@@ -48,7 +48,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 - [ ] `godot --headless --path . --quit` completes with **0 errors**; any warnings are triaged in the evidence file.
 - [ ] Project opens in the editor with Compatibility renderer; no Forward+/Mobile references.
 - [ ] `--headless --quit-after 120 --max-fps 60 -- --server --port 9080` boots, logs the listen banner **and a physics-tick probe** (no SIGTERM requirement; Godot does not trap it).
-- [ ] Web build loads in Chrome and Firefox from `http://localhost` with **no console errors**, pointer lock works, grey-box scene renders.
+- [ ] Web build loads in Chromium/Chrome from `http://localhost` with **no console errors**, pointer lock works, grey-box scene renders. (Sandbox headless Firefox has no WebGL2; real Firefox/Safari are in the CP5 matrix.)
 - [ ] Web initial payload **≤ 20 MB gzipped**; load to interactive **≤ 10 s** on localhost.
 - [ ] Linux server build starts without X11/display and prints the listen banner; WebSocket handshake is verified in CP4a.
 - [ ] `tools/check.sh` passes on a clean checkout; the CI workflow is committed (first green remote run deferred until a remote exists — tracked as a CP0 follow-up).

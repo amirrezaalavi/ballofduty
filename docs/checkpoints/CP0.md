@@ -17,6 +17,9 @@
 - [x] **Web export boots.** Chromium 156 (Playwright headless) at 1280×800: title `Ball of Duty`,
   WebGL2 context true, status overlay removed, **0 console errors**. Screenshot:
   [`cp0-web-boot.png`](./cp0-web-boot.png).
+- [~] **Firefox.** Playwright Firefox 157 in this sandbox reports no WebGL2 (headless GPU limitation),
+  so the game cannot start there; the custom shell's missing-feature error screen rendered correctly.
+  Real Firefox is part of the CP5 matrix.
 - [x] **Pointer lock requires a gesture.** Before click: `document.pointerLockElement === null`; after
   clicking the canvas: `"canvas"`. The controller no longer requests capture in `_ready`.
 - [x] **Payload ≤ 20 MB gzipped.** Raw `38,984 KB`; gzip tar `10,028 KB`; `index.wasm` 39.5 MB served as
