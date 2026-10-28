@@ -3,7 +3,7 @@
 A lightweight, cute, web-first 3D third-person arena shooter. Eight players, one rifle, five minutes,
 bragging rights.
 
-**Status:** CP0 — foundation & pipeline (see [`docs/ROADMAP.md`](docs/ROADMAP.md))
+**Status:** CP0 foundation verified (web export + browser boot); CI first run pending a remote. See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 **Engine:** Godot 4.7.2 (GDScript) · **Renderer:** Compatibility (WebGL 2) · **Netcode:** WebSocket,
 Godot headless authoritative server, 30 Hz fixed tick.
 
@@ -19,6 +19,9 @@ tools/godot --headless --path . -- --server --port 9080
 
 # full pipeline check (import, boot, exports, tests)
 tools/check.sh
+
+# serve the exported web build (http://127.0.0.1:8099)
+tools/serve.sh
 ```
 
 Requirements: Godot **4.7.2** with matching export templates. If the engine lives elsewhere, set
@@ -40,7 +43,8 @@ GODOT_BIN=/path/to/godot tools/godot --version
 | `Shift` | Sprint (from CP1) |
 | `R` | Reload (from CP3) |
 | `Tab` | Scoreboard (from CP5) |
-| `Esc` | Release mouse / pause |
+| `Esc` | Release mouse |
+| Click canvas | Capture mouse |
 | `F3` | Debug overlay |
 
 ## Layout

@@ -90,13 +90,13 @@ final verification. No subagent gets credentials or deploys.
 | Art blocks progress | Grey-box first; art is swappable dressing |
 | Godot headless/templates mismatch | Pin 4.7.2; `tools/check.sh` validates both |
 | Bandwidth/CPU at 8 players | Snapshot size + tick-time budgets enforced from 4a |
-| TCP head-of-line stalls | Stale-snapshot dropping + ≤ 1 KB packets |
+| TCP head-of-line stalls | ≤300 B snapshots + newest-wins draining; documented that retransmits still cause a hitch (no WebSocket fix) |
 | Prediction divergence | Shared locomotion code; fixed tick; replay tests |
 | Scope creep | Out-of-scope list in ROADMAP; change requires your call |
 
 ## Definition of done (every work session)
 
-- [ ] Code imports cleanly (0 errors/warnings) and `tools/check.sh` passes.
+- [ ] Code imports cleanly (0 errors; warnings triaged) and `tools/check.sh` passes.
 - [ ] Acceptance criteria for the active checkpoint are met or explicitly marked deferred.
 - [ ] Evidence written to `docs/checkpoints/CPn.md`.
 - [ ] Decisions/risks updated in this file or `ARCHITECTURE.md`.

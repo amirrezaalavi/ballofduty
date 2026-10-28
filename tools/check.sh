@@ -31,12 +31,12 @@ log "Headless smoke tests"
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_smoke.log
 
 log "Headless client boot"
-"$GODOT" --headless --path . --quit-after 5 2>&1 | tee /tmp/bod_client.log
+"$GODOT" --headless --path . --quit-after 120 --max-fps 60 2>&1 | tee /tmp/bod_client.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_client.log
 
 log "Headless server boot"
-"$GODOT" --headless --path . --quit-after 5 -- --server --port 9123 2>&1 | tee /tmp/bod_server.log
-grep -q "BALL_OF_DUTY server" /tmp/bod_server.log
+"$GODOT" --headless --path . --quit-after 120 --max-fps 60 -- --server --port 9123 2>&1 | tee /tmp/bod_server.log
+grep -q "BALL_OF_DUTY server tick=" /tmp/bod_server.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_server.log
 
 if [[ "$SKIP_EXPORT" == "1" ]]; then
@@ -68,7 +68,7 @@ GZ=$(stat -c%s /tmp/bod_web.tgz)
 echo "web raw: ${RAW} KB · gzip tar: $((GZ / 1024)) KB"
 
 log "Server build smoke test"
-timeout 10 build/server/ballofduty-server.x86_64 --headless --quit-after 5 -- --server --port 9124 2>&1 | tee /tmp/bod_server_bin.log
-grep -q "BALL_OF_DUTY server" /tmp/bod_server_bin.log
+timeout 15 build/server/ballofduty-server.x86_64 --headless --quit-after 120 --max-fps 60 -- --server --port 9124 2>&1 | tee /tmp/bod_server_bin.log
+grep -q "BALL_OF_DUTY server tick=" /tmp/bod_server_bin.log
 
 log "OK"

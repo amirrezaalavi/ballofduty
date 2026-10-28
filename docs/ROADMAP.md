@@ -15,9 +15,9 @@ in `docs/checkpoints/CPn.md` (numbers, screenshots, logs — not "looks good").
 | Server | Godot 4.7.2 headless, authoritative | Same scene/physics as client; no reimplementation of Godot's wire protocol |
 | Transport | `WebSocketMultiplayerPeer` (WSS in prod) | Only option for browser clients; works for desktop too |
 | Simulation | 30 Hz fixed tick, client prediction + reconciliation | Matches snapshot rate; predictable CPU and bandwidth |
-| Snapshot rate | 30 Hz, full state, ≤ 1 KB | 8 players; no delta compression needed for V1 |
+| Snapshot rate | 30 Hz, binary `PackedByteArray`, ≤ 300 B | 8 players; ~7 KB/s downstream; no delta compression for V1 |
 | Combat | Server-spawned projectiles, client cosmetic tracer | No lag-compensation/rewind needed for V1 |
-| Interpolation | 100 ms buffer (2 snapshots), drop stale | Hides 1–2 packet gaps without adding much latency |
+| Interpolation | 2 intervals (67 ms) + jitter margin, newest-wins | ~100 ms render delay; late packets hold last pose, no snap-back |
 | Match | Auto-join room, max 8, 5-min FFA, 3 s respawn | Smallest complete game loop |
 | Web export | Single-threaded, Compatibility, no SAB | Works on any static host without COOP/COEP |
 | Game scope | 1 arena, 1 rifle, no accounts/progression | Prove the loop before content |
@@ -45,14 +45,14 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 10. CI workflow building both artifacts and uploading them.
 
 ### Acceptance criteria
-- [ ] `godot --headless --path . --quit` completes with **0 errors, 0 warnings** in output.
+- [ ] `godot --headless --path . --quit` completes with **0 errors**; any warnings are triaged in the evidence file.
 - [ ] Project opens in the editor with Compatibility renderer; no Forward+/Mobile references.
-- [ ] `godot --headless --path . -- --server --port 9080` boots, logs `server listening`, exits 0 on SIGTERM.
+- [ ] `--headless --quit-after 120 --max-fps 60 -- --server --port 9080` boots, logs the listen banner **and a physics-tick probe** (no SIGTERM requirement; Godot does not trap it).
 - [ ] Web build loads in Chrome and Firefox from `http://localhost` with **no console errors**, pointer lock works, grey-box scene renders.
 - [ ] Web initial payload **≤ 20 MB gzipped**; load to interactive **≤ 10 s** on localhost.
 - [ ] Linux server build starts without X11/display and prints the listen banner; WebSocket handshake is verified in CP4a.
-- [ ] `tools/check.sh` passes on a clean checkout; CI is green and uploads `web.zip` + `server.zip`.
-- [ ] Version string (`git describe`) visible on the boot/loading screen.
+- [ ] `tools/check.sh` passes on a clean checkout; the CI workflow is committed (first green remote run deferred until a remote exists — tracked as a CP0 follow-up).
+- [ ] `config/version` is visible on the in-game boot overlay (build SHA recorded in the evidence file).
 - [ ] Collision layer table documented in `docs/ARCHITECTURE.md` and used consistently.
 
 ---
@@ -72,16 +72,17 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 6. Input capture: click to capture, `Esc` release, re-capture on click, focus-loss handling.
 7. Debug overlay: FPS, physics tick, velocity, input seq, camera distance; `F3` toggle.
 8. Small test course: flat ground, ramp, wall, gap.
+9. Minimal `Settings` autoload: sensitivity + invert-Y persisted to `user://settings.cfg` (full settings UI lands in CP5).
 
 ### Acceptance criteria
-- [ ] Travel distance over 3 s at 30/60/144 FPS differs by **< 2%** (measured, logged).
+- [ ] Travel distance over 3 s at 30/60/144 FPS differs by **< 2%** (measured, logged); rendering is smooth via physics interpolation (no 30 Hz camera judder).
 - [ ] Mouse-look has no 30 Hz stepping; a 360° turn shows no visible stair-stepping at 144 FPS.
 - [ ] Diagonal movement is **not** faster than cardinal (≤ 0.1% difference).
 - [ ] Camera does not clip through the test wall; spring arm recovers smoothly in < 200 ms.
 - [ ] Scope reach 55° FOV in < 100 ms; releasing returns to 75° in < 100 ms.
 - [ ] Player cannot fall through the floor at 30 FPS or while walking down the ramp.
 - [ ] No `Input.is_key_pressed`-style hardcoded keys remain; all actions come from the InputMap.
-- [ ] Sensitivity and invert-Y persist across restarts.
+- [ ] Sensitivity and invert-Y persist across restarts (minimal `Settings` autoload).
 - [ ] **Your sign-off:** camera distance, shoulder offset, FOV, speed, and scope feel right.
 
 ---
@@ -147,20 +148,21 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 1. `NetworkManager` autoload: client connect/disconnect; server listen; CLI `--server --port`.
 2. Headless server scene: no camera/HUD/local player; deterministic world load.
 3. Join/leave handshake: assign id + sanitized name, broadcast roster, clean despawn.
-4. Snapshot encode/decode: `{tick, seq, players:[{id, pos, yaw, state, hp}]}` at 30 Hz.
-5. `NetworkInterpolator` on remote players: 100 ms buffer, drop stale snapshots, extrapolation cap 100 ms.
-6. Motion-state replication (idle/run/air) and yaw; animation driven locally from state.
-7. Dev instrumentation: snapshot queue depth, bytes/s, RTT.
+4. Minimal input path: `{seq, move, jump, sprint, aim_yaw, aim_pitch, scope}` at 30 Hz; server simulates movement and acks each player's last processed seq (full reconciliation in 4b).
+5. Snapshot encode/decode: `{tick, seq, players:[{id, pos, yaw, state, hp, acked_input_seq}]}` at 30 Hz, binary and quantized.
+6. `NetworkInterpolator` on remote players: 67 ms buffer + jitter margin, newest-wins (drop stale), extrapolation ≤ 1 tick or hold last pose.
+7. Motion-state replication (idle/run/air) and yaw; animation driven locally from state.
+8. Dev instrumentation: snapshots processed/dropped, snapshot bytes, RTT, server tick offset.
 
 ### Acceptance criteria
 - [ ] 2 browser clients + 1 desktop client join simultaneously; all see each other move.
 - [ ] Remote movement is smooth at 60 and 144 FPS; **no visible teleporting** while walking/running.
-- [ ] Snapshot size ≤ 1 KB with 8 players; downstream ≤ 10 KB/s per client.
+- [ ] Snapshot size ≤ 300 B with 8 players; downstream ≤ 10 KB/s per client (quantized, binary).
 - [ ] Server process runs with no display; CPU < 25% of one core with 8 connected clients idle.
-- [ ] Client drops stale snapshots rather than queueing (queue depth never > 3; logged).
+- [ ] Client processes at most one snapshot per tick after draining and keeps the newest; processed/dropped counters are logged.
 - [ ] Join mid-match spawns a player; leaving removes the node and the scoreboard row within 1 s.
 - [ ] Malformed/oversized packets are rejected without crashing or stalling the server.
-- [ ] At simulated 100 ms RTT + 20 ms jitter, remote interpolation stays smooth (local input lag is expected at this stage).
+- [ ] At simulated 100 ms RTT + 20 ms jitter, remote interpolation stays smooth with ≤ 1 tick extrapolation; late packets never cause snap-back (local input lag is expected at this stage).
 
 ---
 
@@ -171,18 +173,19 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 ### Tasks
 1. Input frames `{seq, move, jump, aim_yaw, aim_pitch, scope}` sent at 30 Hz; sequence ring buffer.
 2. Server simulation of the **same** `LocomotionComponent` from inputs; acks last processed seq.
-3. Client rewind-and-replay of unacked inputs on each snapshot; smooth visual correction over 100 ms.
-4. Fixed-tick local simulation with render interpolation; no variable-dt movement.
-5. Server validation: speed clamp, teleport clamp, input rate limit, sequence dedupe.
-6. Correction meters: position error, correction count/s, replay depth; RTT graph.
+3. Session token + 30 s reconnect grace (defined here, consumed in 4d).
+4. Client rewind-and-replay of unacked inputs on each snapshot; smooth visual correction over 100 ms.
+5. Fixed-tick local simulation with render interpolation; no variable-dt movement.
+6. Server validation: input rate limit, sequence dedupe, and a server-side displacement assertion (`|Δpos| ≤ max_speed·dt + ε`) — no position packets exist to trust or reject.
+7. Correction meters: position error, correction count/s, replay depth; RTT graph.
 
 ### Acceptance criteria
-- [ ] At 0 ms RTT, predicted position matches server within **0.01 m** steady-state.
-- [ ] At 100 ms RTT + 20 ms jitter, steady-state correction magnitude **< 0.05 m**; corrections are invisible (no rubber-banding).
+- [ ] Metric defined: server position at the acked tick vs the client's stored state for that same tick. At loopback, p95 error **< 0.02 m** steady-state.
+- [ ] At 100 ms RTT + 20 ms jitter, p95 error **< 0.05 m** and corrections are invisible (no rubber-banding). A small residual is acceptable; browser-wasm vs native contact ordering is not bit-identical.
 - [ ] Wall sliding and stair/ramp behavior identical on client and server (side-by-side replay test).
 - [ ] Input replay depth stays ≤ 8 frames at 150 ms RTT.
-- [ ] 2× speed hack / teleport packets rejected within 1 s and logged; legit movement never falsely rejected.
-- [ ] Disconnect during movement leaves no ghost; reconnect starts clean.
+- [ ] Server rejects impossible displacement (2× speed) within 1 s and logs it; legitimate movement is never falsely rejected.
+- [ ] Disconnect during movement leaves no ghost; reconnect within the 30 s grace restores identity and score.
 - [ ] **Your sign-off:** movement feels responsive at 100–150 ms simulated latency.
 
 ---
@@ -192,7 +195,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 **Owner:** me (build), **you** (gameplay test). **Gate:** CP4b acceptance.
 
 ### Tasks
-1. Fire intent `{seq, aim_origin, aim_dir}` → server validates fire rate/ammo/ownership → spawns authoritative projectile.
+1. Fire intent `{seq, client_tick, aim_yaw, aim_pitch, buttons}` → server derives origin/direction from its own player state, validates fire rate/ammo/ownership, spawns authoritative projectile.
 2. Client cosmetic tracer prediction; hitmarker/kill confirmed by server events.
 3. Server hurtbox resolution + damage + death + kill attribution (`source_id` on projectile).
 4. Server-authoritative respawn selection (farthest spawn with LOS check), 1.5 s spawn protection.
@@ -204,7 +207,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 - [ ] Fire rate > weapon spec is rejected; ammo cannot go negative; firing without ammo is rejected.
 - [ ] Headshots confirmed server-side at 2×; kill attributed to the correct shooter.
 - [ ] 8-player match with 4 bots runs 10 min: no desync, no ghost players, server CPU < 50% of one core.
-- [ ] At 100 ms RTT, shots visibly match server-confirmed hits; tracers are cosmetic only.
+- [ ] At 100 ms RTT, the tracer is cosmetic and the server-confirmed hit point is authoritative; hitmarkers/kills appear only on server events. No rewind/lag compensation in V1.
 - [ ] Spawn protection blocks damage for 1.5 s and cancels on firing; spawn is ≥ 10 m from nearest enemy.
 - [ ] **Your sign-off:** firefights feel fair; deaths and hitmarkers are understandable.
 
@@ -227,7 +230,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 - [ ] 8 clients × 10 min soak: RSS stable (±10%), 0 unhandled errors, 0 disconnects.
 - [ ] 9th client receives a clean "server full" message.
 - [ ] Oversized/rapid packets are dropped; server stays responsive (< 5 ms tick time).
-- [ ] `SIGTERM` shuts down gracefully with all peers notified.
+- [ ] A supervisor/shutdown command stops the server and notifies peers within 10 s; SIGTERM behavior is documented (Godot exits 143 without a handler).
 
 ---
 
@@ -251,7 +254,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 - [ ] Chrome, Firefox, **Safari** (latest) all load over HTTPS/WSS with no console errors.
 - [ ] Web payload ≤ 25 MB (gzipped), interactive ≤ 10 s on broadband, 60 FPS at 720p on reference low-end.
 - [ ] Settings persist; audio starts after first click; pointer lock recovers after tab switch.
-- [ ] 8 humans/bots play 15 min: 0 critical bugs, 0 disconnects, max tick time < 10 ms.
+- [ ] 8 humans/bots play 15 min: 0 critical bugs (crash, desync, unplayable frame rate, stuck spawn), 0 unplanned disconnects, max tick time < 10 ms.
 - [ ] One-command deploy reproduces the release; `docs/RELEASE.md` runbook works from scratch.
 - [ ] **Your sign-off:** web build is fun and stable enough to share publicly.
 
@@ -272,7 +275,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 
 ---
 
-## Performance budgets (reference: 1280×720, Intel UHD-class)
+## Performance budgets (reference device: 4-core/8 GB laptop, Intel UHD 620-class iGPU, 1280×720)
 
 | Metric | Budget | Hard fail |
 |---|---|---|
@@ -282,6 +285,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 | Texture memory | ≤ 100 MB | > 150 MB |
 | Web payload (gzip) | ≤ 20 MB | > 30 MB |
 | Server tick (8 players) | ≤ 5 ms | > 10 ms |
+| Snapshot size (8 players) | ≤ 300 B | > 500 B |
 | Snapshot downstream | ≤ 10 KB/s | > 20 KB/s |
 | Client memory | ≤ 300 MB | > 500 MB |
 

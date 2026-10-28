@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=12 format=3]
 
 [sub_resource type="Environment" id="Env_arena"]
 background_mode = 1
@@ -16,6 +16,12 @@ size = Vector3(60, 0.5, 60)
 
 [sub_resource type="BoxShape3D" id="Shape_floor"]
 size = Vector3(60, 0.5, 60)
+
+[sub_resource type="BoxMesh" id="Mesh_ramp"]
+size = Vector3(10, 0.5, 10)
+
+[sub_resource type="BoxShape3D" id="Shape_ramp"]
+size = Vector3(10, 0.5, 10)
 
 [sub_resource type="StandardMaterial3D" id="Mat_wall"]
 albedo_color = Color(0.760784, 0.729412, 0.65098, 1)
@@ -134,12 +140,11 @@ material_override = SubResource("Mat_crate")
 transform = Transform3D(1, 0, 0, 0, 0.983844, 0.17903, 0, -0.17903, 0.983844, 10, 0.75, -9)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Ramp"]
-shape = SubResource("Shape_floor")
+shape = SubResource("Shape_ramp")
 
 [node name="MeshInstance3D" type="MeshInstance3D" parent="Ramp"]
-mesh = SubResource("Mesh_floor")
+mesh = SubResource("Mesh_ramp")
 material_override = SubResource("Mat_floor")
-scale = Vector3(0.166667, 1, 0.166667)
 
 [node name="Spawn01" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -20, 0.1, -20)

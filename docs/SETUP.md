@@ -28,6 +28,7 @@ Verify:
 tools/godot --version                     # 4.7.2.stable.official...
 tools/check.sh                            # full pipeline
 tools/check.sh --skip-export              # imports + headless boots + tests
+tools/serve.sh                            # serve build/web on :8099
 ```
 
 ## Web export notes (Godot 4.7, Compatibility)

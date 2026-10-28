@@ -35,8 +35,8 @@ var _gravity: float = 22.0
 func _ready() -> void:
 	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 22.0))
 	camera.fov = normal_fov
-	if DisplayServer.get_name() != "headless":
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	# Never request pointer lock here: browsers require a user gesture and will
+	# silently reject it. The first click on the canvas captures the mouse.
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -47,17 +47,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			# Consume the capture click so it does not also fire the weapon.
 			get_viewport().set_input_as_handled()
 
 
-func _process(delta: float) -> void:
-	if Input.is_action_just_pressed("pause") and DisplayServer.get_name() != "headless":
-		Input.mouse_mode = (
-			Input.MOUSE_MODE_VISIBLE
-			if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
-			else Input.MOUSE_MODE_CAPTURED
-		)
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 
+
+func _process(delta: float) -> void:
 	var target_fov := scope_fov if Input.is_action_pressed("aim") else normal_fov
 	camera.fov = move_toward(camera.fov, target_fov, scope_speed * delta)
 

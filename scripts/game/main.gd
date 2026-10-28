@@ -7,14 +7,17 @@ const DEFAULT_PORT := 9080
 
 func _ready() -> void:
 	var user_args := OS.get_cmdline_user_args()
-	if user_args.has("--server"):
+	if OS.has_feature("dedicated_server") or user_args.has("--server"):
 		_start_server(user_args)
 	elif DisplayServer.get_name() != "headless":
-		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		_show_boot_version()
 
 
 func _start_server(args: PackedStringArray) -> void:
+	# Do not let a headless server spin a core. 60 FPS keeps the main loop
+	# responsive while the 30 Hz physics tick does the simulation.
+	Engine.max_fps = 60
+
 	var port := DEFAULT_PORT
 	var port_index := args.find("--port")
 	if port_index >= 0 and port_index + 1 < args.size():
@@ -27,6 +30,10 @@ func _start_server(args: PackedStringArray) -> void:
 		local_player.queue_free()
 
 	print("BALL_OF_DUTY server stub listening on port %d (transport arrives in CP4a)" % port)
+	get_tree().create_timer(0.75).timeout.connect(
+		func() -> void:
+			print("BALL_OF_DUTY server tick=%d" % Engine.get_physics_frames())
+	)
 
 
 ## Temporary CP0 boot stamp. Replaced by the real HUD in CP1/CP3.
@@ -43,7 +50,15 @@ func _show_boot_version() -> void:
 	label.add_theme_color_override("font_color", Color(0.215686, 0.878431, 0.784314))
 	layer.add_child(label)
 
+	var hint := Label.new()
+	hint.text = "CLICK CANVAS TO CAPTURE MOUSE  ·  ESC RELEASES"
+	hint.position = Vector2(24, 42)
+	hint.add_theme_font_size_override("font_size", 11)
+	hint.add_theme_color_override("font_color", Color(0.49, 0.54, 0.66))
+	layer.add_child(hint)
+
 	var tween := create_tween()
-	tween.tween_interval(2.5)
+	tween.tween_interval(3.5)
 	tween.tween_property(label, "modulate:a", 0.0, 0.6)
+	tween.parallel().tween_property(hint, "modulate:a", 0.0, 0.6)
 	tween.tween_callback(layer.queue_free)
