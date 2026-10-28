@@ -9,5 +9,6 @@ var jump: bool = false
 var sprint: bool = false
 var aim: bool = false
 var fire: bool = false
+var reload: bool = false
 var yaw: float = 0.0
 var pitch: float = 0.0

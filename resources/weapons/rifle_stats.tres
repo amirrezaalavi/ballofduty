@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponStats" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/components/weapon_stats.gd" id="1_stats"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/projectile.tscn" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_stats")
+display_name = "R-1 Rifle"
+weapon_id = &"rifle"
+damage = 25
+headshot_multiplier = 2.0
+projectile_speed = 90.0
+projectile_lifetime = 2.5
+fire_rate = 10.0
+automatic = true
+spread_degrees = 0.3
+magazine_size = 30
+infinite_reserve = true
+reload_time = 1.6
+recoil_degrees = 0.7
+projectile_scene = ExtResource("2_projectile")

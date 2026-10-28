@@ -5,6 +5,17 @@ extends Node
 ## LocomotionComponent instead.
 
 var sequence: int = 0
+var _fire_buffered: bool = false
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if (
+		event is InputEventMouseButton
+		and event.pressed
+		and event.button_index == MOUSE_BUTTON_LEFT
+		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
+	):
+		_fire_buffered = true
 
 
 func sample(yaw: float, pitch: float) -> PlayerInputFrame:
@@ -15,7 +26,9 @@ func sample(yaw: float, pitch: float) -> PlayerInputFrame:
 	frame.jump = Input.is_action_just_pressed("jump")
 	frame.sprint = Input.is_action_pressed("sprint")
 	frame.aim = Input.is_action_pressed("aim")
-	frame.fire = Input.is_action_pressed("fire")
+	frame.fire = Input.is_action_pressed("fire") or _fire_buffered
+	_fire_buffered = false
+	frame.reload = Input.is_action_just_pressed("reload")
 	frame.yaw = yaw
 	frame.pitch = pitch
 	return frame

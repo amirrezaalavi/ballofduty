@@ -35,15 +35,27 @@ func _init() -> void:
 		"*res://scripts/autoload/settings.gd",
 		"Settings autoload is registered"
 	)
+	_check_equal(
+		String(ProjectSettings.get_setting("autoload/EventBus", "")),
+		"*res://scripts/autoload/event_bus.gd",
+		"EventBus autoload is registered"
+	)
+	_check_equal(
+		String(ProjectSettings.get_setting("autoload/AudioManager", "")),
+		"*res://scripts/autoload/audio_manager.gd",
+		"AudioManager autoload is registered"
+	)
 
-	_check_scene("res://scenes/main.tscn", ["Arena", "Player", "DebugOverlay"])
+	_check_scene("res://scenes/main.tscn", ["Arena", "Player", "HUD", "DebugOverlay"])
 	_check_scene("res://scenes/characters/player.tscn",
 		["CollisionShape3D", "Visual", "BodyHurtbox", "HeadHurtbox", "CameraPivot",
 		"LocomotionComponent", "InputHandler", "HealthComponent"])
 	_check_scene("res://scenes/maps/arena_greybox.tscn",
 		["Floor", "Ramp", "PlatformA", "PlatformB", "CameraWall", "Spawn01", "Spawn08"])
 	_check_scene("res://scenes/maps/arena_nature.tscn",
-		["Floor", "PlatformA", "PlatformB", "CameraWall", "Props", "Spawn01", "Spawn08"])
+		["Floor", "PlatformA", "PlatformB", "CameraWall", "Props", "DummyA", "DummyB", "DummyC", "Spawn01", "Spawn08"])
+	_check_scene("res://scenes/characters/training_dummy.tscn",
+		["HealthComponent", "BodyHurtbox", "HeadHurtbox"])
 
 	var nature_scene := load("res://scenes/maps/arena_nature.tscn") as PackedScene
 	if nature_scene:
@@ -119,6 +131,10 @@ func _init() -> void:
 		_check(locomotion != null and locomotion.stats != null, "locomotion component has PlayerStats")
 		_check(player.get_node_or_null("InputHandler") is InputHandler, "input handler is present")
 		_check(player.get_node_or_null("HealthComponent") is HealthComponent, "health component is present")
+		var weapon := player.get_node_or_null("WeaponController") as WeaponController
+		_check(weapon != null and weapon.stats != null, "weapon controller has WeaponStats")
+		if weapon and weapon.stats:
+			_check(weapon.stats.projectile_scene != null, "weapon projectile scene is assigned")
 		var rig := player.get_node_or_null("CameraPivot") as CameraRig
 		_check(rig != null, "camera pivot uses CameraRig")
 		if rig:

@@ -8,8 +8,11 @@ extends CharacterBody3D
 @onready var locomotion: LocomotionComponent = $LocomotionComponent
 @onready var input_handler: InputHandler = $InputHandler
 @onready var visual: Node3D = $Visual
+@onready var weapon: WeaponController = $WeaponController
 
 var last_seq: int = 0
+
+var _ignore_look_until_msec: int = 0
 
 
 func _ready() -> void:
@@ -21,14 +24,21 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		# Pointer lock can emit a large synthetic delta on the capture frame.
+		if Time.get_ticks_msec() < _ignore_look_until_msec:
+			return
+		var relative: Vector2 = event.relative
+		if relative.length() > 180.0:
+			relative = relative.normalized() * 180.0
 		var scoped := Input.is_action_pressed("aim")
-		var yaw_delta := camera_rig.look(event.relative, scoped)
+		var yaw_delta := camera_rig.look(relative, scoped)
 		rotate_y(yaw_delta)
 		# Let the model lag slightly behind the aim direction, then settle.
 		visual.rotation.y = wrapf(visual.rotation.y - yaw_delta, -PI, PI)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			_ignore_look_until_msec = Time.get_ticks_msec() + 140
 			# Consume the capture click so it does not also fire the weapon.
 			get_viewport().set_input_as_handled()
 
@@ -50,3 +60,4 @@ func _physics_process(delta: float) -> void:
 	var frame := input_handler.sample(rotation.y, camera_rig.pitch)
 	last_seq = frame.seq
 	locomotion.simulate(self, frame, delta)
+	weapon.tick(delta, frame)

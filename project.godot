@@ -20,6 +20,8 @@ run/flush_stdout_on_print=true
 [autoload]
 
 Settings="*res://scripts/autoload/settings.gd"
+EventBus="*res://scripts/autoload/event_bus.gd"
+AudioManager="*res://scripts/autoload/audio_manager.gd"
 
 [display]
 

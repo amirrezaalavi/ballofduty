@@ -1,0 +1,131 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://scripts/characters/training_dummy.gd" id="1_dummy"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://scripts/components/hurtbox_component.gd" id="3_hurtbox"]
+
+[sub_resource type="CapsuleShape3D" id="Shape_body"]
+radius = 0.35
+height = 1.1
+
+[sub_resource type="CylinderMesh" id="Mesh_body"]
+top_radius = 0.35
+bottom_radius = 0.35
+height = 1.1
+radial_segments = 10
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="Mat_wood"]
+albedo_color = Color(0.545098, 0.360784, 0.203922, 1)
+roughness = 1.0
+
+[sub_resource type="CylinderMesh" id="Mesh_bullseye"]
+top_radius = 0.15
+bottom_radius = 0.15
+height = 0.02
+radial_segments = 16
+rings = 1
+
+[sub_resource type="StandardMaterial3D" id="Mat_bullseye"]
+albedo_color = Color(0.8, 0.2, 0.18, 1)
+roughness = 1.0
+
+[sub_resource type="SphereMesh" id="Mesh_head"]
+radius = 0.26
+height = 0.52
+radial_segments = 12
+rings = 6
+
+[sub_resource type="StandardMaterial3D" id="Mat_head"]
+albedo_color = Color(0.86, 0.62, 0.38, 1)
+roughness = 1.0
+
+[sub_resource type="SphereMesh" id="Mesh_eye"]
+radius = 0.04
+height = 0.08
+radial_segments = 8
+rings = 4
+
+[sub_resource type="StandardMaterial3D" id="Mat_eye"]
+albedo_color = Color(0.05, 0.04, 0.04, 1)
+roughness = 1.0
+
+[sub_resource type="CapsuleShape3D" id="Shape_hit_body"]
+radius = 0.4
+height = 1.1
+
+[sub_resource type="SphereShape3D" id="Shape_hit_head"]
+radius = 0.28
+
+[node name="TrainingDummy" type="AnimatableBody3D"]
+collision_layer = 1
+collision_mask = 0
+script = ExtResource("1_dummy")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("Shape_body")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("2_health")
+max_health = 100
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+mesh = SubResource("Mesh_body")
+material_override = SubResource("Mat_wood")
+
+[node name="Bullseye" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0, -1, 0, 1, 0, 0, 0.7, -0.34)
+mesh = SubResource("Mesh_bullseye")
+material_override = SubResource("Mat_bullseye")
+
+[node name="Head" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+mesh = SubResource("Mesh_head")
+material_override = SubResource("Mat_head")
+
+[node name="EyeLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.08, 1.39, -0.23)
+mesh = SubResource("Mesh_eye")
+material_override = SubResource("Mat_eye")
+
+[node name="EyeRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.08, 1.39, -0.23)
+mesh = SubResource("Mesh_eye")
+material_override = SubResource("Mat_eye")
+
+[node name="BodyHurtbox" type="Area3D" parent="."]
+collision_layer = 8
+collision_mask = 0
+monitoring = false
+script = ExtResource("3_hurtbox")
+entity_id = 1001
+hitbox_name = &"body"
+health_path = NodePath("../HealthComponent")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BodyHurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+shape = SubResource("Shape_hit_body")
+
+[node name="HeadHurtbox" type="Area3D" parent="."]
+collision_layer = 8
+collision_mask = 0
+monitoring = false
+script = ExtResource("3_hurtbox")
+entity_id = 1001
+hitbox_name = &"head"
+health_path = NodePath("../HealthComponent")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="HeadHurtbox"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
+shape = SubResource("Shape_hit_head")
+
+[node name="Label3D" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)
+billboard = 1
+no_depth_test = true
+pixel_size = 0.005
+font_size = 42
+outline_size = 8
+text = "100 / 100"

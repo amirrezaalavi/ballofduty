@@ -38,6 +38,10 @@ log "Locomotion tests"
 "$GODOT" --headless --path . --script tests/headless/movement_test.gd 2>&1 | tee /tmp/bod_movement.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_movement.log
 
+log "Combat tests"
+"$GODOT" --headless --path . --script tests/headless/combat_test.gd 2>&1 | tee /tmp/bod_combat.log
+! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_combat.log
+
 log "Headless client boot"
 "$GODOT" --headless --path . --quit-after 120 --max-fps 60 2>&1 | tee /tmp/bod_client.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_client.log

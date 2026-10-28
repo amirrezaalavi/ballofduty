@@ -1,6 +1,7 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/nature_arena.gd" id="1_arena"]
+[ext_resource type="PackedScene" path="res://scenes/characters/training_dummy.tscn" id="2_dummy"]
 
 [sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
 sky_top_color = Color(0.239216, 0.529412, 0.827451, 1)
@@ -141,6 +142,17 @@ shape = SubResource("Shape_wall")
 [node name="MeshInstance3D" type="MeshInstance3D" parent="CameraWall"]
 mesh = SubResource("Mesh_wall")
 material_override = SubResource("Mat_stone")
+
+[node name="DummyA" parent="." instance=ExtResource("2_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -10, 0, 4)
+
+[node name="DummyB" parent="." instance=ExtResource("2_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, 4)
+
+[node name="DummyC" parent="." instance=ExtResource("2_dummy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -8)
+strafe_enabled = true
+strafe_range = 1.2
 
 [node name="Props" type="Node3D" parent="."]
 
