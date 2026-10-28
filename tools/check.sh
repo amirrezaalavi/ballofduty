@@ -13,6 +13,9 @@ log() { echo -e "\n\033[1;36m== $* ==\033[0m"; }
 log "Engine"
 "$GODOT" --version
 
+log "Clean build outputs"
+rm -rf build
+
 log "Import"
 "$GODOT" --headless --path . --import >/tmp/bod_import.log 2>&1 || {
   cat /tmp/bod_import.log
