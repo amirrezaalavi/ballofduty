@@ -23,6 +23,10 @@ if grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_import.log; then
   exit 1
 fi
 
+log "Headless smoke tests"
+"$GODOT" --headless --path . --script tests/headless/smoke_test.gd 2>&1 | tee /tmp/bod_smoke.log
+! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_smoke.log
+
 log "Headless client boot"
 "$GODOT" --headless --path . --quit-after 5 2>&1 | tee /tmp/bod_client.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_client.log
@@ -56,8 +60,9 @@ rm -rf build/server && mkdir -p build/server
 
 log "Payload size (gzip)"
 RAW=$(du -sk build/web | cut -f1)
-GZ=$(find build/web -type f -print0 | xargs -0 gzip -c 2>/dev/null | wc -c)
-echo "web raw: ${RAW} KB · gzip: $((GZ / 1024)) KB"
+tar -czf /tmp/bod_web.tgz -C build/web .
+GZ=$(stat -c%s /tmp/bod_web.tgz)
+echo "web raw: ${RAW} KB · gzip tar: $((GZ / 1024)) KB"
 
 log "Server build smoke test"
 timeout 10 build/server/ballofduty-server.x86_64 --headless --quit-after 5 -- --server --port 9124 2>&1 | tee /tmp/bod_server_bin.log
