@@ -3,7 +3,7 @@
 A lightweight, cute, web-first 3D third-person arena shooter. Eight players, one rifle, five minutes,
 bragging rights.
 
-**Status:** CP2 implemented — nature arena and asset pass awaiting visual review (CP0/CP1 accepted; CI first run pending a remote). See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Status:** CP3 implemented — combat, HUD and audio awaiting feel review (CP0/CP1/CP2 accepted; CI first run pending a remote). See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 **Engine:** Godot 4.7.2 (GDScript) · **Renderer:** Compatibility (WebGL 2) · **Netcode:** WebSocket,
 Godot headless authoritative server, 30 Hz fixed tick.
 

@@ -36,6 +36,8 @@ Status: `todo` · `doing` · `done` · `deferred`
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
 | L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |
 | L12 | Character variants | Remote players need distinct Blocky Characters textures/colors; same animation rig. Add in CP4a roster work. | todo |
+| L13 | Weapon viewmodel polish | Gun is currently a simple mesh viewed end-on. Add hand-held pose, muzzle light, impact decals, damage numbers, richer kill feed before release. | todo |
+| L14 | Player damage feedback | Damage vignette/health loss are wired but untestable until CP4c bots can shoot back. Validate then. | todo |
 
 ## Changelog
 
@@ -44,3 +46,5 @@ Status: `todo` · `doing` · `done` · `deferred`
 - **2026-10-29 — CP2 feedback:** Blocky character with animations replaces the capsule; log/stump
   collision fixed; tree/rock collider shapes tightened. Long-term 3D mountain/terrain map with
   Minecraft-style chunk limits recorded as **L11**.
+- **2026-10-29 — CP3:** rifle/projectile/damage/HUD/audio/training dummies landed. Combat test covers
+  20/20 headshots at 5/15/30 m. Weapon viewmodel and player damage feedback recorded as **L13/L14**.

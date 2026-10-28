@@ -2,7 +2,7 @@
 
 - **Date:** 2026-10-28
 - **Build:** `f3bbd7d` (post-review patch)
-- **Status:** visual review patch applied — **awaiting re-check**
+- **Status:** **accepted by user** (2026-10-29); follow-up polish tracked in `docs/BACKLOG.md`
 - **Engine:** Godot 4.7.2, Compatibility, 30 Hz physics
 
 ## Asset audit
