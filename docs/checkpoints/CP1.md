@@ -1,7 +1,7 @@
 # CP1 — Movement, camera & feel
 
 - **Date:** 2026-10-28
-- **Build:** `7705c6f`
+- **Build:** `34b354e` (feedback revision: smaller avatar, higher jump)
 - **Engine:** Godot 4.7.2-stable, Compatibility, 30 Hz physics + physics interpolation
 - **Status:** implementation complete — **awaiting your feel sign-off**
 
@@ -13,15 +13,16 @@
 | 3 s travel distance | **16.63 m** | `movement_test.gd` (90 ticks, from rest) |
 | No diagonal speed boost | cardinal **5.60** / diagonal **5.60 m/s** | `movement_test.gd` |
 | Sprint | **7.56 m/s** (5.6 × 1.35) | `movement_test.gd` |
-| Jump apex | **1.23 m** | `movement_test.gd` |
+| Jump apex | **1.35 m** (+10 % from 1.23 m) | `movement_test.gd` |
 | Coyote time (0.10 s) | pass | jump one tick after leaving floor |
 | Jump buffer (0.12 s) | pass | jump fires on landing |
 | Release deceleration | stops in < 0.2 s | 60 m/s² ground acceleration |
 | Settings persistence | pass | sensitivity / invert-Y / volume round-trip through `user://` |
 | InputMap only | pass | no `Input.is_key_pressed`; only the mouse-capture gesture uses a raw button |
-| Components present | pass | Locomotion, InputHandler, Health, CameraRig, DebugOverlay (59 smoke checks) |
+| Character size | **1.36 m** capsule / mesh (20 % smaller) | `smoke_test.gd` |
+| Components present | pass | Locomotion, InputHandler, Health, CameraRig, DebugOverlay (62 smoke checks) |
 | Web boot | pass | 0 console errors, pointer lock after click, debug overlay renders |
-| Full pipeline | pass | 59 smoke + 14 movement checks, Web + Linux server exports, gzip **10,042 KB** |
+| Full pipeline | pass | 62 smoke + 14 movement checks, Web + Linux server exports, gzip **10,042 KB** |
 
 Screenshot: [`cp1-debug-overlay.png`](./cp1-debug-overlay.png) (headless Chromium).
 
@@ -33,7 +34,7 @@ Screenshot: [`cp1-debug-overlay.png`](./cp1-debug-overlay.png) (headless Chromiu
 4. **Ramp/fall-through** — walk down the ramp; no fall-through at 30 FPS.
 5. **Platform gap** — jump the 2 m gap between the two 0.8 m platforms at `(12, -6)` and `(12, -12)`.
 6. **Scope** — hold RMB: FOV 75 → 55 in ~70 ms, sensitivity scales to 0.7×.
-7. **Movement feel**: 5.6 m/s walk, 7.56 sprint, 1.23 m jump, 0.12 s jump buffer, 0.10 s coyote.
+7. **Movement feel**: 5.6 m/s walk, 7.56 sprint, **1.35 m jump**, 0.12 s jump buffer, 0.10 s coyote — on a **1.36 m** character.
 
 ## How to test
 
@@ -53,8 +54,9 @@ camera distance, FOV). `Esc` releases the mouse.
 
 | Knob | File | Current |
 |---|---|---|
-| Walk/sprint/jump/gravity/coyote/buffer | `resources/players/default_player.tres` | 5.6 / 1.35× / 7.0 / 22 / 0.10 / 0.12 |
+| Walk/sprint/jump/gravity/coyote/buffer | `resources/players/default_player.tres` | 5.6 / 1.35× / **7.34** / 22 / 0.10 / 0.12 |
 | Spring length, FOV, scope FOV, pitch clamp | `scenes/characters/player.tscn` → `CameraPivot` | 3.6 / 75 / 55 / 1.35–0.95 |
+| Character capsule/mesh/hurtboxes | `scenes/characters/player.tscn` | 1.36 m, r 0.32 (0.8×) |
 | Shoulder offset, camera height | `CameraPivot` transform | x 0.55, y 1.55 |
 | Sensitivity / invert / scope scale | `user://settings.cfg` via `Settings` | 0.0022 / off / 0.7 |
 
@@ -69,3 +71,5 @@ will tune the resources, rebuild, and re-check. A video/screenshot of the bad fe
   `user://settings.cfg` or via code for now.
 - Camera pitch is clamped to [-1.35, 0.95]; no camera shake yet.
 - The full browser matrix (Firefox/Safari) remains CP5.
+- Camera framing was intentionally **not** changed with the avatar shrink, so the size change can be judged on its own.
+- Feedback and follow-ups are tracked in [`../BACKLOG.md`](../BACKLOG.md); jump floatiness and final map scale are recorded there, not silently changed.
