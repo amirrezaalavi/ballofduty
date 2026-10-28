@@ -29,8 +29,9 @@ func _run() -> void:
 	await physics_frame
 	_count_node(arena)
 	var blocked_spawns := _blocked_spawns(arena)
-	print("arena_stats: draw_calls=%d triangles=%d prop_instances=%d colliders=%d blocked_spawns=%d" % [
-		_draw_calls, _triangles, _instances, _colliders, blocked_spawns,
+	var log_solid := _log_is_solid(arena)
+	print("arena_stats: draw_calls=%d triangles=%d prop_instances=%d colliders=%d blocked_spawns=%d log_solid=%s" % [
+		_draw_calls, _triangles, _instances, _colliders, blocked_spawns, str(log_solid),
 	])
 
 	var ok := true
@@ -45,6 +46,9 @@ func _run() -> void:
 		ok = false
 	if blocked_spawns > 0:
 		push_error("%d spawn point(s) are blocked by geometry" % blocked_spawns)
+		ok = false
+	if not log_solid:
+		push_error("the fallen log has no collision")
 		ok = false
 
 	arena.free()
@@ -68,6 +72,17 @@ func _blocked_spawns(arena: Node3D) -> int:
 			blocked += 1
 			push_warning("Spawn blocked: " + marker.name)
 	return blocked
+
+
+func _log_is_solid(arena: Node3D) -> bool:
+	var space := arena.get_world_3d().direct_space_state
+	var shape := SphereShape3D.new()
+	shape.radius = 0.2
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = shape
+	query.collision_mask = 1
+	query.transform = Transform3D(Basis(), Vector3(-12.0, 0.25, -3.0))
+	return not space.intersect_shape(query, 1).is_empty()
 
 
 func _count_node(node: Node) -> void:

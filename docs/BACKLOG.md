@@ -16,6 +16,9 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S5 | Map scale | CP2 nature arena keeps the 60×60 m playable footprint; final map is still expected to be larger (90–120 m or distinct arenas) | todo | CP3+ |
 | S6 | Jump floatiness | Deferred by request. Current airtime is unchanged conceptually; fixing requires retuning gravity, jump velocity, air control and maybe fall curves together | deferred | CP3+ |
 | S7 | Shadow/lighting verification | Headless software rendering does not show directional shadows; verify on real Chrome/desktop GPU before changing the lighting budget | doing | CP2/CP3 |
+| S8 | Character model | Replaced the capsule with Kenney Blocky `character-a`, 1.36 m, animated idle/walk/sprint | done | CP2 |
+| S9 | Log/stump collision | Logs and stumps now have solid box/cylinder colliders (were walk-through) | done | CP2 |
+| S10 | Tree/rock collider fit | Tree trunk radius reduced from 0.36× to 0.12× scale; low-rock height corrected so invisible collision no longer feels spherical | done | CP2 |
 
 ## Long term (record now, decide later)
 
@@ -31,8 +34,13 @@ Status: `todo` · `doing` · `done` · `deferred`
 | L8 | Server parity | Character scale, hurtboxes, camera-independent stats, jump values must come from the same resources on client and server | todo |
 | L9 | Browser matrix | Real Firefox/Safari, low-end laptop, 720p/60 target (CP5) | todo |
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
+| L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |
+| L12 | Character variants | Remote players need distinct Blocky Characters textures/colors; same animation rig. Add in CP4a roster work. | todo |
 
 ## Changelog
 
 - **2026-10-28 — CP1 feedback:** jump apex +10 %; character −20 %; map-scale and jump-floatiness
   comments recorded. Camera/speed held constant so the next feel pass isolates the size change.
+- **2026-10-29 — CP2 feedback:** Blocky character with animations replaces the capsule; log/stump
+  collision fixed; tree/rock collider shapes tightened. Long-term 3D mountain/terrain map with
+  Minecraft-style chunk limits recorded as **L11**.

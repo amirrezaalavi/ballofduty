@@ -111,7 +111,7 @@ func _place_hero_props() -> void:
 			Transform3D(basis, Vector3(spot.x, 0.03, spot.y)))
 		_colliders.append({
 			"shape": "cylinder", "pos": Vector3(spot.x, 0.0, spot.y),
-			"radius": 0.36 * scale_value, "height": 1.6 * scale_value,
+			"radius": 0.12 * scale_value, "height": 1.3 * scale_value,
 		})
 
 	for spot: Vector3 in HERO_ROCKS:
@@ -129,14 +129,23 @@ func _place_hero_props() -> void:
 		else:
 			_colliders.append({
 				"shape": "cylinder", "pos": Vector3(spot.x, 0.0, spot.y),
-				"radius": 0.48 * scale_value, "height": 0.45 * scale_value,
+				"radius": 0.46 * scale_value, "height": 0.3 * scale_value,
 			})
 
 	# A couple of fallen logs and stumps as low cover landmarks.
 	_add_instance("log", Transform3D(
 		Basis(Vector3.UP, 0.6).scaled(Vector3.ONE * 2.4), Vector3(-12.0, 0.12, -3.0)))
+	_colliders.append({
+		"shape": "box", "pos": Vector3(-12.0, 0.22, -3.0),
+		"size": Vector3(0.7, 0.4, 1.9), "yaw": 0.6,
+	})
+
 	_add_instance("stump", Transform3D(
 		Basis(Vector3.UP, 1.2).scaled(Vector3.ONE * 2.5), Vector3(11.0, 0.03, 14.0)))
+	_colliders.append({
+		"shape": "cylinder", "pos": Vector3(11.0, 0.0, 14.0),
+		"radius": 0.4, "height": 0.45,
+	})
 
 
 func _place_border() -> void:
@@ -163,7 +172,7 @@ func _place_border() -> void:
 			Basis(Vector3.UP, _rng.randf_range(0.0, TAU)).scaled(Vector3.ONE * scale_value), pos))
 		_colliders.append({
 			"shape": "cylinder", "pos": pos,
-			"radius": 0.36 * scale_value, "height": 1.6 * scale_value,
+			"radius": 0.12 * scale_value, "height": 1.3 * scale_value,
 		})
 
 	# Rock wall just outside the invisible boundary.
@@ -292,6 +301,7 @@ func _build_colliders() -> void:
 		body.collision_layer = 1
 		body.collision_mask = 0
 		body.position = collider["pos"]
+		body.rotation.y = float(collider.get("yaw", 0.0))
 
 		var shape_node := CollisionShape3D.new()
 		if collider["shape"] == "box":

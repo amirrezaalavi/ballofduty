@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Resource" path="res://resources/players/default_player.tres" id="2_stats"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://scripts/components/input_handler.gd" id="4_input"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="5_rig"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="6_health"]
+[ext_resource type="PackedScene" path="res://assets/kenney_blocky/character-a.glb" id="7_character"]
+[ext_resource type="Script" path="res://scripts/player/character_visual.gd" id="8_visual"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
 radius = 0.32
@@ -17,19 +19,6 @@ height = 0.96
 
 [sub_resource type="SphereShape3D" id="Shape_hit_head"]
 radius = 0.192
-
-[sub_resource type="CapsuleMesh" id="Mesh_body"]
-radius = 0.32
-height = 1.36
-
-[sub_resource type="StandardMaterial3D" id="Mat_body"]
-albedo_color = Color(0.215686, 0.878431, 0.784314, 1)
-roughness = 0.6
-metallic_specular = 0.35
-
-[sub_resource type="StandardMaterial3D" id="Mat_face"]
-albedo_color = Color(0.043137, 0.062745, 0.12549, 1)
-roughness = 0.4
 
 [node name="Player" type="CharacterBody3D"]
 collision_layer = 2
@@ -54,17 +43,10 @@ script = ExtResource("6_health")
 max_health = 100
 
 [node name="Visual" type="Node3D" parent="."]
+script = ExtResource("8_visual")
 
-[node name="Mesh" type="MeshInstance3D" parent="Visual"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.68, 0)
-mesh = SubResource("Mesh_body")
-material_override = SubResource("Mat_body")
-
-[node name="Face" type="MeshInstance3D" parent="Visual"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.92, -0.272)
-mesh = SubResource("Mesh_body")
-material_override = SubResource("Mat_face")
-scale = Vector3(0.176, 0.128, 0.224)
+[node name="Character" parent="Visual" instance=ExtResource("7_character")]
+transform = Transform3D(-0.68, 0, 0, 0, 0.68, 0, 0, 0, -0.68, 0, 0, 0)
 
 [node name="BodyHurtbox" type="Area3D" parent="."]
 collision_layer = 8

@@ -105,8 +105,15 @@ func _init() -> void:
 			and is_equal_approx(physical_shape.radius, 0.32),
 			"character is 20% smaller (1.36 m capsule)"
 		)
-		var visual_mesh := (player.get_node("Visual/Mesh") as MeshInstance3D).mesh as CapsuleMesh
-		_check(visual_mesh != null and is_equal_approx(visual_mesh.height, 1.36), "visual mesh matches physical size")
+		var character := player.get_node_or_null("Visual/Character")
+		_check(character != null, "animated character model is present")
+		if character:
+			var animation_player := character.find_child("AnimationPlayer", true, false) as AnimationPlayer
+			_check(animation_player != null, "character has an AnimationPlayer")
+			if animation_player:
+				_check(animation_player.has_animation(&"idle"), "character has idle animation")
+				_check(animation_player.has_animation(&"walk"), "character has walk animation")
+				_check(animation_player.has_animation(&"sprint"), "character has sprint animation")
 
 		var locomotion := player.get_node_or_null("LocomotionComponent") as LocomotionComponent
 		_check(locomotion != null and locomotion.stats != null, "locomotion component has PlayerStats")
