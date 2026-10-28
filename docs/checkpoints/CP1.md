@@ -3,7 +3,7 @@
 - **Date:** 2026-10-28
 - **Build:** `34b354e` (feedback revision: smaller avatar, higher jump)
 - **Engine:** Godot 4.7.2-stable, Compatibility, 30 Hz physics + physics interpolation
-- **Status:** implementation complete — **awaiting your feel sign-off**
+- **Status:** **accepted by user** (2026-10-28)
 
 ## Automated acceptance evidence
 
@@ -26,7 +26,7 @@
 
 Screenshot: [`cp1-debug-overlay.png`](./cp1-debug-overlay.png) (headless Chromium).
 
-## Awaiting your sign-off (cannot be measured from here)
+## User feel test (accepted)
 
 1. **Mouse-look feel at 144 Hz** — no 30 Hz stepping.
 2. **Camera**: distance (3.6 m), shoulder offset (0.55 m), height (1.55 m).
@@ -60,7 +60,7 @@ camera distance, FOV). `Esc` releases the mouse.
 | Shoulder offset, camera height | `CameraPivot` transform | x 0.55, y 1.55 |
 | Sensitivity / invert / scope scale | `user://settings.cfg` via `Settings` | 0.0022 / off / 0.7 |
 
-Reply with the numbers you want changed (e.g. “camera 4.2 m, shoulder 0.7, FOV 80, speed 6.0”) and I
+Accepted as-is; tuning requests are tracked in `docs/BACKLOG.md`. Reply with numbers to change (e.g. “camera 4.2 m, shoulder 0.7, FOV 80, speed 6.0”) and I
 will tune the resources, rebuild, and re-check. A video/screenshot of the bad feel is even better.
 
 ## Notes / deviations

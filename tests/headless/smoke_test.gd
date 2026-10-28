@@ -42,6 +42,24 @@ func _init() -> void:
 		"LocomotionComponent", "InputHandler", "HealthComponent"])
 	_check_scene("res://scenes/maps/arena_greybox.tscn",
 		["Floor", "Ramp", "PlatformA", "PlatformB", "CameraWall", "Spawn01", "Spawn08"])
+	_check_scene("res://scenes/maps/arena_nature.tscn",
+		["Floor", "PlatformA", "PlatformB", "CameraWall", "Props", "Spawn01", "Spawn08"])
+
+	var nature_scene := load("res://scenes/maps/arena_nature.tscn") as PackedScene
+	if nature_scene:
+		var nature := nature_scene.instantiate()
+		var spawns: Array[Vector3] = []
+		for child in nature.get_children():
+			if child is Marker3D and child.name.begins_with("Spawn"):
+				spawns.append((child as Marker3D).position)
+		_check(spawns.size() == 8, "nature arena has 8 spawn points")
+		var too_close := false
+		for a in spawns.size():
+			for b in range(a + 1, spawns.size()):
+				if spawns[a].distance_to(spawns[b]) < 15.0:
+					too_close = true
+		_check(not too_close, "all spawn points are at least 15 m apart")
+		nature.free()
 
 	var stats := load("res://resources/players/default_player.tres") as PlayerStats
 	_check(stats != null, "default PlayerStats resource loads")

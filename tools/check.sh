@@ -30,6 +30,10 @@ log "Headless smoke tests"
 "$GODOT" --headless --path . --script tests/headless/smoke_test.gd 2>&1 | tee /tmp/bod_smoke.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_smoke.log
 
+log "Arena budget"
+"$GODOT" --headless --path . --script tests/headless/arena_stats.gd 2>&1 | tee /tmp/bod_arena.log
+! grep -E "FAIL|SCRIPT ERROR|Parse Error|exceed" /tmp/bod_arena.log
+
 log "Locomotion tests"
 "$GODOT" --headless --path . --script tests/headless/movement_test.gd 2>&1 | tee /tmp/bod_movement.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_movement.log

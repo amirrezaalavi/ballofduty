@@ -1,0 +1,169 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/nature_arena.gd" id="1_arena"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.239216, 0.529412, 0.827451, 1)
+sky_horizon_color = Color(0.74902, 0.862745, 0.94902, 1)
+sky_curve = 0.15
+ground_bottom_color = Color(0.180392, 0.25098, 0.2, 1)
+ground_horizon_color = Color(0.6, 0.701961, 0.62, 1)
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Env_main"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 2
+ambient_light_color = Color(0.78, 0.82, 0.72, 1)
+ambient_light_energy = 0.5
+tonemap_mode = 2
+tonemap_exposure = 0.95
+
+[sub_resource type="StandardMaterial3D" id="Mat_grass"]
+albedo_color = Color(0.329412, 0.521569, 0.278431, 1)
+roughness = 1.0
+
+[sub_resource type="StandardMaterial3D" id="Mat_stone"]
+albedo_color = Color(0.529412, 0.541176, 0.505882, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="Mesh_floor"]
+size = Vector3(72, 0.5, 72)
+
+[sub_resource type="BoxShape3D" id="Shape_floor"]
+size = Vector3(72, 0.5, 72)
+
+[sub_resource type="BoxMesh" id="Mesh_platform"]
+size = Vector3(4, 0.8, 4)
+
+[sub_resource type="BoxShape3D" id="Shape_platform"]
+size = Vector3(4, 0.8, 4)
+
+[sub_resource type="BoxMesh" id="Mesh_wall"]
+size = Vector3(1, 3, 7)
+
+[sub_resource type="BoxShape3D" id="Shape_wall"]
+size = Vector3(1, 3, 7)
+
+[sub_resource type="BoxShape3D" id="Shape_boundary_long"]
+size = Vector3(62, 4, 1)
+
+[sub_resource type="BoxShape3D" id="Shape_boundary_side"]
+size = Vector3(1, 4, 62)
+
+[node name="ArenaNature" type="Node3D"]
+script = ExtResource("1_arena")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, 0, 0.5, 0.383022, 0.642788, -0.663414, -0.321394, 0.766044, 0.55667, 0, 20, 0)
+light_color = Color(1, 0.956863, 0.854902, 1)
+light_energy = 1.25
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 80.0
+
+[node name="Floor" type="StaticBody3D" parent="."]
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+shape = SubResource("Shape_floor")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+mesh = SubResource("Mesh_floor")
+material_override = SubResource("Mat_grass")
+
+[node name="BoundaryNorth" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, -30.5)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BoundaryNorth"]
+shape = SubResource("Shape_boundary_long")
+
+[node name="BoundarySouth" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 30.5)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BoundarySouth"]
+shape = SubResource("Shape_boundary_long")
+
+[node name="BoundaryWest" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -30.5, 2, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BoundaryWest"]
+shape = SubResource("Shape_boundary_side")
+
+[node name="BoundaryEast" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30.5, 2, 0)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="BoundaryEast"]
+shape = SubResource("Shape_boundary_side")
+
+[node name="PlatformA" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.4, -6)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlatformA"]
+shape = SubResource("Shape_platform")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PlatformA"]
+mesh = SubResource("Mesh_platform")
+material_override = SubResource("Mat_stone")
+
+[node name="PlatformB" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.4, -12)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="PlatformB"]
+shape = SubResource("Shape_platform")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="PlatformB"]
+mesh = SubResource("Mesh_platform")
+material_override = SubResource("Mat_stone")
+
+[node name="CameraWall" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1.5, -14)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CameraWall"]
+shape = SubResource("Shape_wall")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CameraWall"]
+mesh = SubResource("Mesh_wall")
+material_override = SubResource("Mat_stone")
+
+[node name="Props" type="Node3D" parent="."]
+
+[node name="Spawn01" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 22, 0.1, 0)
+
+[node name="Spawn02" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5563, 0.1, 15.5563)
+
+[node name="Spawn03" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 22)
+
+[node name="Spawn04" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.5563, 0.1, 15.5563)
+
+[node name="Spawn05" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -22, 0.1, 0)
+
+[node name="Spawn06" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -15.5563, 0.1, -15.5563)
+
+[node name="Spawn07" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, -22)
+
+[node name="Spawn08" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15.5563, 0.1, -15.5563)
