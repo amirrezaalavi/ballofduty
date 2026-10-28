@@ -1,6 +1,6 @@
 # Ball of Duty — Roadmap & Acceptance Criteria
 
-Status: **CP0 verified** (CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility**
+Status: **CP1 awaiting feel sign-off** (CP0 verified; CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility**
 Platform: **Web (primary) + native desktop/headless Linux (dev & server)**
 
 A checkpoint is **done** only when every acceptance criterion is met and the evidence is recorded

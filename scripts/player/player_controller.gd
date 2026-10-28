@@ -1,49 +1,31 @@
 class_name PlayerController
 extends CharacterBody3D
-## CP0/CP1 movement stub: 30 Hz physics simulation, render-rate mouse look.
-##
-## Deliberate design notes:
-## - Movement is simulated in _physics_process (project physics tick = 30 Hz).
-##   Do NOT add a second accumulator in _process; that would double-step.
-## - Mouse look is applied from _unhandled_input at render rate, so aiming never
-##   feels stepped at 30 Hz.
-## - Camera/aim is presentation until CP4b, when the tick's input frame becomes
-##   the authoritative input sent to the server.
+## Local player driver: input sampling + camera presentation, delegating all
+## movement to LocomotionComponent. The server will run the same component with
+## network input frames in CP4b; nothing here may live inside that component.
 
-@export_group("Movement")
-@export var move_speed: float = 5.6
-@export var sprint_multiplier: float = 1.35
-@export var ground_acceleration: float = 60.0
-@export var air_acceleration: float = 12.0
-@export var jump_velocity: float = 7.0
+@onready var camera_rig: CameraRig = $CameraPivot
+@onready var locomotion: LocomotionComponent = $LocomotionComponent
+@onready var input_handler: InputHandler = $InputHandler
+@onready var visual: Node3D = $Visual
 
-@export_group("Camera")
-@export var mouse_sensitivity: float = 0.0022
-@export var normal_fov: float = 75.0
-@export var scope_fov: float = 55.0
-@export var scope_speed: float = 400.0
-@export var pitch_min: float = -1.35
-@export var pitch_max: float = 0.95
-
-@onready var camera_pivot: Node3D = $CameraPivot
-@onready var camera: Camera3D = $CameraPivot/SpringArm3D/Camera3D
-
-var _pitch: float = 0.0
-var _gravity: float = 22.0
+var last_seq: int = 0
 
 
 func _ready() -> void:
-	_gravity = float(ProjectSettings.get_setting("physics/3d/default_gravity", 22.0))
-	camera.fov = normal_fov
-	# Never request pointer lock here: browsers require a user gesture and will
-	# silently reject it. The first click on the canvas captures the mouse.
+	# Never request pointer lock here: browsers require a user gesture. The first
+	# click on the canvas captures the mouse (handled below).
+	if DisplayServer.get_name() == "headless":
+		return
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		rotate_y(-event.relative.x * mouse_sensitivity)
-		_pitch = clampf(_pitch - event.relative.y * mouse_sensitivity, pitch_min, pitch_max)
-		camera_pivot.rotation.x = _pitch
+		var scoped := Input.is_action_pressed("aim")
+		var yaw_delta := camera_rig.look(event.relative, scoped)
+		rotate_y(yaw_delta)
+		# Let the model lag slightly behind the aim direction, then settle.
+		visual.rotation.y = wrapf(visual.rotation.y - yaw_delta, -PI, PI)
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -57,29 +39,14 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
-	var target_fov := scope_fov if Input.is_action_pressed("aim") else normal_fov
-	camera.fov = move_toward(camera.fov, target_fov, scope_speed * delta)
+	camera_rig.update_aim(Input.is_action_pressed("aim"), delta)
+
+	if locomotion.stats:
+		var weight := 1.0 - exp(-locomotion.stats.visual_turn_speed * delta)
+		visual.rotation.y = lerp_angle(visual.rotation.y, 0.0, weight)
 
 
 func _physics_process(delta: float) -> void:
-	if not is_on_floor():
-		velocity.y -= _gravity * delta
-	elif Input.is_action_just_pressed("jump"):
-		velocity.y = jump_velocity
-
-	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var direction := transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)
-	direction.y = 0.0
-	if direction.length_squared() > 1.0:
-		direction = direction.normalized()
-
-	var speed := move_speed
-	if Input.is_action_pressed("sprint"):
-		speed *= sprint_multiplier
-
-	var target := direction * speed
-	var acceleration := ground_acceleration if is_on_floor() else air_acceleration
-	velocity.x = move_toward(velocity.x, target.x, acceleration * delta)
-	velocity.z = move_toward(velocity.z, target.z, acceleration * delta)
-
-	move_and_slide()
+	var frame := input_handler.sample(rotation.y, camera_rig.pitch)
+	last_seq = frame.seq
+	locomotion.simulate(self, frame, delta)

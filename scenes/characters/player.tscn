@@ -1,6 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
+[ext_resource type="Resource" path="res://resources/players/default_player.tres" id="2_stats"]
+[ext_resource type="Script" path="res://scripts/components/locomotion_component.gd" id="3_loco"]
+[ext_resource type="Script" path="res://scripts/components/input_handler.gd" id="4_input"]
+[ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="5_rig"]
+[ext_resource type="Script" path="res://scripts/components/health_component.gd" id="6_health"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
 radius = 0.4
@@ -37,6 +42,17 @@ script = ExtResource("1_player")
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 shape = SubResource("Capsule_body")
 
+[node name="LocomotionComponent" type="Node" parent="."]
+script = ExtResource("3_loco")
+stats = ExtResource("2_stats")
+
+[node name="InputHandler" type="Node" parent="."]
+script = ExtResource("4_input")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("6_health")
+max_health = 100
+
 [node name="Visual" type="Node3D" parent="."]
 
 [node name="Mesh" type="MeshInstance3D" parent="Visual"]
@@ -70,6 +86,7 @@ shape = SubResource("Shape_hit_head")
 
 [node name="CameraPivot" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 1.55, 0)
+script = ExtResource("5_rig")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraPivot"]
 spring_length = 3.6

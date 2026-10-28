@@ -30,10 +30,24 @@ func _init() -> void:
 	for action: String in REQUIRED_ACTIONS:
 		_check(InputMap.has_action(action), "input action exists: " + action)
 
-	_check_scene("res://scenes/main.tscn", ["Arena", "Player"])
+	_check_equal(
+		String(ProjectSettings.get_setting("autoload/Settings", "")),
+		"*res://scripts/autoload/settings.gd",
+		"Settings autoload is registered"
+	)
+
+	_check_scene("res://scenes/main.tscn", ["Arena", "Player", "DebugOverlay"])
 	_check_scene("res://scenes/characters/player.tscn",
-		["CollisionShape3D", "Visual", "BodyHurtbox", "HeadHurtbox", "CameraPivot"])
-	_check_scene("res://scenes/maps/arena_greybox.tscn", ["Floor", "Ramp", "Spawn01", "Spawn08"])
+		["CollisionShape3D", "Visual", "BodyHurtbox", "HeadHurtbox", "CameraPivot",
+		"LocomotionComponent", "InputHandler", "HealthComponent"])
+	_check_scene("res://scenes/maps/arena_greybox.tscn",
+		["Floor", "Ramp", "PlatformA", "PlatformB", "CameraWall", "Spawn01", "Spawn08"])
+
+	var stats := load("res://resources/players/default_player.tres") as PlayerStats
+	_check(stats != null, "default PlayerStats resource loads")
+	if stats:
+		_check(is_equal_approx(stats.move_speed, 5.6), "move speed comes from PlayerStats")
+		_check(stats.ground_acceleration > stats.air_acceleration, "air control is weaker than ground control")
 
 	var player_scene := load("res://scenes/characters/player.tscn") as PackedScene
 	if player_scene:
@@ -65,6 +79,16 @@ func _init() -> void:
 				_check(head_top <= 1.75, "head hurtbox is inside the avatar silhouette")
 
 		_check_equal(player.collision_mask, 1, "player collides with world only (no predicted body collisions)")
+
+		var locomotion := player.get_node_or_null("LocomotionComponent") as LocomotionComponent
+		_check(locomotion != null and locomotion.stats != null, "locomotion component has PlayerStats")
+		_check(player.get_node_or_null("InputHandler") is InputHandler, "input handler is present")
+		_check(player.get_node_or_null("HealthComponent") is HealthComponent, "health component is present")
+		var rig := player.get_node_or_null("CameraPivot") as CameraRig
+		_check(rig != null, "camera pivot uses CameraRig")
+		if rig:
+			_check(is_equal_approx(rig.spring_length, 3.6), "camera spring length is data-driven")
+			_check(rig.scope_fov < rig.normal_fov, "scope FOV is tighter than hip FOV")
 		player.free()
 
 	var arena_scene := load("res://scenes/maps/arena_greybox.tscn") as PackedScene
