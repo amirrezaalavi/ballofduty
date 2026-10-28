@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Reproducible Godot launcher. Override with GODOT_BIN if needed.
+set -euo pipefail
+
+GODOT_BIN="${GODOT_BIN:-/srv/opencode/pkg/godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64}"
+
+if [[ ! -x "$GODOT_BIN" ]]; then
+  echo "Godot executable not found or not executable: $GODOT_BIN" >&2
+  echo "Set GODOT_BIN=/path/to/godot" >&2
+  exit 1
+fi
+
+exec "$GODOT_BIN" "$@"

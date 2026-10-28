@@ -1,0 +1,23 @@
+# Godot 4
+.godot/
+export/
+build/
+*.translation
+
+# Local tooling / logs
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Exports and secrets
+*.pck
+*.zip
+*.tpz
+.env
+.env.*
+!.env.example
+
+# Editors
+.vscode/
+.idea/
