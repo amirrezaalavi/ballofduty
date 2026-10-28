@@ -81,7 +81,7 @@ func _test_jump(stats: PlayerStats) -> void:
 		height += vy * DT
 		peak = maxf(peak, height)
 		vy = maxf(vy - stats.gravity * DT, -stats.max_fall_speed)
-	_check(peak > 1.0 and peak < 1.4, "jump apex is ~1.2 m (got %.2f)" % peak)
+	_check(peak > 1.25 and peak < 1.45, "jump apex is ~1.35 m (got %.2f)" % peak)
 	print("  jump_apex=%.2f m" % peak)
 
 	loco.free()

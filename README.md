@@ -66,6 +66,7 @@ res://
 
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — revised sequencing, Phase 4 split, acceptance criteria
 - [`docs/PLAN.md`](docs/PLAN.md) — execution plan, subagent usage, how you can help
+- [`docs/BACKLOG.md`](docs/BACKLOG.md) — short-term feedback and long-term recommendations
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — authority model, layers, events, directories
 
 ## License

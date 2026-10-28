@@ -47,6 +47,7 @@ func _init() -> void:
 	_check(stats != null, "default PlayerStats resource loads")
 	if stats:
 		_check(is_equal_approx(stats.move_speed, 5.6), "move speed comes from PlayerStats")
+		_check(is_equal_approx(stats.jump_velocity, 7.34), "jump velocity is the +10% value")
 		_check(stats.ground_acceleration > stats.air_acceleration, "air control is weaker than ground control")
 
 	var player_scene := load("res://scenes/characters/player.tscn") as PackedScene
@@ -66,7 +67,7 @@ func _init() -> void:
 			var capsule := body_shape.shape as CapsuleShape3D
 			_check(capsule != null, "body hurtbox is a capsule")
 			if capsule:
-				_check(is_equal_approx(capsule.height, 1.2), "body hurtbox excludes the head")
+				_check(is_equal_approx(capsule.height, 0.96), "body hurtbox excludes the head")
 				var body_bottom := body_shape.position.y - capsule.height * 0.5
 				_check(body_bottom >= -0.01, "body hurtbox does not extend below the floor")
 
@@ -76,9 +77,18 @@ func _init() -> void:
 			_check(sphere != null, "head hurtbox is a sphere")
 			if sphere:
 				var head_top := head_shape.position.y + sphere.radius
-				_check(head_top <= 1.75, "head hurtbox is inside the avatar silhouette")
+				_check(head_top <= 1.4, "head hurtbox is inside the 1.36 m avatar silhouette")
 
 		_check_equal(player.collision_mask, 1, "player collides with world only (no predicted body collisions)")
+
+		var physical_shape := (player.get_node("CollisionShape3D") as CollisionShape3D).shape as CapsuleShape3D
+		_check(
+			physical_shape != null and is_equal_approx(physical_shape.height, 1.36)
+			and is_equal_approx(physical_shape.radius, 0.32),
+			"character is 20% smaller (1.36 m capsule)"
+		)
+		var visual_mesh := (player.get_node("Visual/Mesh") as MeshInstance3D).mesh as CapsuleMesh
+		_check(visual_mesh != null and is_equal_approx(visual_mesh.height, 1.36), "visual mesh matches physical size")
 
 		var locomotion := player.get_node_or_null("LocomotionComponent") as LocomotionComponent
 		_check(locomotion != null and locomotion.stats != null, "locomotion component has PlayerStats")
