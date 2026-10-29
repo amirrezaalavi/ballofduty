@@ -9,6 +9,19 @@ Status: `todo` · `doing` · `done` · `deferred`
 
 | # | Item | Decision / target | Status | Phase |
 |---|---|---|---|---|
+| S44 | Visible bullets | Pooled 0.28 m glowing projectile at 81 m/s with trail, swept stop, impact spark; 24-node pool; no per-shot allocation | todo | CP4c-fix |
+| S43 | Speed retune | Walk **1.05 m/s** (+5 %), sprint **2.75 m/s** (+10 %); projectile **81 m/s** (−10 %) | todo | CP4c-fix |
+| S42 | Revised execution plan | Phase 0 trust/feel, Phase 1 three parallel agents, Phase 2 world, Phase 3 CP4d/CP5 — see `docs/PLAN.md` | doing | next |
+| S41 | Connection state truth | P0: `CONNECTING/CONNECTED/FAILED/TIMEOUT/LOST`, HUD banner, retry, clear ghosts, restore offline play when the socket never opens. One-origin static+WS proxy so only one port needs forwarding | todo | CP4c-fix |
+| S40 | Combat telemetry | Server counters: inputs, shots accepted/rejected (rate/ammo/reload), projectiles spawned/expired, hits/misses, event bytes; debug overlay toggle | todo | CP4c-fix |
+| S39 | Gun/turn behavior | Gun follows hand/body, not camera; body turns to view on fire (turn-then-shoot); legs keep movement direction; no permanent aim overlay | todo | CP4c-fix |
+| S38 | Character rig + strafe | UAL has no strafe clips. Choose a CC0 rig with strafe locomotion or drive lower-body yaw procedurally; rebuild the clip map and remote states | todo | CP5 |
+| S37 | Rifle model | Replace the `BoxMesh` gun with a low-poly rifle, grip socket and muzzle marker; keep the asset contract stable | todo | CP5 |
+| S36 | Tracer/impact feel | 0.15–0.25 s tapered tracer, muzzle light, impact puff/hit spark, pooled meshes/materials; optional visible projectile | todo | CP4c-fix |
+| S35 | First-shot hitch | Pre-warm tracer/impact materials, pool nodes, resume AudioContext on first gesture, profile Firefox 2 s stall | todo | CP4c-fix |
+| S34 | Loading + quick menu | Animated HTML boot screen and an in-engine main menu (name, host, join, solo, settings entry) instead of the bottom-right dev panel | todo | CP5 |
+| S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S32 | Playtest 2026-10-29 | Connection never reached `:9180`; see `docs/PLAYTEST-2026-10-29.md` | done | CP4c |
 | S1 | Jump height +10 % | `jump_velocity` 7.00 → **7.34** (apex 1.23 m → **1.35 m**) | done | CP1 |
 | S2 | Character 20 % smaller | Physical capsule, mesh, hurtboxes scaled to 0.8; camera framing unchanged for now | done | CP1 |
 | S3 | Re-check camera after shrink | User accepted the current 3.6 m / 0.55 m / 1.55 m framing as-is | done | CP1 |
