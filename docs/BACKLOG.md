@@ -22,6 +22,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S51 | Class balance pass | Projectiles −30 % speed; Mage cycle +40 %, damage −20 %; crossbow 18/36; heavy gravity 12/10; pierce second-hurtbox fix | done | CP5 |
 | S50 | Sunken Quarry arena | 150×150 m, 3×3 mesh chunks, heightmap/collision, double-wall caves, rock skirts, MultiMesh foliage, 8 spawns; greybox then art | todo | CP5 |
 | S49 | Class weapons v1 | Five class profiles, picker (`?class=`), per-class variants/models/animations/HUD; M4 retired for now; Quaternius CC0 spear/bow models | done | CP5 |
 | S48 | Class weapons + bigger map research | Report + decisions at `docs/research/weapons-and-arena.md` / `WEAPONS-DECISIONS.md` | done | CP5 |

@@ -109,8 +109,11 @@ func _impact(hit: Dictionary) -> void:
 			_apply_hit_effects(hurtbox)
 	else:
 		# A piercing round met the same victim's second hurtbox (body/head).
-		# Never double-dip, but let the round continue.
-		pass
+		# Never double-dip and never stop on the same entity: step past it and
+		# keep the remaining pierce budget for the next target.
+		exclusion_rids.append(hurtbox.get_rid())
+		global_position = hit.position + velocity.normalized() * 0.02
+		return
 
 	_spawn_impact(hit.position, hit.get("normal", Vector3.UP))
 	if pierce_left > 0 and not already_hit:

@@ -88,7 +88,12 @@ while the server hits is expected under lag and is better than an invisible one.
   Rogue_Hooded 3-bolt burst, Barbarian arcing axes. M4 retired from the class rotation.
 - Client variants by class, five weapon models (Quaternius spear/bow, KayKit staff/crossbow/axe),
   per-class animation overlays, HUD ammo/heat/charge/burst.
-- 106 tests green; web 14,204 KB gzip. Live Mage pick → join → death marker verified.
+- 106 tests green; web 14,205 KB gzip. Live Mage pick → join → death marker verified.
+- Balance pass: all class projectiles **30 % slower** (Knight 40, Mage 64, bow 31.5–77,
+  crossbow 57, axes 36 m/s); Mage **+40 % cycle** (fire_rate 3.57) and **−20 % damage**
+  (28 body / 44 head / 12 splash); fast crossbow bolts **22 → 18** so heavy hits read stronger.
+  Knight/Barbarian gravity lowered to 12/10 m/s² so the slower arcs stay usable. Piercing a
+  target's second hurtbox no longer stops the round.
 - Next: 150×150 Sunken Quarry/Cavern Pass greybox, then art pass.
 
 ## 3b. Class weapons + bigger playground (research prompt)

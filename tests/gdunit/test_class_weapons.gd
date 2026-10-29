@@ -140,7 +140,7 @@ func test_knight_body_and_head_damage() -> void:
 	await _setup(0)
 	var shot := await _fire_once()
 	expect(not shot.is_empty(), "Knight throw accepted")
-	expect(is_equal_approx(float(shot.get("speed", 0.0)), 58.0), "Knight projectile is 58 m/s")
+	expect(is_equal_approx(float(shot.get("speed", 0.0)), 40.0), "Knight projectile is 40 m/s")
 	expect(_body().current == 40, "Knight body hit deals 60 (hp %d)" % _body().current)
 
 	_entry["cooldown"] = 0.0
@@ -161,8 +161,8 @@ func test_mage_body_damage_and_heat_lockout() -> void:
 	await _setup(1)
 	var shot := await _fire_once()
 	expect(not shot.is_empty(), "Mage bolt accepted")
-	expect(is_equal_approx(float(shot.get("speed", 0.0)), 92.0), "Mage bolt is 92 m/s")
-	expect(_body().current == 65, "Mage direct body hit deals 35 (hp %d)" % _body().current)
+	expect(is_equal_approx(float(shot.get("speed", 0.0)), 64.0), "Mage bolt is 64 m/s")
+	expect(_body().current == 72, "Mage direct body hit deals 28 (hp %d)" % _body().current)
 	expect(_entry["overheated"] == false, "one shot is not an overheat")
 
 	# Five more accepted shots fill the meter; the seventh intent is locked out.
@@ -202,8 +202,8 @@ func test_rogue_charge_hold_then_release() -> void:
 	var released := _combat.process(_entry, _a, _aim_frame(false), DT)
 	expect(not released.is_empty(), "release launches the charged arrow")
 	expect(_combat.shots_fired == shots_before + 1, "exactly one arrow on release")
-	expect(float(released.get("speed", 0.0)) > 100.0,
-		"full draw flies near 110 m/s (%.1f)" % float(released.get("speed", 0.0)))
+	expect(float(released.get("speed", 0.0)) > 70.0,
+		"full draw flies near 77 m/s (%.1f)" % float(released.get("speed", 0.0)))
 	expect(int(released.get("damage", 0)) >= 70,
 		"full draw deals near 75 (got %d)" % int(released.get("damage", 0)))
 	await _settle_shot()

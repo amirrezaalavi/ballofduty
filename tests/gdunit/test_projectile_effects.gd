@@ -121,10 +121,10 @@ func test_mage_splash_damages_neighbour() -> void:
 	await _setup(1, Vector3(0, 0.2, -4), Vector3(1.0, 0.2, -4))
 	var shot := await _fire_at(_body_shape(_b), 12)
 	expect(not shot.is_empty(), "Mage bolt accepted")
-	expect(_health(_b).current == 65, "direct target takes 35 (hp %d)" % _health(_b).current)
+	expect(_health(_b).current == 72, "direct target takes 28 (hp %d)" % _health(_b).current)
 	var splash_lost := 100 - _health(_c).current
 	expect(splash_lost > 0, "neighbour takes splash damage (lost %d)" % splash_lost)
-	expect(splash_lost <= 15, "splash never exceeds its 15 damage cap (lost %d)" % splash_lost)
+	expect(splash_lost <= 12, "splash never exceeds its 12 damage cap (lost %d)" % splash_lost)
 
 
 func test_barbarian_knockback_and_slow_hook() -> void:
@@ -157,7 +157,7 @@ func test_barbarian_knockback_and_slow_hook() -> void:
 func test_crossbow_bleed_hook_ticks_damage() -> void:
 	await _setup(3, Vector3(0, 0.2, -4), Vector3(4, 0.2, -4))
 	await _fire_at(_body_shape(_b), 8)
-	expect(_health(_b).current == 78, "bolt body hit deals 22 (hp %d)" % _health(_b).current)
+	expect(_health(_b).current == 82, "bolt body hit deals 18 (hp %d)" % _health(_b).current)
 	expect(_combat.statuses.has(2), "bleed status installed on the victim")
 	var hp_after_hit := _health(_b).current
 	var damage_before := _combat.damage_hits
