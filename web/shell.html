@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
+		<meta name="theme-color" content="#070b16">
+		<title>Ball of Duty</title>
+		<style>
+:root {
+	--bg: #070b16;
+	--panel: #0d1426;
+	--line: #1d2a46;
+	--text: #e8ecf8;
+	--muted: #7d88a6;
+	--accent: #37e0c8;
+	--warn: #ffc46b;
+	--error: #ff7b88;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #canvas {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	width: 100%;
+	height: 100%;
+}
+
+body {
+	color: var(--text);
+	background-color: var(--bg);
+	overflow: hidden;
+	touch-action: none;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+#canvas {
+	display: block;
+}
+
+#canvas:focus { outline: none; }
+
+#boot {
+	position: fixed;
+	inset: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1.1rem;
+	padding: 2rem;
+	background:
+		radial-gradient(circle at 50% 30%, rgba(55, 224, 200, 0.12), transparent 42%),
+		linear-gradient(145deg, #050810 0%, #091026 52%, #050810 100%);
+	transition: opacity 420ms ease, visibility 420ms ease;
+}
+
+#boot::before {
+	content: "";
+	position: absolute;
+	inset: -20%;
+	background-image:
+		linear-gradient(rgba(55, 224, 200, 0.055) 1px, transparent 1px),
+		linear-gradient(90deg, rgba(55, 224, 200, 0.055) 1px, transparent 1px);
+	background-size: 56px 56px;
+	transform: perspective(500px) rotateX(56deg) translateY(18%);
+	animation: grid-pan 12s linear infinite;
+	pointer-events: none;
+	mask-image: radial-gradient(circle at center, black 10%, transparent 72%);
+}
+
+#boot.is-done {
+	opacity: 0;
+	visibility: hidden;
+}
+
+.boot-card {
+	position: relative;
+	width: min(92vw, 520px);
+	padding: 2rem 2.2rem 1.6rem;
+	background: linear-gradient(180deg, rgba(13, 20, 38, 0.92), rgba(8, 12, 24, 0.96));
+	border: 1px solid var(--line);
+	border-radius: 10px;
+	box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+	text-align: center;
+}
+
+.boot-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: 10px;
+	background: linear-gradient(180deg, rgba(55, 224, 200, 0.06), transparent 40%);
+	pointer-events: none;
+}
+
+.orbit {
+	position: relative;
+	width: 86px;
+	height: 86px;
+	margin: 0 auto 1rem;
+}
+
+.orbit .ring {
+	position: absolute;
+	inset: 0;
+	border: 1px solid rgba(55, 224, 200, 0.24);
+	border-radius: 50%;
+}
+
+.orbit .ring:nth-child(2) {
+	inset: 12px;
+	border-color: rgba(55, 224, 200, 0.14);
+}
+
+.orbit .core {
+	position: absolute;
+	inset: 29px;
+	border-radius: 50%;
+	background: radial-gradient(circle at 35% 30%, #9affef, #1aa995 60%, #0c5a52);
+	box-shadow: 0 0 24px rgba(55, 224, 200, 0.6);
+	animation: pulse 1.8s ease-in-out infinite;
+}
+
+.orbit .satellite {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 8px;
+	height: 8px;
+	margin: -4px;
+	border-radius: 50%;
+	background: var(--accent);
+	box-shadow: 0 0 12px var(--accent);
+	transform-origin: 4px 4px;
+	animation: orbit 2.2s linear infinite;
+}
+
+h1 {
+	margin: 0;
+	font-size: clamp(1.7rem, 5vw, 2.8rem);
+	letter-spacing: 0.11em;
+	color: var(--accent);
+	text-shadow: 0 0 30px rgba(55, 224, 200, 0.32);
+}
+
+.subtitle {
+	margin: 0.45rem 0 1.4rem;
+	font-size: 0.68rem;
+	letter-spacing: 0.24em;
+	color: var(--muted);
+	text-transform: uppercase;
+}
+
+.progress-track {
+	position: relative;
+	height: 7px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: #151f36;
+	border: 1px solid #1d2a46;
+}
+
+.progress-fill {
+	height: 100%;
+	width: 0%;
+	border-radius: inherit;
+	background: linear-gradient(90deg, #1aa995, var(--accent), #9affef);
+	box-shadow: 0 0 16px rgba(55, 224, 200, 0.55);
+	transition: width 180ms ease;
+}
+
+.progress-track.indeterminate .progress-fill {
+	width: 38%;
+	animation: sweep 1.25s ease-in-out infinite;
+}
+
+.boot-line {
+	margin-top: 0.8rem;
+	min-height: 1.1rem;
+	font-size: 0.68rem;
+	letter-spacing: 0.08em;
+	color: var(--muted);
+}
+
+.boot-line::after {
+	content: "";
+	display: inline-block;
+	width: 6px;
+	height: 10px;
+	margin-left: 5px;
+	background: var(--accent);
+	vertical-align: -1px;
+	animation: blink 1s steps(2, start) infinite;
+}
+
+#hint {
+	margin-top: 1.2rem;
+	font-size: 0.66rem;
+	letter-spacing: 0.05em;
+	color: #58627f;
+	text-align: center;
+}
+
+#status-notice {
+	display: none;
+	position: relative;
+	z-index: 2;
+	width: min(92vw, 560px);
+	padding: 1.1rem 1.25rem;
+	background: rgba(58, 27, 38, 0.96);
+	border: 1px solid #9b3943;
+	border-radius: 8px;
+	color: #ffd7de;
+	line-height: 1.5;
+	text-align: center;
+	font-size: 0.8rem;
+	word-break: break-word;
+}
+
+#status-notice button {
+	margin-top: 0.9rem;
+	padding: 0.55rem 1.2rem;
+	background: transparent;
+	border: 1px solid #ff9aa4;
+	border-radius: 4px;
+	color: #ffd7de;
+	font: inherit;
+	font-size: 0.72rem;
+	letter-spacing: 0.12em;
+	cursor: pointer;
+}
+
+#status-notice button:hover { background: rgba(255, 154, 164, 0.12); }
+
+@keyframes orbit {
+	from { transform: rotate(0deg) translateX(39px) rotate(0deg); }
+	to { transform: rotate(360deg) translateX(39px) rotate(-360deg); }
+}
+
+@keyframes pulse {
+	0%, 100% { transform: scale(1); box-shadow: 0 0 18px rgba(55, 224, 200, 0.45); }
+	50% { transform: scale(1.08); box-shadow: 0 0 32px rgba(55, 224, 200, 0.8); }
+}
+
+@keyframes sweep {
+	0% { transform: translateX(-110%); }
+	100% { transform: translateX(310%); }
+}
+
+@keyframes grid-pan {
+	from { background-position: 0 0, 0 0; }
+	to { background-position: 0 56px, 56px 0; }
+}
+
+@keyframes blink {
+	0%, 49% { opacity: 1; }
+	50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*, *::before, *::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+	}
+}
+		</style>
+		$GODOT_HEAD_INCLUDE
+		<!-- BOD_PROXY_INJECT -->
+	</head>
+	<body>
+		<canvas id="canvas">
+			Your browser does not support the canvas tag.
+		</canvas>
+
+		<noscript>
+			Your browser does not support JavaScript.
+		</noscript>
+
+		<div id="boot" role="status" aria-live="polite">
+			<div class="boot-card">
+				<div class="orbit" aria-hidden="true">
+					<div class="ring"></div>
+					<div class="ring"></div>
+					<div class="core"></div>
+					<div class="satellite"></div>
+				</div>
+				<h1>BALL OF DUTY</h1>
+				<p class="subtitle">arena link · boot sequence</p>
+				<div class="progress-track" id="status-progress">
+					<div class="progress-fill" id="status-progress-fill"></div>
+				</div>
+				<div class="boot-line" id="boot-line">initializing engine</div>
+			</div>
+			<div id="status-notice"></div>
+			<div id="hint">Click the canvas to capture the mouse · Esc to release</div>
+		</div>
+
+		<script src="$GODOT_URL"></script>
+		<script>
+const GODOT_CONFIG = $GODOT_CONFIG;
+const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
+const engine = new Engine(GODOT_CONFIG);
+
+(function () {
+	const bootOverlay = document.getElementById('boot');
+	const progressTrack = document.getElementById('status-progress');
+	const progressFill = document.getElementById('status-progress-fill');
+	const bootLine = document.getElementById('boot-line');
+	const statusNotice = document.getElementById('status-notice');
+
+	let initializing = true;
+	let statusMode = 'progress';
+
+	function setBootLine(text) {
+		if (bootLine) {
+			bootLine.textContent = text;
+		}
+	}
+
+	function setProgress(current, total) {
+		if (!progressTrack || !progressFill) {
+			return;
+		}
+		if (current > 0 && total > 0) {
+			progressTrack.classList.remove('indeterminate');
+			progressFill.style.width = Math.min(100, Math.max(2, (current / total) * 100)) + '%';
+			const pct = Math.round((current / total) * 100);
+			if (pct < 25) {
+				setBootLine('loading arena shaders · ' + pct + '%');
+			} else if (pct < 60) {
+				setBootLine('warming collision + navigation · ' + pct + '%');
+			} else if (pct < 95) {
+				setBootLine('assembling match scene · ' + pct + '%');
+			} else {
+				setBootLine('entering arena · ' + pct + '%');
+			}
+		} else {
+			progressTrack.classList.add('indeterminate');
+			setBootLine('fetching game data');
+		}
+	}
+
+	function setStatusNotice(text) {
+		while (statusNotice.lastChild) {
+			statusNotice.removeChild(statusNotice.lastChild);
+		}
+		const lines = text.split('\n');
+		lines.forEach((line) => {
+			statusNotice.appendChild(document.createTextNode(line));
+			statusNotice.appendChild(document.createElement('br'));
+		});
+		const retry = document.createElement('button');
+		retry.type = 'button';
+		retry.textContent = 'RETRY';
+		retry.addEventListener('click', () => window.location.reload());
+		statusNotice.appendChild(retry);
+	}
+
+	function displayFailureNotice(err) {
+		console.error(err);
+		if (err instanceof Error) {
+			setStatusNotice(err.message);
+		} else if (typeof err === 'string') {
+			setStatusNotice(err);
+		} else {
+			setStatusNotice('An unknown error occurred.');
+		}
+		if (progressTrack) {
+			progressTrack.style.display = 'none';
+		}
+		if (bootLine) {
+			bootLine.style.display = 'none';
+		}
+		statusNotice.style.display = 'block';
+		initializing = false;
+		statusMode = 'notice';
+	}
+
+	const missing = Engine.getMissingFeatures({
+		threads: GODOT_THREADS_ENABLED,
+	});
+
+	if (missing.length !== 0) {
+		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
+			let registrationPromise;
+			try {
+				registrationPromise = navigator.serviceWorker.getRegistration();
+			} catch (err) {
+				registrationPromise = Promise.reject(new Error('Service worker registration failed.'));
+			}
+			Promise.race([
+				registrationPromise.then((registration) => {
+					if (registration != null) {
+						return Promise.reject(new Error('Service worker already exists.'));
+					}
+					return registration;
+				}).then(() => engine.installServiceWorker()),
+				new Promise((resolve) => setTimeout(() => resolve(), 2000)),
+			]).then(() => {
+				window.location.reload();
+			}).catch((err) => {
+				console.error('Error while registering service worker:', err);
+			});
+		} else {
+			displayFailureNotice(
+				'Ball of Duty could not start.\nThis browser is missing:\n' + missing.join('\n')
+			);
+		}
+	} else {
+		setProgress(0, 0);
+		engine.startGame({
+			'onProgress': function (current, total) {
+				if (initializing) {
+					setProgress(current, total);
+				}
+			},
+		}).then(() => {
+			if (!initializing) {
+				return;
+			}
+			initializing = false;
+			statusMode = 'hidden';
+			if (bootOverlay) {
+				bootOverlay.classList.add('is-done');
+				window.setTimeout(() => bootOverlay.remove(), 500);
+			}
+		}, displayFailureNotice);
+	}
+}());
+		</script>
+	</body>
+</html>
