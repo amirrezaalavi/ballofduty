@@ -20,28 +20,29 @@ func build(
 	rim_mesh: Mesh,
 	body_material: Material,
 	trail_material: Material,
-	rim_material: Material
+	rim_material: Material,
+	size_scale: float
 ) -> void:
 	# The dark rim sits under the bright streak so it stays readable against
 	# bright grass, sand and sky (additive alone washes out on light terrain).
 	_rim = MeshInstance3D.new()
 	_rim.mesh = rim_mesh
 	_rim.material_override = rim_material
-	_rim.position = Vector3(0.0, 0.0, 1.35)
+	_rim.position = Vector3(0.0, 0.0, 1.35 * size_scale)
 	_rim.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_rim)
 
 	_trail = MeshInstance3D.new()
 	_trail.mesh = trail_mesh
 	_trail.material_override = trail_material
-	_trail.position = Vector3(0.0, 0.0, 1.25)
+	_trail.position = Vector3(0.0, 0.0, 1.25 * size_scale)
 	_trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_trail)
 
 	_body = MeshInstance3D.new()
 	_body.mesh = body_mesh
 	_body.material_override = body_material
-	_body.position = Vector3(0.0, 0.0, -0.18)
+	_body.position = Vector3(0.0, 0.0, -0.18 * size_scale)
 	_body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_body)
 

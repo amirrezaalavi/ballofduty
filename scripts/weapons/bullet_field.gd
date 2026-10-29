@@ -7,6 +7,8 @@ extends Node3D
 const POOL_SIZE := 64
 const IMPACT_POOL := 24
 const IMPACT_LIFE := 0.10
+## Visual bulk is tuned independently of feel: 5% of the previous mesh size.
+const SIZE_SCALE := 0.05
 
 const LOCAL_COLOR := Color(1.0, 0.9, 0.45)
 const REMOTE_COLOR := Color(1.0, 0.6, 0.32)
@@ -62,16 +64,18 @@ func _ensure_pool() -> void:
 	if not _bullets.is_empty():
 		return
 	_body_mesh = BoxMesh.new()
-	_body_mesh.size = Vector3(0.055, 0.055, 0.36)
-	# 2.5 m behind the core: at 81 m/s the round moves 1.35 m per 60 fps frame,
-	# so anything shorter strobes instead of reading as a streak.
+	_body_mesh = BoxMesh.new()
+	_body_mesh.size = Vector3(0.055, 0.055, 0.36) * SIZE_SCALE
+	# Keep the streak proportional to the requested 5% visual size. The bullet
+	# still leaves the gun, not the camera, because it is spawned at the muzzle;
+	# the old long trail behind it was what read as a camera-origin beam.
 	_trail_mesh = BoxMesh.new()
-	_trail_mesh.size = Vector3(0.026, 0.026, 2.5)
+	_trail_mesh.size = Vector3(0.026, 0.026, 2.5) * SIZE_SCALE
 	_rim_mesh = BoxMesh.new()
-	_rim_mesh.size = Vector3(0.075, 0.075, 2.8)
+	_rim_mesh.size = Vector3(0.075, 0.075, 2.8) * SIZE_SCALE
 	_impact_mesh = SphereMesh.new()
-	_impact_mesh.radius = 0.055
-	_impact_mesh.height = 0.11
+	_impact_mesh.radius = 0.055 * SIZE_SCALE
+	_impact_mesh.height = 0.11 * SIZE_SCALE
 
 	for color: Color in [LOCAL_COLOR, REMOTE_COLOR]:
 		var body := StandardMaterial3D.new()
@@ -114,7 +118,8 @@ func _ensure_pool() -> void:
 		add_child(bullet)
 		bullet.build(
 			_body_mesh, _trail_mesh, _rim_mesh,
-			_body_materials[0], _trail_materials[0], _rim_materials[0]
+			_body_materials[0], _trail_materials[0], _rim_materials[0],
+			SIZE_SCALE
 		)
 		bullet.visible = false
 		bullet.set_physics_process(false)
