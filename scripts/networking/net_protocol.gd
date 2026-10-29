@@ -1,0 +1,227 @@
+class_name NetProtocol
+extends RefCounted
+## CP4a binary wire protocol. All integers are little-endian, hand-packed so the
+## layout is unambiguous across native and web exports.
+##
+## Snapshot budget: header 6 B + 15 B/player -> 126 B at 8 players (limit 300 B).
+## Input packet: 12 B at 30 Hz upstream (~360 B/s).
+
+enum Msg { JOIN_REQ = 1, JOIN_OK = 2, DENY = 3, ROSTER = 4, INPUT = 5, SNAPSHOT = 6, LEAVE = 7, PING = 8, PONG = 9 }
+enum DenyReason { FULL = 1 }
+enum AnimState { STILL = 0, WALK = 1, SPRINT = 2, AIR = 3 }
+
+const MAX_PLAYERS := 8
+const MAX_NAME_BYTES := 16
+const MAX_PACKET_BYTES := 2048
+const POS_RANGE := 32.768
+const PITCH_RANGE := 1.6
+
+
+static func sanitize_name(raw: String) -> String:
+	var out := ""
+	for c in raw.strip_edges().left(MAX_NAME_BYTES):
+		if (c >= "a" and c <= "z") or (c >= "A" and c <= "Z") or (c >= "0" and c <= "9") or c == "_" or c == "-" or c == " ":
+			out += c
+	out = out.strip_edges()
+	return out if out != "" else "Player"
+
+
+static func encode_join_request(display_name: String) -> PackedByteArray:
+	var body := sanitize_name(display_name).to_utf8_buffer().slice(0, MAX_NAME_BYTES)
+	var pkt := PackedByteArray([Msg.JOIN_REQ, body.size()])
+	pkt.append_array(body)
+	return pkt
+
+
+static func decode_join_request(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() < 2 or pkt[0] != Msg.JOIN_REQ:
+		return {}
+	var name_len := pkt[1]
+	if name_len > MAX_NAME_BYTES or pkt.size() != 2 + name_len:
+		return {}
+	return {"name": sanitize_name(pkt.slice(2).get_string_from_utf8())}
+
+
+static func encode_join_ok(player_id: int, server_tick: int, spawn: Vector3 = Vector3.ZERO, yaw: float = 0.0) -> PackedByteArray:
+	var pkt := PackedByteArray([Msg.JOIN_OK, player_id & 0xFF]) + _u32(server_tick)
+	pkt.append_array(_i16(_quant_pos(spawn.x)))
+	pkt.append_array(_i16(_quant_pos(spawn.y)))
+	pkt.append_array(_i16(_quant_pos(spawn.z)))
+	pkt.append_array(_i16(int(roundf(clampf(wrapf(yaw, -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
+	return pkt
+
+
+static func decode_join_ok(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() != 14 or pkt[0] != Msg.JOIN_OK:
+		return {}
+	return {
+		"id": pkt[1],
+		"tick": _get_u32(pkt, 2),
+		"spawn": Vector3(_dequant_pos(_get_i16(pkt, 6)), _dequant_pos(_get_i16(pkt, 8)), _dequant_pos(_get_i16(pkt, 10))),
+		"yaw": float(_get_i16(pkt, 12)) / 32767.0 * PI,
+	}
+
+
+static func encode_deny(reason: int) -> PackedByteArray:
+	return PackedByteArray([Msg.DENY, reason & 0xFF])
+
+
+static func encode_roster(entries: Array) -> PackedByteArray:
+	# entries: Array of {id: int, name: String}
+	var pkt := PackedByteArray([Msg.ROSTER, mini(entries.size(), MAX_PLAYERS)])
+	for entry in entries:
+		var body := String(entry["name"]).to_utf8_buffer().slice(0, MAX_NAME_BYTES)
+		pkt.append(entry["id"] & 0xFF)
+		pkt.append(body.size())
+		pkt.append_array(body)
+	return pkt
+
+
+static func decode_roster(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() < 2 or pkt[0] != Msg.ROSTER:
+		return {}
+	var count := pkt[1]
+	if count > MAX_PLAYERS:
+		return {}
+	var entries: Array = []
+	var offset := 2
+	for _i in count:
+		if offset + 2 > pkt.size():
+			return {}
+		var pid := pkt[offset]
+		var name_len := pkt[offset + 1]
+		offset += 2
+		if name_len > MAX_NAME_BYTES or offset + name_len > pkt.size():
+			return {}
+		entries.append({"id": pid, "name": sanitize_name(pkt.slice(offset, offset + name_len).get_string_from_utf8())})
+		offset += name_len
+	if offset != pkt.size():
+		return {}
+	return {"entries": entries}
+
+
+static func encode_input(seq: int, move: Vector2, jump: bool, sprint: bool, scoped: bool, yaw: float, pitch: float) -> PackedByteArray:
+	var flags := 0
+	if jump:
+		flags |= 1
+	if sprint:
+		flags |= 2
+	if scoped:
+		flags |= 4
+	var pkt := PackedByteArray([Msg.INPUT]) + _u32(seq)
+	pkt.append(clampi(int(roundf(clampf(move.x, -1.0, 1.0) * 127.0)), -128, 127) & 0xFF)
+	pkt.append(clampi(int(roundf(clampf(move.y, -1.0, 1.0) * 127.0)), -128, 127) & 0xFF)
+	pkt.append(flags & 0xFF)
+	pkt.append_array(_i16(int(roundf(clampf(wrapf(yaw, -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
+	pkt.append_array(_i16(int(roundf(clampf(pitch / PITCH_RANGE, -1.0, 1.0) * 32767.0))))
+	return pkt
+
+
+static func decode_input(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() != 12 or pkt[0] != Msg.INPUT:
+		return {}
+	var move := Vector2(_s8(pkt[5]) / 127.0, _s8(pkt[6]) / 127.0)
+	if move.length_squared() > 1.02:
+		return {}
+	return {
+		"seq": _get_u32(pkt, 1),
+		"move": move,
+		"jump": (pkt[7] & 1) != 0,
+		"sprint": (pkt[7] & 2) != 0,
+		"scoped": (pkt[7] & 4) != 0,
+		"yaw": float(_get_i16(pkt, 8)) / 32767.0 * PI,
+		"pitch": float(_get_i16(pkt, 10)) / 32767.0 * PITCH_RANGE,
+	}
+
+
+static func encode_snapshot(tick: int, entries: Array) -> PackedByteArray:
+	# entries: Array of {id, pos: Vector3, yaw: float, state: int, hp: int, ack: int}
+	var pkt := PackedByteArray([Msg.SNAPSHOT]) + _u32(tick)
+	pkt.append(mini(entries.size(), MAX_PLAYERS) & 0xFF)
+	for entry in entries:
+		var pos: Vector3 = entry["pos"]
+		pkt.append(entry["id"] & 0xFF)
+		pkt.append_array(_i16(_quant_pos(pos.x)))
+		pkt.append_array(_i16(_quant_pos(pos.y)))
+		pkt.append_array(_i16(_quant_pos(pos.z)))
+		pkt.append_array(_i16(int(roundf(clampf(wrapf(float(entry["yaw"]), -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
+		pkt.append(int(entry["state"]) & 0xFF)
+		pkt.append(clampi(int(entry["hp"]), 0, 255) & 0xFF)
+		pkt.append_array(_u32(int(entry["ack"])))
+	return pkt
+
+
+static func decode_snapshot(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() < 6 or pkt[0] != Msg.SNAPSHOT:
+		return {}
+	var count := pkt[5]
+	if count > MAX_PLAYERS or pkt.size() != 6 + count * 15:
+		return {}
+	var entries: Array = []
+	var offset := 6
+	for _i in count:
+		entries.append({
+			"id": pkt[offset],
+			"pos": Vector3(_dequant_pos(_get_i16(pkt, offset + 1)), _dequant_pos(_get_i16(pkt, offset + 3)), _dequant_pos(_get_i16(pkt, offset + 5))),
+			"yaw": float(_get_i16(pkt, offset + 7)) / 32767.0 * PI,
+			"state": pkt[offset + 9],
+			"hp": pkt[offset + 10],
+			"ack": _get_u32(pkt, offset + 11),
+		})
+		offset += 15
+	return {"tick": _get_u32(pkt, 1), "entries": entries}
+
+
+static func encode_ping(client_msec: int) -> PackedByteArray:
+	return PackedByteArray([Msg.PING]) + _u32(client_msec)
+
+
+static func decode_ping(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() != 5 or pkt[0] != Msg.PING:
+		return {}
+	return {"client_msec": _get_u32(pkt, 1)}
+
+
+static func encode_pong(client_msec: int, server_tick: int) -> PackedByteArray:
+	return PackedByteArray([Msg.PONG]) + _u32(client_msec) + _u32(server_tick)
+
+
+static func decode_pong(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() != 9 or pkt[0] != Msg.PONG:
+		return {}
+	return {"client_msec": _get_u32(pkt, 1), "server_tick": _get_u32(pkt, 5)}
+
+
+static func msg_type(pkt: PackedByteArray) -> int:
+	return pkt[0] if pkt.size() >= 1 else -1
+
+
+static func _quant_pos(v: float) -> int:
+	return clampi(int(roundf(clampf(v, -POS_RANGE, POS_RANGE - 0.001) * 1000.0)), -32768, 32767)
+
+
+static func _dequant_pos(q: int) -> float:
+	return float(q) / 1000.0
+
+
+static func _s8(b: int) -> int:
+	return b - 256 if b > 127 else b
+
+
+static func _u32(v: int) -> PackedByteArray:
+	var u := v & 0xFFFFFFFF
+	return PackedByteArray([u & 0xFF, (u >> 8) & 0xFF, (u >> 16) & 0xFF, (u >> 24) & 0xFF])
+
+
+static func _get_u32(pkt: PackedByteArray, offset: int) -> int:
+	return pkt[offset] | (pkt[offset + 1] << 8) | (pkt[offset + 2] << 16) | (pkt[offset + 3] << 24)
+
+
+static func _i16(v: int) -> PackedByteArray:
+	var u := clampi(v, -32768, 32767) & 0xFFFF
+	return PackedByteArray([u & 0xFF, (u >> 8) & 0xFF])
+
+
+static func _get_i16(pkt: PackedByteArray, offset: int) -> int:
+	var u := pkt[offset] | (pkt[offset + 1] << 8)
+	return u - 65536 if u > 32767 else u

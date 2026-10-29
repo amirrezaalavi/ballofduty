@@ -22,6 +22,9 @@ var _state: StringName = &""
 var _camera_rig: CameraRig
 var _was_airborne: bool = false
 var _landed_at_msec: int = 0
+## Remote ghosts set this from the snapshot state byte; >= 0 skips local
+## derivation and plays the mapped clip (0 still, 1 walk, 2 sprint, 3 air).
+var force_anim: int = -1
 
 
 func _ready() -> void:
@@ -40,6 +43,11 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if animation_player == null or body == null:
+		return
+
+	if force_anim >= 0:
+		_play_forced(force_anim)
+		_update_gun_pitch()
 		return
 
 	var flat := Vector3(body.velocity.x, 0.0, body.velocity.z)
@@ -151,6 +159,23 @@ func _update_gun_pitch() -> void:
 	# The mount inherits yaw from Visual; copy the camera pitch (plus recoil)
 	# so vertical aim moves the gun instead of leaving it fixed.
 	gun_mount.rotation.x = _camera_rig.rotation.x
+
+
+func _play_forced(net_state: int) -> void:
+	var clip := &"Pistol_Idle"
+	match net_state:
+		NetProtocol.AnimState.WALK:
+			clip = &"Walk"
+		NetProtocol.AnimState.SPRINT:
+			clip = &"Sprint"
+		NetProtocol.AnimState.AIR:
+			clip = &"Jump"
+	# Compare against the player, not _state: the local state machine may have
+	# left _state == clip while the player itself is stopped.
+	if animation_player.current_animation != clip:
+		animation_player.play(clip, 0.15)
+	_state = clip
+	animation_player.speed_scale = 1.0
 
 
 func _play(state: StringName) -> void:

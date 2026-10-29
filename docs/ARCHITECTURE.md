@@ -33,6 +33,29 @@ That is a scoped refactor, not a one-file flip — plan for it.
   cannot hide head-of-line retransmit stalls; a lost packet is a visible hitch of at least the RTO. Keep
   snapshots small and budget for it. Revisit WebTransport only if this is unacceptable.
 
+## Wire protocol (CP4a)
+
+All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-packed; no dictionaries.
+
+| Message | Size | Fields |
+|---|---|---|
+| `JOIN_REQ` | 2 + n | name length, up to 16 sanitized bytes |
+| `JOIN_OK` | 14 | id, server tick, **spawn xyz (mm i16), spawn yaw (i16)** |
+| `DENY` | 2 | reason |
+| `ROSTER` | 2 + Σ(2+n) | count, then (id, name len, name) |
+| `INPUT` | 12 | seq u32, move x/y i8, flags, yaw i16, pitch i16 |
+| `SNAPSHOT` | 6 + 15n | tick u32, count, then (id, pos xyz i16 mm, yaw i16, state, hp, acked seq u32) |
+| `PING`/`PONG` | 5 / 9 | client msec; pong adds server tick |
+
+- Position quantization is millimetres over ±32.768 m (2 mm round-trip error in tests).
+- Every decoder rejects wrong lengths, counts above 8, and out-of-range values; the transport also caps
+  packets at 2 KB and drains at most 64 per frame to prevent stalls.
+- **Spawn authority:** the server owns the spawn pose and ships it in `JOIN_OK`; clients must adopt it
+  or they will disagree with every other client about where they are standing.
+- **Yaw ownership:** the client owns aim yaw *after* its first input frame. Before that, the server keeps
+  the spawn yaw so a missing packet can never spin a player to a default angle.
+- Broadcasts go to joined roster peers only, never to half-open connections.
+
 ## Collision layers
 
 Defined in `project.godot` under `layer_names/3d_physics`:
@@ -78,7 +101,7 @@ Conventions:
 ## Components & scenes
 
 ```text
-Player.tscn (CharacterBody3D)
+Player.tscn (CharacterBody3D) — roles: LOCAL (input/camera), REMOTE (snapshot-posed), SERVER (authority)
 ├── CollisionShape3D
 ├── Visual (Node3D) → Mesh/Face (presentation only)
 ├── BodyHurtbox / HeadHurtbox   (Area3D, layer hurtbox)

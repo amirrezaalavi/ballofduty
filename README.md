@@ -3,7 +3,15 @@
 A lightweight, cute, web-first 3D third-person arena shooter. Eight players, one rifle, five minutes,
 bragging rights.
 
-**Status:** CP3 implemented — combat, HUD and audio awaiting feel review (CP0/CP1/CP2 accepted; CI first run pending a remote). See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Status:** CP4a implemented — WebSocket client/server replication awaiting a two-player test
+(CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first run pending a remote).
+See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+```bash
+tools/godot --headless --path . -- --server --port 9180   # authority
+tools/check.sh && tools/serve.sh 8099                     # web build
+# open http://127.0.0.1:8099/?join=1&host=127.0.0.1&port=9180&name=You
+```
 **Engine:** Godot 4.7.2 (GDScript) · **Renderer:** Compatibility (WebGL 2) · **Netcode:** WebSocket,
 Godot headless authoritative server, 30 Hz fixed tick.
 

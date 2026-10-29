@@ -42,6 +42,12 @@ log "Combat tests"
 "$GODOT" --headless --path . --script tests/headless/combat_test.gd 2>&1 | tee /tmp/bod_combat.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_combat.log
 
+log "Netcode tests"
+"$GODOT" --headless --path . --script tests/headless/net_protocol_test.gd 2>&1 | tee /tmp/bod_net_protocol.log
+! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_net_protocol.log
+"$GODOT" --headless --path . --script tests/headless/net_loopback_test.gd 2>&1 | tee /tmp/bod_net_loopback.log
+! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_net_loopback.log
+
 log "Headless client boot"
 "$GODOT" --headless --path . --quit-after 120 --max-fps 60 2>&1 | tee /tmp/bod_client.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_client.log

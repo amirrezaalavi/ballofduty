@@ -45,6 +45,16 @@ func _init() -> void:
 		"*res://scripts/autoload/audio_manager.gd",
 		"AudioManager autoload is registered"
 	)
+	_check_equal(
+		String(ProjectSettings.get_setting("autoload/NetworkManager", "")),
+		"*res://scripts/networking/network_manager.gd",
+		"NetworkManager autoload is registered"
+	)
+	_check_equal(
+		String(ProjectSettings.get_setting("autoload/GameManager", "")),
+		"*res://scripts/game/game_manager.gd",
+		"GameManager autoload is registered"
+	)
 
 	_check_scene("res://scenes/main.tscn", ["Arena", "Player", "HUD", "DebugOverlay"])
 	_check_scene("res://scenes/characters/player.tscn",

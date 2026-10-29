@@ -22,6 +22,8 @@ run/flush_stdout_on_print=true
 Settings="*res://scripts/autoload/settings.gd"
 EventBus="*res://scripts/autoload/event_bus.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
+NetworkManager="*res://scripts/networking/network_manager.gd"
+GameManager="*res://scripts/game/game_manager.gd"
 
 [display]
 
