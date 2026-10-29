@@ -14,8 +14,9 @@ func test_tuned_speeds_and_projectile() -> void:
 
 
 func test_turn_then_shoot() -> void:
+	# Intent shaping only reads view_yaw/rotation/aim state; no tree needed, so
+	# the visual layer never creates deferred overlays during this test.
 	var player := (load("res://scenes/characters/player.tscn") as PackedScene).instantiate() as PlayerController
-	add_child(player)
 	player.rotation.y = 0.0
 	player.view_yaw = PI * 0.5
 
@@ -33,7 +34,7 @@ func test_turn_then_shoot() -> void:
 	player._shape_combat_intent(second)
 	expect(second.fire, "shot fires once the body is aligned")
 	expect(player.aim_hold_until_msec > Time.get_ticks_msec(), "body stays aimed after firing")
-	player.queue_free()
+	player.free()
 
 
 func test_interpolator_is_smooth_and_teleports() -> void:
@@ -60,6 +61,7 @@ func test_interpolator_is_smooth_and_teleports() -> void:
 	expect((after["pos"] as Vector3).distance_to(Vector3(10.0, 0.0, 0.0)) < 0.2,
 		"teleport snaps instead of sliding")
 	interp.queue_free()
+	await get_tree().process_frame
 
 
 func test_client_timeout_reports_failure() -> void:
@@ -73,3 +75,41 @@ func test_client_timeout_reports_failure() -> void:
 	expect(net.last_error != "", "unreachable server records a reason")
 	expect(net.mode == net.Mode.OFFLINE, "failed connection returns to offline")
 	net.queue_free()
+	await get_tree().process_frame
+
+
+func test_death_pose_and_red_marker() -> void:
+	var floor_body := StaticBody3D.new()
+	var floor_shape := CollisionShape3D.new()
+	var floor_box := BoxShape3D.new()
+	floor_box.size = Vector3(20, 1, 20)
+	floor_shape.shape = floor_box
+	floor_body.add_child(floor_shape)
+	add_child(floor_body)
+	floor_body.position = Vector3(0, -0.55, 0)
+
+	var player := (load("res://scenes/characters/player.tscn") as PackedScene).instantiate() as PlayerController
+	add_child(player)
+	player.global_position = Vector3(0, 0.2, 0)
+	var cv := player.visual as CharacterVisual
+	for _i in 60:
+		await get_tree().physics_frame
+		if cv._grip_calibrated:
+			break
+	for _i in 2:
+		await get_tree().process_frame
+	player.net_dead = true
+	for _i in 5:
+		await get_tree().process_frame
+	expect(cv._dead, "remote death enters the death pose")
+	expect(cv.animation_player.current_animation == &"Death_A", "Death_A plays")
+	expect(cv._death_marker != null and cv._death_marker.visible, "red death marker is shown")
+	player.net_dead = false
+	for _i in 5:
+		await get_tree().process_frame
+	expect(not cv._dead, "respawn exits the death pose")
+	expect(not cv._death_marker.visible, "red death marker is hidden on respawn")
+	player.queue_free()
+	floor_body.free()
+	for _i in 3:
+		await get_tree().process_frame

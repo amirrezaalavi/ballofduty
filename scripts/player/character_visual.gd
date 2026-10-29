@@ -64,6 +64,7 @@ var _variant: int = 0
 var _was_airborne: bool = false
 var _landed_at_msec: int = 0
 var _dead: bool = false
+var _death_marker: Node3D
 var _last_health: int = 100
 var _last_position := Vector3.ZERO
 var _motion_local := Vector3.ZERO
@@ -90,6 +91,7 @@ func _ready() -> void:
 	process_priority = 100
 	_camera_rig = get_parent().get_node_or_null("CameraPivot") as CameraRig
 	character = get_node_or_null("Character") as Node3D
+	_build_death_marker()
 	_bind_character()
 	_setup_overlays.call_deferred()
 	_setup_hand_attachment.call_deferred()
@@ -306,13 +308,66 @@ func _play_death() -> void:
 	animation_player.speed_scale = 1.0
 	animation_player.play(&"Death_A", 0.12)
 	_state = &"Death_A"
+	if _death_marker:
+		_death_marker.visible = true
 
 
 func _revive() -> void:
 	if not _dead:
 		return
 	_dead = false
+	if _death_marker:
+		_death_marker.visible = false
 	_play(&"Idle_A", 0.15)
+
+
+## Flat red pool + a faint red shell over the body. Presentational only; it
+## marks a corpse for both the local player and remote ghosts.
+func _build_death_marker() -> void:
+	if _death_marker != null or body == null:
+		return
+	_death_marker = Node3D.new()
+	_death_marker.name = "DeathMarker"
+	_death_marker.visible = false
+	# The visual can be constructed before the body has entered the tree; defer
+	# so the marker always ends up parented (an unparented node would leak).
+	body.call_deferred("add_child", _death_marker)
+
+	var disc_mesh := CylinderMesh.new()
+	disc_mesh.top_radius = 0.38
+	disc_mesh.bottom_radius = 0.38
+	disc_mesh.height = 0.012
+	var disc_mat := StandardMaterial3D.new()
+	disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	disc_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	disc_mat.albedo_color = Color(0.72, 0.03, 0.04, 0.55)
+	disc_mat.emission_enabled = true
+	disc_mat.emission = Color(0.75, 0.04, 0.05)
+	disc_mat.emission_energy_multiplier = 0.7
+	var disc := MeshInstance3D.new()
+	disc.mesh = disc_mesh
+	disc.material_override = disc_mat
+	disc.position = Vector3(0.0, 0.02, 0.0)
+	disc.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_death_marker.add_child(disc)
+
+	var shell_mesh := CapsuleMesh.new()
+	shell_mesh.radius = 0.24
+	shell_mesh.height = 0.80
+	var shell_mat := StandardMaterial3D.new()
+	shell_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shell_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shell_mat.albedo_color = Color(0.85, 0.06, 0.05, 0.15)
+	shell_mat.emission_enabled = true
+	shell_mat.emission = Color(0.8, 0.05, 0.04)
+	shell_mat.emission_energy_multiplier = 0.5
+	shell_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var shell := MeshInstance3D.new()
+	shell.mesh = shell_mesh
+	shell.material_override = shell_mat
+	shell.position = Vector3(0.0, 0.40, 0.0)
+	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_death_marker.add_child(shell)
 
 
 func _update_death_state() -> void:
@@ -320,7 +375,7 @@ func _update_death_state() -> void:
 	if pc == null:
 		return
 	if _dead:
-		if pc.net_role == PlayerController.NetRole.REMOTE and not pc.net_dead:
+		if not pc.dead and not pc.net_dead:
 			_revive()
 		return
 	if pc.dead or pc.net_dead:

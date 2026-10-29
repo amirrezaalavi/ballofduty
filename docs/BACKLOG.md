@@ -22,8 +22,9 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S48 | Class weapons + bigger map | Research prompt at `docs/research/PROMPT-weapons-and-arena.md`: one long-range weapon per character, mountain/cave playground, CC0 asset links | doing | CP5 |
 | S47 | Roster cap | Accepted **8 total actors** (humans + bots) for V1; soak covers 4+4 and 8+0. 8 clients + 4 bots would need MAX_PLAYERS=12 plus 4 more spawns and a 270 B snapshot row | done | CP4d |
-| S46 | Remote death visuals | Remote ghosts hide on hp 0; the KayKit `Death_A/B` clips exist but are not wired to remote DEATH/HP events | todo | CP5 |
+| S46 | Remote death visuals | Death_A + red pool/shell marker now play for local and remote deaths; corpses stay visible until respawn | done | CP4c-fix |
 | S32 | Playtest 2026-10-29 | Connection never reached `:9180`; see `docs/PLAYTEST-2026-10-29.md` | done | CP4c |
 | S1 | Jump height +10 % | `jump_velocity` 7.00 → **7.34** (apex 1.23 m → **1.35 m**) | done | CP1 |
 | S2 | Character 20 % smaller | Physical capsule, mesh, hurtboxes scaled to 0.8; camera framing unchanged for now | done | CP1 |

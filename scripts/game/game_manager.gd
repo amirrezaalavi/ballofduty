@@ -906,10 +906,15 @@ func _on_server_event(event: Dictionary) -> void:
 					audio.play_hit()
 		NetProtocol.EventType.DEATH:
 			server_death.emit(int(event["victim_id"]), int(event["killer_id"]))
-			if int(event["victim_id"]) == local_id:
+			var victim_id := int(event["victim_id"])
+			if victim_id == local_id:
 				var local := _world.get_node_or_null("Player") as PlayerController if _world else null
 				if local:
 					local.set_dead(true)
+			elif _remotes.has(victim_id):
+				var victim := _remotes[victim_id] as PlayerController
+				if is_instance_valid(victim):
+					victim.net_dead = true
 		NetProtocol.EventType.RESPAWN:
 			var pid := int(event["player_id"])
 			server_respawn.emit(pid, event["position"], float(event["yaw"]))

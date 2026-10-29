@@ -81,6 +81,13 @@ while the server hits is expected under lag and is better than an invisible one.
 - Detect `vel` for strafe animation on remotes: snapshot already carries it; the interpolator
   currently drops it.
 
+## 3b. Class weapons + bigger playground (research prompt)
+
+`docs/research/PROMPT-weapons-and-arena.md` asks a research agent to design one long-range weapon
+per character (Knight spear/javelin, Mage wand, Rogue bow, Rogue_Hooded crossbow/knives, Barbarian
+throwing axe), with model links, animation clips, ranges/cooldowns/effects, and a larger
+mountain/cave playground asset plan. Research only; no implementation until the report is reviewed.
+
 ## 4. Gun, turn-to-fire, legs (P0)
 
 Current: the gun socket is oriented from `view_yaw` + camera pitch, and the aim overlay always runs.
@@ -139,7 +146,7 @@ Rules:
 **Phase 1 gate:** character/rifle visible and stable at 2.3 m camera distance; menu and loading
 animation complete; 10-minute soak clean; no regression in hit/death/respawn.
 
-**Phase 1 result:** A/B/C merged (`67f2958`, `a8d0053`, `b9f99db`). 83 tests green. Live one-origin
+**Phase 1 result:** A/B/C merged (`67f2958`, `a8d0053`, `b9f99db`). 84 tests green. Live one-origin
 menu → join verified. Web **13,972 KB gzip** after removing the old UAL. Soak: 4 clients + 4 bots
 30.05 Hz, 26.9 % CPU, 0 dropped snapshots; 8 clients 30.00 Hz, 42.2 % CPU, 0 dropped. KayKit
 characters are one shadowless skinned surface each (70 surfaces for 5 players + arena).

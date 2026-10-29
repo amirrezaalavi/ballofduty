@@ -452,9 +452,9 @@ func _forward_input(frame: PlayerInputFrame) -> void:
 
 func _apply_remote(delta: float) -> void:
 	if net_dead:
-		visible = false
-		_remote_offset = Vector3.ZERO
-		visual.position = _visual_base
+		# Keep the corpse visible so CharacterVisual can play Death_A and the
+		# red death marker; do not keep interpolating the body.
+		visible = true
 		return
 	var interp := get_node_or_null("NetworkInterpolator") as NetworkInterpolator
 	if interp == null or not interp.has_data():
