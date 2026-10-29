@@ -81,6 +81,16 @@ while the server hits is expected under lag and is better than an invisible one.
 - Detect `vel` for strafe animation on remotes: snapshot already carries it; the interpolator
   currently drops it.
 
+## 3a. Phase 2A status — class weapons + picker (implemented 2026-10-30)
+
+- Five-card class picker; `?class=0..4`; class locked for the match.
+- Five server-authoritative profiles: Knight javelin, Mage staff/heat, Rogue charge bow,
+  Rogue_Hooded 3-bolt burst, Barbarian arcing axes. M4 retired from the class rotation.
+- Client variants by class, five weapon models (Knight spear and Rogue bow are marked proxies),
+  per-class animation overlays, HUD ammo/heat/charge/burst.
+- 106 tests green; web 14,140 KB gzip. Live Mage pick → join → death marker verified.
+- Next: 150×150 Sunken Quarry/Cavern Pass greybox, then art pass.
+
 ## 3b. Class weapons + bigger playground (research prompt)
 
 `docs/research/PROMPT-weapons-and-arena.md` asks a research agent to design one long-range weapon

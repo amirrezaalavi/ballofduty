@@ -92,6 +92,11 @@ func test_weapon_controller() -> void:
 		return
 
 	weapon.spawn_projectiles = false
+	# This suite covers the legacy rifle controller; keep it on rifle stats even
+	# though the default player class (Knight) loads a class profile at _ready.
+	weapon.stats = load("res://resources/weapons/rifle_stats.tres") as WeaponStats
+	weapon.class_id = player.class_id
+	weapon.reset_ammo()
 	expect(weapon.ammo == 30, "weapon starts with a full magazine")
 	var frame := PlayerInputFrame.new()
 	frame.fire = true

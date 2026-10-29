@@ -18,6 +18,11 @@ signal weapon_changed(display_name: String)
 
 const RIFLE_STATS := preload("res://resources/weapons/rifle_stats.tres")
 const CLASS_KEYS := ["knight", "mage", "rogue", "rogue_hooded", "barbarian"]
+## Server profile filenames from Phase 2D.
+const CLASS_STAT_FILES := [
+	"knight_javelin", "mage_staff", "rogue_bow",
+	"rogue_hooded_crossbow", "barbarian_axes",
+]
 const CLASS_WEAPON_NAMES := [
 	"Heavy Javelin",
 	"Arcane Staff",
@@ -209,7 +214,7 @@ func burst_count() -> int:
 	if stats == null:
 		return 1
 	var value := int(_stat("burst_count", _stat("burst", 0)))
-	if value <= 0 and class_id == 3:
+	if value <= 1 and class_id == 3:
 		value = 3
 	return maxi(1, value)
 
@@ -278,6 +283,7 @@ func _sync_class() -> void:
 static func load_class_stats(id: int) -> WeaponStats:
 	id = clampi(id, 0, CLASS_KEYS.size() - 1)
 	for path: String in [
+		"res://resources/weapons/class_%s.tres" % CLASS_STAT_FILES[id],
 		"res://resources/weapons/class_%s.tres" % CLASS_KEYS[id],
 		"res://resources/weapons/class_%d.tres" % id,
 	]:

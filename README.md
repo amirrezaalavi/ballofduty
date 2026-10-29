@@ -3,7 +3,7 @@
 A lightweight, cute, web-first 3D third-person arena shooter. Eight players, one rifle, five minutes,
 bragging rights.
 
-**Status:** Phase 1 landed — KayKit five-character art, M4 rifle, menu/loading/one-port proxy, soak/perf/bots; awaiting retest
+**Status:** Phase 2A landed — five class weapons, picker, per-class visuals/HUD; 150 m quarry next
 (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first run pending a remote).
 Tests run on gdUnit4 with JUnit XML; see [`docs/TESTING.md`](docs/TESTING.md).
 See [`docs/ROADMAP.md`](docs/ROADMAP.md).

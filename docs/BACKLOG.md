@@ -22,7 +22,9 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
-| S48 | Class weapons + bigger map | Research prompt at `docs/research/PROMPT-weapons-and-arena.md`: one long-range weapon per character, mountain/cave playground, CC0 asset links | doing | CP5 |
+| S50 | Sunken Quarry arena | 150×150 m, 3×3 mesh chunks, heightmap/collision, double-wall caves, rock skirts, MultiMesh foliage, 8 spawns; greybox then art | todo | CP5 |
+| S49 | Class weapons v1 | Five class profiles, picker (`?class=`), per-class variants/models/animations/HUD; M4 retired for now; Knight spear/Rogue bow are proxies | done | CP5 |
+| S48 | Class weapons + bigger map research | Report + decisions at `docs/research/weapons-and-arena.md` / `WEAPONS-DECISIONS.md` | done | CP5 |
 | S47 | Roster cap | Accepted **8 total actors** (humans + bots) for V1; soak covers 4+4 and 8+0. 8 clients + 4 bots would need MAX_PLAYERS=12 plus 4 more spawns and a 270 B snapshot row | done | CP4d |
 | S46 | Remote death visuals | Death_A + red pool/shell marker now play for local and remote deaths; corpses stay visible until respawn | done | CP4c-fix |
 | S32 | Playtest 2026-10-29 | Connection never reached `:9180`; see `docs/PLAYTEST-2026-10-29.md` | done | CP4c |

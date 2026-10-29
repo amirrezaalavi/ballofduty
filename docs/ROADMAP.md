@@ -1,6 +1,6 @@
 # Ball of Duty — Roadmap & Acceptance Criteria
 
-Status: **Phase 1 landed (KayKit five-character art, M4, menu/loading/one-port proxy, soak/perf/bots) — awaiting retest; plan in [`PLAN.md`](PLAN.md)** (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility** · Tests: **gdUnit4, 85 cases / ~772 assertions** ([`TESTING.md`](TESTING.md))
+Status: **Phase 2A landed (five class weapons, picker, per-class visuals/HUD) — awaiting retest; 150 m quarry next; plan in [`PLAN.md`](PLAN.md)** (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility** · Tests: **gdUnit4, 85 cases / ~772 assertions** ([`TESTING.md`](TESTING.md))
 Platform: **Web (primary) + native desktop/headless Linux (dev & server)**
 
 A checkpoint is **done** only when every acceptance criterion is met and the evidence is recorded
