@@ -11,13 +11,23 @@ var coyote_left: float = 0.0
 var last_input: PlayerInputFrame
 
 
-func simulate(body: CharacterBody3D, input: PlayerInputFrame, delta: float) -> void:
+## on_floor_override: -1 uses the body's cached state. CP4b passes 0/1 for the
+## first replayed frame because a teleport has not run move_and_slide yet, so
+## is_on_floor() still describes the pre-correction pose.
+func simulate(
+	body: CharacterBody3D,
+	input: PlayerInputFrame,
+	delta: float,
+	on_floor_override: int = -1
+) -> void:
 	if stats == null:
 		push_error("LocomotionComponent.stats is not assigned")
 		return
 	last_input = input
 
 	var on_floor := body.is_on_floor()
+	if on_floor_override >= 0:
+		on_floor = on_floor_override != 0
 	# Input move is local (x = strafe, y = forward/back); convert to world using
 	# the body yaw so the server can replay from its own authoritative rotation.
 	var wish_dir := body.transform.basis * Vector3(input.move.x, 0.0, input.move.y)

@@ -8,6 +8,11 @@ extends CharacterBody3D
 
 enum NetRole { LOCAL, REMOTE, SERVER }
 
+const MAX_PREDICTION_FRAMES := 64
+const CORRECTION_EPSILON_M := 0.01
+const VISUAL_OFFSET_DECAY := 14.0
+const VISUAL_OFFSET_MAX := 2.0
+
 @onready var camera_rig: CameraRig = $CameraPivot
 @onready var locomotion: LocomotionComponent = $LocomotionComponent
 @onready var input_handler: InputHandler = $InputHandler
@@ -18,10 +23,30 @@ var net_role: NetRole = NetRole.LOCAL
 var net_id: int = 0
 var last_seq: int = 0
 
+# CP4b prediction. Every locally simulated frame is kept with its resulting
+# state; a snapshot ack rewinds to the authoritative pose and replays the tail.
+var prediction_enabled: bool = false
+var last_acked_seq: int = 0
+var last_ack_error_m: float = -1.0
+var last_position_error_m: float = 0.0
+var corrections_total: int = 0
+var replay_depth: int = 0
+
+var _prediction: Array[Dictionary] = []
+var _pending_correction: Dictionary = {}
+var _correction_events: Array[int] = []
+var _visual_offset := Vector3.ZERO
+var _visual_base := Vector3.ZERO
+var _camera_base := Vector3.ZERO
+var _offset_active := false
+
 var _ignore_look_until_msec: int = 0
 
 
 func _ready() -> void:
+	# Capture child rest poses before any correction offset is applied.
+	_visual_base = visual.position
+	_camera_base = camera_rig.position
 	# Never request pointer lock here: browsers require a user gesture. The first
 	# click on the canvas captures the mouse (handled below).
 	if DisplayServer.get_name() == "headless":
@@ -33,6 +58,7 @@ func _ready() -> void:
 
 
 func make_remote(remote_id: int) -> void:
+	disable_prediction()
 	net_role = NetRole.REMOTE
 	net_id = remote_id
 	collision_layer = 0
@@ -59,6 +85,7 @@ func make_remote(remote_id: int) -> void:
 
 
 func make_server(server_id: int) -> void:
+	disable_prediction()
 	net_role = NetRole.SERVER
 	net_id = server_id
 	var camera := get_node_or_null("CameraPivot/SpringArm3D/Camera3D") as Camera3D
@@ -101,6 +128,7 @@ func _process(delta: float) -> void:
 	if net_role != NetRole.LOCAL:
 		return
 	camera_rig.update_aim(Input.is_action_pressed("aim"), delta)
+	_decay_visual_offset(delta)
 
 	if locomotion.stats:
 		var weight := 1.0 - exp(-locomotion.stats.visual_turn_speed * delta)
@@ -111,8 +139,7 @@ func _physics_process(delta: float) -> void:
 	match net_role:
 		NetRole.LOCAL:
 			var frame := input_handler.sample(rotation.y, camera_rig.pitch)
-			last_seq = frame.seq
-			locomotion.simulate(self, frame, delta)
+			simulate_tick(frame, delta)
 			weapon.tick(delta, frame)
 			_forward_input(frame)
 		NetRole.REMOTE:
@@ -130,6 +157,73 @@ func server_step(frame: PlayerInputFrame, delta: float, apply_yaw: bool = true) 
 	locomotion.simulate(self, frame, delta)
 
 
+## One local simulation step: reconcile any pending snapshot, simulate, record.
+## Used by _physics_process for real input and by tests/bots with explicit frames,
+## so the predicted path is identical in both cases.
+func simulate_tick(frame: PlayerInputFrame, delta: float) -> void:
+	if prediction_enabled and not _pending_correction.is_empty():
+		_apply_correction()
+	last_seq = frame.seq
+	locomotion.simulate(self, frame, delta)
+	if prediction_enabled:
+		_record_prediction(frame)
+
+
+## Start predicting after JOIN_OK; clear any history from the pre-join pose.
+func enable_prediction() -> void:
+	prediction_enabled = true
+	last_acked_seq = 0
+	last_ack_error_m = -1.0
+	last_position_error_m = 0.0
+	corrections_total = 0
+	replay_depth = 0
+	_prediction.clear()
+	_pending_correction.clear()
+	_correction_events.clear()
+	_visual_offset = Vector3.ZERO
+	_offset_active = false
+	visual.position = _visual_base
+	camera_rig.position = _camera_base
+
+
+func disable_prediction() -> void:
+	prediction_enabled = false
+	_prediction.clear()
+	_pending_correction.clear()
+	_correction_events.clear()
+	_visual_offset = Vector3.ZERO
+	_offset_active = false
+	visual.position = _visual_base
+	camera_rig.position = _camera_base
+
+
+## Called from GameManager when a snapshot row matches the local player id.
+## The newest ack wins; stale/older snapshots are ignored.
+func accept_server_state(entry: Dictionary) -> void:
+	if not prediction_enabled:
+		return
+	var ack := int(entry.get("ack", -1))
+	if ack <= last_acked_seq or ack > last_seq:
+		return
+	_pending_correction = entry
+
+
+func prediction_stats() -> Dictionary:
+	var now := Time.get_ticks_msec()
+	while not _correction_events.is_empty() and now - _correction_events[0] > 1000:
+		_correction_events.pop_front()
+	return {
+		"enabled": prediction_enabled,
+		"ack": last_acked_seq,
+		"pending": _prediction.size(),
+		"ack_error_m": last_ack_error_m,
+		"visual_error_m": last_position_error_m,
+		"corrections": corrections_total,
+		"corrections_per_sec": _correction_events.size(),
+		"replay_depth": replay_depth,
+	}
+
+
 ## Coarse animation byte for snapshots: still / walk / sprint / air.
 func anim_state_byte() -> int:
 	if not is_on_floor():
@@ -140,6 +234,93 @@ func anim_state_byte() -> int:
 	if speed > 0.25:
 		return NetProtocol.AnimState.WALK
 	return NetProtocol.AnimState.STILL
+
+
+func _record_prediction(frame: PlayerInputFrame) -> void:
+	_prediction.append({
+		"seq": frame.seq,
+		"frame": frame,
+		"pos": global_position,
+		"yaw": rotation.y,
+		"vel": velocity,
+		"on_floor": is_on_floor(),
+	})
+	while _prediction.size() > MAX_PREDICTION_FRAMES:
+		_prediction.pop_front()
+
+
+func _apply_correction() -> void:
+	var entry := _pending_correction
+	_pending_correction = {}
+	if entry.is_empty():
+		return
+
+	var ack := int(entry["ack"])
+	var first_authority := last_acked_seq == 0
+	# Drop history up to and including the acked input, keeping its state for
+	# the authoritative-error metric (server pose vs our prediction for that seq).
+	var stored: Dictionary = {}
+	while not _prediction.is_empty() and int(_prediction[0]["seq"]) <= ack:
+		stored = _prediction.pop_front()
+	var server_pos: Vector3 = entry["pos"]
+	last_ack_error_m = (
+		(stored["pos"] as Vector3).distance_to(server_pos) if stored.has("pos") else -1.0
+	)
+
+	var before := global_position
+	global_position = server_pos
+	rotation.y = float(entry["yaw"])
+	velocity = entry.get("vel", Vector3.ZERO)
+
+	# Replay every unacked input from the authoritative pose. The first frame
+	# needs the server's ground flag because the teleport has not moved yet.
+	var on_floor_first := 1 if bool(entry.get("on_floor", true)) else 0
+	var first := true
+	replay_depth = _prediction.size()
+	for item in _prediction:
+		locomotion.simulate(self, item["frame"], 1.0 / 30.0, on_floor_first if first else -1)
+		item["pos"] = global_position
+		item["yaw"] = rotation.y
+		item["vel"] = velocity
+		item["on_floor"] = is_on_floor()
+		first = false
+
+	last_acked_seq = ack
+	# Hide the visible jump by offsetting the render children, then letting the
+	# offset decay over ~100 ms. The collision body is already authoritative.
+	var visual_delta := before - global_position
+	visual_delta.y = 0.0
+	last_position_error_m = visual_delta.length()
+	# The very first authoritative state is the spawn baseline: snap to it
+	# instead of smoothing a 30 cm settle into the camera. Every later
+	# correction is hidden by the decaying render offset.
+	if last_position_error_m > CORRECTION_EPSILON_M and not first_authority:
+		corrections_total += 1
+		_correction_events.append(Time.get_ticks_msec())
+		_visual_offset += visual_delta
+		if _visual_offset.length() > VISUAL_OFFSET_MAX:
+			_visual_offset = _visual_offset.normalized() * VISUAL_OFFSET_MAX
+		_offset_active = true
+		_apply_visual_offset()
+
+
+func _apply_visual_offset() -> void:
+	var local_offset := global_transform.basis.inverse() * _visual_offset
+	visual.position = _visual_base + local_offset
+	camera_rig.position = _camera_base + local_offset
+
+
+func _decay_visual_offset(delta: float) -> void:
+	if not _offset_active:
+		return
+	_visual_offset *= exp(-VISUAL_OFFSET_DECAY * delta)
+	if _visual_offset.length_squared() < 0.000001:
+		_visual_offset = Vector3.ZERO
+		_offset_active = false
+		visual.position = _visual_base
+		camera_rig.position = _camera_base
+		return
+	_apply_visual_offset()
 
 
 func _forward_input(frame: PlayerInputFrame) -> void:

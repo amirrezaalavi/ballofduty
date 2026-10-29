@@ -55,12 +55,16 @@ func test_snapshot_budget_and_rejection() -> void:
 	for i in 8:
 		entries.append({
 			"id": i + 1, "pos": Vector3(-29.5 + i, 0.4, 12.25 - i * 3.0),
-			"yaw": -PI + i * 0.8, "state": i % 4, "hp": 100 - i, "ack": 5000 + i,
+			"yaw": -PI + i * 0.8, "state": i % 4,
+			"vel": Vector3(1.25 - i * 0.1, -2.5, 7.5),
+			"on_floor": i % 2 == 0,
+			"hp": 100 - i, "ack": 5000 + i,
 		})
 	var snap := NetProtocol.encode_snapshot(123456, entries)
 	_budget_bytes = snap.size()
 	print("  snapshot 8-player bytes=%d" % _budget_bytes)
-	expect(_budget_bytes <= 300, "8-player snapshot is %d B (limit 300 B)" % _budget_bytes)
+	expect(_budget_bytes == 182, "8-player snapshot is %d B (expected 182 B)" % _budget_bytes)
+	expect(_budget_bytes <= 300, "8-player snapshot within the 300 B budget")
 
 	var back := NetProtocol.decode_snapshot(snap)
 	expect(back.get("tick") == 123456, "snapshot tick roundtrips")
@@ -70,6 +74,10 @@ func test_snapshot_budget_and_rejection() -> void:
 	expect(rpos.distance_to(epos) < 0.002, "position quantization < 2 mm")
 	expect(absf(float(first["yaw"]) - wrapf(float(entries[0]["yaw"]), -PI, PI)) < 0.001, "snapshot yaw < 1 mrad")
 	expect(first["state"] == 0 and first["hp"] == 100 and first["ack"] == 5000, "snapshot state/hp/ack roundtrip")
+	var rvel: Vector3 = first["vel"]
+	expect(rvel.distance_to(Vector3(1.25, -2.5, 7.5)) < 0.02, "velocity roundtrips within 2 cm/s")
+	expect(first["on_floor"] == true, "on-floor flag roundtrips")
+	expect(back.get("entries")[1]["on_floor"] == false, "airborne flag roundtrips")
 
 	expect(NetProtocol.decode_snapshot(PackedByteArray([6, 1, 2, 3, 4, 9])) == {}, "truncated snapshot rejected")
 	var tampered := snap.duplicate()

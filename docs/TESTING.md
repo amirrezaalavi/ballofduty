@@ -33,12 +33,15 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 6 | 14 | travel distance, diagonal parity, sprint, jump apex, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 204 | weapon data, 20/20 headshots at 5/15/30 m, body damage, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 6 | 26 | roundtrips, quantization, snapshot budget, malformed/oversized rejection |
-| `tests/gdunit/test_net_loopback.gd` | 1 | 25 | two real WebSocket clients, spawn parity, yaw persistence, ghost convergence, latency/jitter, leave cleanup |
+| `tests/gdunit/test_net_protocol.gd` | 6 | 30 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
+| `tests/gdunit/test_net_loopback.gd` | 1 | 37 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, leave cleanup |
+| `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**27 test cases · 371 assertions.** `test_net_loopback` stays one integration test: the value is the
+**30 test cases · 400 assertions.** `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
+Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
+prediction path is identical to real input without competing sequences.
 
 `tests/gdunit/bod_test_suite.gd` is the shared base (`class BodTestSuite extends GdUnitTestSuite`).
 It provides `expect(condition, label)` and `wait_for(predicate, frames)` so failures keep a

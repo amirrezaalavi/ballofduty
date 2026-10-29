@@ -3,7 +3,9 @@ extends RefCounted
 ## CP4a binary wire protocol. All integers are little-endian, hand-packed so the
 ## layout is unambiguous across native and web exports.
 ##
-## Snapshot budget: header 6 B + 15 B/player -> 126 B at 8 players (limit 300 B).
+## Snapshot budget: header 6 B + 22 B/player -> 182 B at 8 players (limit 300 B).
+## The velocity + on-floor fields exist so CP4b reconciliation can restart the
+## replay from authoritative motion state instead of guessing it.
 ## Input packet: 12 B at 30 Hz upstream (~360 B/s).
 
 enum Msg { JOIN_REQ = 1, JOIN_OK = 2, DENY = 3, ROSTER = 4, INPUT = 5, SNAPSHOT = 6, LEAVE = 7, PING = 8, PONG = 9 }
@@ -15,6 +17,7 @@ const MAX_NAME_BYTES := 16
 const MAX_PACKET_BYTES := 2048
 const POS_RANGE := 32.768
 const PITCH_RANGE := 1.6
+const VEL_RANGE := 327.67
 
 
 static func sanitize_name(raw: String) -> String:
@@ -135,17 +138,22 @@ static func decode_input(pkt: PackedByteArray) -> Dictionary:
 
 
 static func encode_snapshot(tick: int, entries: Array) -> PackedByteArray:
-	# entries: Array of {id, pos: Vector3, yaw: float, state: int, hp: int, ack: int}
+	# entries: Array of {id, pos, yaw, state, vel, on_floor, hp, ack}
 	var pkt := PackedByteArray([Msg.SNAPSHOT]) + _u32(tick)
 	pkt.append(mini(entries.size(), MAX_PLAYERS) & 0xFF)
 	for entry in entries:
 		var pos: Vector3 = entry["pos"]
+		var vel: Vector3 = entry.get("vel", Vector3.ZERO)
 		pkt.append(entry["id"] & 0xFF)
 		pkt.append_array(_i16(_quant_pos(pos.x)))
 		pkt.append_array(_i16(_quant_pos(pos.y)))
 		pkt.append_array(_i16(_quant_pos(pos.z)))
 		pkt.append_array(_i16(int(roundf(clampf(wrapf(float(entry["yaw"]), -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
 		pkt.append(int(entry["state"]) & 0xFF)
+		pkt.append_array(_i16(_quant_vel(vel.x)))
+		pkt.append_array(_i16(_quant_vel(vel.y)))
+		pkt.append_array(_i16(_quant_vel(vel.z)))
+		pkt.append(1 if bool(entry.get("on_floor", true)) else 0)
 		pkt.append(clampi(int(entry["hp"]), 0, 255) & 0xFF)
 		pkt.append_array(_u32(int(entry["ack"])))
 	return pkt
@@ -155,20 +163,23 @@ static func decode_snapshot(pkt: PackedByteArray) -> Dictionary:
 	if pkt.size() < 6 or pkt[0] != Msg.SNAPSHOT:
 		return {}
 	var count := pkt[5]
-	if count > MAX_PLAYERS or pkt.size() != 6 + count * 15:
+	if count > MAX_PLAYERS or pkt.size() != 6 + count * 22:
 		return {}
 	var entries: Array = []
 	var offset := 6
 	for _i in count:
+		var flags := pkt[offset + 16]
 		entries.append({
 			"id": pkt[offset],
 			"pos": Vector3(_dequant_pos(_get_i16(pkt, offset + 1)), _dequant_pos(_get_i16(pkt, offset + 3)), _dequant_pos(_get_i16(pkt, offset + 5))),
 			"yaw": float(_get_i16(pkt, offset + 7)) / 32767.0 * PI,
 			"state": pkt[offset + 9],
-			"hp": pkt[offset + 10],
-			"ack": _get_u32(pkt, offset + 11),
+			"vel": Vector3(_dequant_vel(_get_i16(pkt, offset + 10)), _dequant_vel(_get_i16(pkt, offset + 12)), _dequant_vel(_get_i16(pkt, offset + 14))),
+			"on_floor": (flags & 1) != 0,
+			"hp": pkt[offset + 17],
+			"ack": _get_u32(pkt, offset + 18),
 		})
-		offset += 15
+		offset += 22
 	return {"tick": _get_u32(pkt, 1), "entries": entries}
 
 
@@ -202,6 +213,14 @@ static func _quant_pos(v: float) -> int:
 
 static func _dequant_pos(q: int) -> float:
 	return float(q) / 1000.0
+
+
+static func _quant_vel(v: float) -> int:
+	return clampi(int(roundf(clampf(v, -VEL_RANGE, VEL_RANGE - 0.001) * 100.0)), -32768, 32767)
+
+
+static func _dequant_vel(q: int) -> float:
+	return float(q) / 100.0
 
 
 static func _s8(b: int) -> int:

@@ -8,6 +8,10 @@ enum NetMode { OFFLINE, SERVER, CLIENT }
 
 # Preloaded so joining never hits the resource loader mid-match.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
+## CP4b input intake: one frame is consumed per server tick, so a jitter burst
+## queues instead of overwriting. Oldest frames are dropped past the cap.
+const MAX_INPUT_QUEUE := 16
+const INPUT_RATE_LIMIT := 90
 
 var net_mode: NetMode = NetMode.OFFLINE
 
@@ -140,7 +144,9 @@ func _on_peer_joined(peer_id: int, player_name: String) -> void:
 	initial.yaw = spawn_yaw
 	_roster[peer_id] = {
 		"id": assigned, "name": player_name, "node": node,
-		"frame": initial, "ack": 0, "has_input": false,
+		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
+		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
+		"rate_count": 0, "displacements": 0,
 		}
 	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
 	net.server_send(peer_id, NetProtocol.encode_join_ok(assigned, _server_tick, spawn_pos, spawn_yaw))
@@ -168,17 +174,39 @@ func _on_remote_input(peer_id: int, frame: Dictionary) -> void:
 	if net_mode != NetMode.SERVER or not _roster.has(peer_id):
 		return
 	var stored: Dictionary = _roster[peer_id]
+
+	# Token window: a client cannot buy simulation time by flooding frames.
+	var now := Time.get_ticks_msec()
+	if now - int(stored["rate_window_msec"]) >= 1000:
+		stored["rate_window_msec"] = now
+		stored["rate_count"] = 0
+	stored["rate_count"] = int(stored["rate_count"]) + 1
+	if int(stored["rate_count"]) > INPUT_RATE_LIMIT:
+		stored["inputs_dropped"] = int(stored["inputs_dropped"]) + 1
+		return
+
+	var seq := int(frame["seq"])
+	# WebSocket delivery is ordered, but a duplicate or replayed seq must still
+	# never be simulated twice.
+	if seq <= int(stored["last_seq"]):
+		stored["inputs_dropped"] = int(stored["inputs_dropped"]) + 1
+		return
+
 	var converted := PlayerInputFrame.new()
-	converted.seq = int(frame["seq"])
+	converted.seq = seq
 	converted.move = frame["move"]
 	converted.jump = bool(frame["jump"])
 	converted.sprint = bool(frame["sprint"])
 	converted.aim = bool(frame["scoped"])
 	converted.yaw = float(frame["yaw"])
 	converted.pitch = float(frame["pitch"])
-	stored["frame"] = converted
-	stored["ack"] = converted.seq
-	stored["has_input"] = true
+	stored["last_seq"] = seq
+
+	var queue: Array = stored["queue"]
+	queue.append(converted)
+	if queue.size() > MAX_INPUT_QUEUE:
+		queue.pop_front()
+		stored["inputs_dropped"] = int(stored["inputs_dropped"]) + 1
 
 
 func _physics_process(delta: float) -> void:
@@ -192,13 +220,29 @@ func _physics_process(delta: float) -> void:
 		var actor := entry["node"] as PlayerController
 		if not is_instance_valid(actor):
 			continue
-		var frame: PlayerInputFrame = entry["frame"]
+		# Consume exactly one input per tick. If the queue is empty, repeat the
+		# last frame but keep the ack pinned, so the client knows what was applied.
+		var frame: PlayerInputFrame = entry["last_frame"]
+		var queue: Array = entry["queue"]
+		if not queue.is_empty():
+			frame = queue.pop_front()
+			entry["last_frame"] = frame
+			entry["ack"] = frame.seq
+			entry["has_input"] = true
+		var before := actor.global_position
 		actor.server_step(frame, delta, bool(entry.get("has_input", false)))
+		if _check_displacement(entry, before, actor.global_position, delta):
+			# Reject the step: impossible travel is rolled back, horizontal
+			# velocity zeroed, and the tick continues from the last good pose.
+			actor.global_position = before
+			actor.velocity = Vector3(0.0, actor.velocity.y, 0.0)
 		entries.append({
 			"id": int(entry["id"]),
 			"pos": actor.global_position,
 			"yaw": actor.rotation.y,
 			"state": actor.anim_state_byte(),
+			"vel": actor.velocity,
+			"on_floor": actor.is_on_floor(),
 			"hp": 100,
 			"ack": int(entry["ack"]),
 		})
@@ -207,6 +251,36 @@ func _physics_process(delta: float) -> void:
 		var snapshot := NetProtocol.encode_snapshot(_server_tick, entries)
 		for peer_id in _roster:
 			net.server_send(peer_id, snapshot)
+
+
+## CP4b displacement guard: every step is authoritative simulation from clamped
+## input, so a legitimate step can never exceed sprint speed. A violated step is
+## rejected (rolled back by the caller); CP4d can escalate repeated attempts.
+func _check_displacement(entry: Dictionary, before: Vector3, after: Vector3, delta: float) -> bool:
+	var moved := Vector2(after.x - before.x, after.z - before.z).length()
+	var max_step := 8.6 * delta
+	if moved <= max_step:
+		return false
+	entry["displacements"] = int(entry["displacements"]) + 1
+	if int(entry["displacements"]) % 30 == 1:
+		print("BALL_OF_DUTY displacement id=%d moved=%.3f max=%.3f rejected" % [
+			int(entry["id"]), moved, max_step,
+		])
+	return true
+
+
+func server_player_stats(player_id: int) -> Dictionary:
+	for peer_id in _roster:
+		var entry: Dictionary = _roster[peer_id]
+		if int(entry["id"]) == player_id:
+			return {
+				"ack": int(entry["ack"]),
+				"queued": (entry["queue"] as Array).size(),
+				"last_seq": int(entry["last_seq"]),
+				"dropped": int(entry["inputs_dropped"]),
+				"displacements": int(entry["displacements"]),
+			}
+	return {}
 
 
 func _spawn_server_actor(assigned_id: int, slot: int) -> PlayerController:
@@ -324,6 +398,7 @@ func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 			local.rotation.y = float(spawn["yaw"])
 			local.velocity = Vector3.ZERO
 			local.reset_physics_interpolation()
+		local.enable_prediction()
 	# A snapshot can arrive before JOIN_OK; drop any ghost we made of ourselves.
 	if _remotes.has(local_id):
 		var self_ghost := _remotes[local_id] as Node
@@ -360,9 +435,13 @@ func _on_roster_updated(entries: Array) -> void:
 func _on_snapshot_received(_tick: int, entries: Array) -> void:
 	if net_mode != NetMode.CLIENT:
 		return
+	var local := _world.get_node_or_null("Player") as PlayerController if _world else null
 	for entry in entries:
 		var rid := int(entry["id"])
 		if rid == local_id:
+			# The owning client reconciles instead of rendering a ghost of itself.
+			if local:
+				local.accept_server_state(entry)
 			continue
 		if not _remotes.has(rid):
 			_spawn_remote(rid, "Player%d" % rid)
@@ -387,6 +466,10 @@ func _spawn_remote(rid: int, display_name: String) -> void:
 
 
 func stop_all() -> void:
+	if _world:
+		var local := _world.get_node_or_null("Player") as PlayerController
+		if local:
+			local.disable_prediction()
 	var net := _net()
 	if net:
 		net.stop()

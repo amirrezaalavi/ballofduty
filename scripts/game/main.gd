@@ -99,6 +99,10 @@ func _try_autoconnect(args: PackedStringArray) -> void:
 		display_name = args[ni + 1]
 	if params.has("host"):
 		host = params["host"]
+	# ?join=1 without an explicit host should reach the machine that served the
+	# page, not the tester's own localhost.
+	if host == "" and params.get("join", "") == "1" and OS.has_feature("web"):
+		host = _page_hostname()
 	if params.has("port"):
 		port = int(params["port"])
 	if params.has("name"):
@@ -124,6 +128,14 @@ func _connect_to(host: String, port: int, display_name: String) -> void:
 		_status_label.text = "connect failed: %s" % err
 	else:
 		_status_label.text = "connecting to %s:%d…" % [host, port]
+
+
+func _page_hostname() -> String:
+	var bridge := Engine.get_singleton("JavaScriptBridge") if Engine.has_singleton("JavaScriptBridge") else null
+	if bridge == null:
+		return "127.0.0.1"
+	var page_host := str(bridge.eval("window.location.hostname", true))
+	return page_host if page_host != "" else "127.0.0.1"
 
 
 func _url_params() -> Dictionary:

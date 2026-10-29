@@ -104,13 +104,24 @@ func test_replication_pipeline() -> void:
 		"live snapshot is %d B (limit 300 B)" % _client_b_net.last_snapshot_bytes
 	)
 
+	# Drive the same local tick the real game uses: predict + send, one input per
+	# physics tick. Idle phases must keep sending, because a client that stops
+	# sending predicts nothing while the server repeats the last frame.
+	local_a.set_process(false)
+	# seq continues from whatever the controller already sampled (normally 0,
+	# because the helper disables its physics callback before any tick).
+	var seq := local_a.last_seq
+	var drive_errors: Array = []
+
 	# Drive client A rightward; client B's remote must converge (67 ms buffer lag).
-	var seq := 100
 	for _i in 45:
 		seq += 1
-		client_a_gm.client_send_input(_input_frame(seq, Vector2(1.0, 0.0)))
-		for _k in 2:
-			await get_tree().physics_frame
+		await _tick_client_a(local_a, client_a_gm, _input_frame(seq, Vector2(1.0, 0.0)))
+		var drive_stats: Dictionary = local_a.prediction_stats()
+		# Skip the spawn baseline (first ack) so p95 measures steady-state replay.
+		var drive_err := float(drive_stats["ack_error_m"])
+		if int(drive_stats["ack"]) > 5 and drive_err >= 0.0:
+			drive_errors.append(drive_err)
 	var server_actor := _server_actor_of(server_gm, client_a_gm.local_id)
 	var remote_on_b: PlayerController = client_b_gm._remotes.get(client_a_gm.local_id)
 	expect(server_actor != null and remote_on_b != null, "server actor and B-side ghost both exist")
@@ -138,11 +149,43 @@ func test_replication_pipeline() -> void:
 			"remote ghost ignores local damage (hp %d)" % ghost_health.current
 		)
 
-	# Smoothness: successive ghost poses must not jump (no snap-back/teleport).
+	# CP4b: the owning client must reconcile, not just simulate locally.
+	var pred: Dictionary = local_a.prediction_stats()
+	print("  prediction ack=%d pending=%d replay=%d ack_err=%.3f m corr=%d" % [
+		int(pred["ack"]), int(pred["pending"]), int(pred["replay_depth"]),
+		float(pred["ack_error_m"]), int(pred["corrections"])])
+	expect(bool(pred["enabled"]), "client prediction is enabled after join")
+	expect(int(pred["ack"]) > 0, "server acked client input")
+	expect(
+		float(pred["ack_error_m"]) >= 0.0 and float(pred["ack_error_m"]) < 0.05,
+		"predicted state at ack matches authority (%.3f m)" % float(pred["ack_error_m"])
+	)
+	expect(int(pred["replay_depth"]) <= 8, "replay depth stays bounded (%d frames)" % int(pred["replay_depth"]))
+	drive_errors.sort()
+	var drive_p95: float = drive_errors[int(float(drive_errors.size() - 1) * 0.95)] if not drive_errors.is_empty() else -1.0
+	print("  loopback ack error p95=%.4f m over %d samples" % [drive_p95, drive_errors.size()])
+	expect(drive_p95 >= 0.0 and drive_p95 < 0.02, "loopback ack error p95 < 2 cm (%.4f m)" % drive_p95)
+	var server_stats: Dictionary = server_gm.server_player_stats(client_a_gm.local_id)
+	expect(int(server_stats.get("displacements", 0)) == 0, "no impossible displacement under normal input")
+
+	# Forced divergence: reconciliation must pull the client back to authority.
+	var corrections_before := int(pred["corrections"])
+	local_a.global_position += Vector3(2.0, 0.0, 0.0)
+	for _i in 12:
+		seq += 1
+		await _tick_client_a(local_a, client_a_gm, _input_frame(seq, Vector2.ZERO))
+	var after: Dictionary = local_a.prediction_stats()
+	expect(int(after["corrections"]) > corrections_before, "reconciliation counts a correction")
+	var recovered_gap: float = local_a.global_position.distance_to(server_actor.global_position)
+	print("  divergence recovery gap=%.3f m (corrections %d)" % [recovered_gap, int(after["corrections"])])
+	expect(recovered_gap < 0.5, "client snaps back to authority (gap %.3f m)" % recovered_gap)
+
+	# Smoothness: successive ghost poses must not jump (idle input still sent).
 	var smooth := true
 	var prev := remote_on_b.global_position
 	for _i in 20:
-		await get_tree().physics_frame
+		seq += 1
+		await _tick_client_a(local_a, client_a_gm, _input_frame(seq, Vector2.ZERO))
 		var step: float = (remote_on_b.global_position - prev).length()
 		if step > 0.5:
 			smooth = false
@@ -155,16 +198,24 @@ func test_replication_pipeline() -> void:
 	_client_b_net.latency_ms = 100
 	_client_b_net.jitter_ms = 20
 	var gap_samples: Array = []
+	var ack_errors: Array = []
 	for i in 90:
 		seq += 1
 		var dir := Vector2(1.0, 0.0) if i % 30 < 15 else Vector2(-1.0, 0.0)
-		client_a_gm.client_send_input(_input_frame(seq, dir))
-		await get_tree().physics_frame
+		await _tick_client_a(local_a, client_a_gm, _input_frame(seq, dir))
 		gap_samples.append((remote_on_b.global_position - server_actor.global_position).length())
+		var ack_err := float(local_a.prediction_stats()["ack_error_m"])
+		if ack_err >= 0.0:
+			ack_errors.append(ack_err)
 	gap_samples.sort()
+	ack_errors.sort()
 	var gap_lag: float = gap_samples[gap_samples.size() / 2]
-	print("  replication gap at 100ms/20ms median=%.3f m" % gap_lag)
+	var ack_err_median: float = ack_errors[ack_errors.size() / 2] if not ack_errors.is_empty() else -1.0
+	var ack_err_p95: float = ack_errors[int(float(ack_errors.size() - 1) * 0.95)] if not ack_errors.is_empty() else -1.0
+	print("  replication gap at 100ms/20ms median=%.3f m · ack error median=%.3f p95=%.3f m" % [gap_lag, ack_err_median, ack_err_p95])
 	expect(gap_lag < 2.0, "ghost converges within 2 m under latency (median gap %.3f m)" % gap_lag)
+	expect(ack_err_median >= 0.0 and ack_err_median < 0.05, "ack error under latency (median %.3f m)" % ack_err_median)
+	expect(ack_err_p95 >= 0.0 and ack_err_p95 < 0.05, "ack error under latency p95 < 5 cm (%.3f m)" % ack_err_p95)
 	expect(_client_b_net.snapshots_dropped >= 0, "drop counter alive (dropped=%d)" % _client_b_net.snapshots_dropped)
 
 	# Leave: A disconnects; server and B clean up quickly.
@@ -183,9 +234,44 @@ func test_replication_pipeline() -> void:
 	expect(_server_net.packets_rejected == before + 3, "3 malformed packets rejected, server alive")
 	expect(server_gm.server_player_count() == 1, "server still serving after malformed traffic")
 
+	# CP4b input intake: ordered consumption, duplicate rejection, rate limiting.
+	var peer_b := 0
+	for peer_id in server_gm._roster:
+		if int(server_gm._roster[peer_id]["id"]) == client_b_gm.local_id:
+			peer_b = int(peer_id)
+	var b_stats: Dictionary = server_gm.server_player_stats(client_b_gm.local_id)
+	var base_seq := int(b_stats["last_seq"])
+	var ordered := NetProtocol.encode_input(base_seq + 1, Vector2.ZERO, false, false, false, 0.0, 0.0)
+	_server_net._route(peer_b, ordered)
+	await get_tree().physics_frame
+	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
+	expect(int(b_stats["ack"]) == base_seq + 1, "queued input is consumed in order (ack %d)" % int(b_stats["ack"]))
+	var dropped_before := int(b_stats["dropped"])
+	_server_net._route(peer_b, ordered)
+	await get_tree().physics_frame
+	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
+	expect(int(b_stats["dropped"]) == dropped_before + 1, "duplicate input seq is rejected")
+
+	var flood_before := int(b_stats["dropped"])
+	for i in 120:
+		_server_net._route(peer_b, NetProtocol.encode_input(
+			base_seq + 2 + i, Vector2.ZERO, false, false, false, 0.0, 0.0))
+	await get_tree().physics_frame
+	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
+	expect(int(b_stats["dropped"]) > flood_before + 20, "input flood is rate-limited (%d dropped)" % int(b_stats["dropped"]))
+	expect(server_gm.server_player_count() == 1, "server still serving after an input flood")
+
 	_server_net.stop()
 	_client_b_net.stop()
 	await get_tree().process_frame
+
+
+## One client tick: predict, send, advance one physics frame. Mirrors
+## PlayerController._physics_process minus the real Input sampling.
+func _tick_client_a(local: PlayerController, gm, frame: PlayerInputFrame) -> void:
+	local.simulate_tick(frame, 1.0 / 30.0)
+	gm.client_send_input(frame)
+	await get_tree().physics_frame
 
 
 func _add_world(world_name: String) -> Node3D:
@@ -208,6 +294,9 @@ func _make_local_player(world: Node3D) -> PlayerController:
 	var player := (load("res://scenes/characters/player.tscn") as PackedScene).instantiate() as PlayerController
 	player.name = "Player"
 	world.add_child(player)
+	# The suite drives explicit frames; the controller's own callback would
+	# record unsent predictions with a competing sequence.
+	player.set_physics_process(false)
 	return player
 
 

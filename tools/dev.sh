@@ -12,6 +12,7 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SERVER_PORT="${SERVER_PORT:-9180}"
 WEB_PORT="${WEB_PORT:-8099}"
+WEB_BIND="${WEB_BIND:-127.0.0.1}"
 PID_DIR=".cache/pids"
 LOG_DIR=".cache"
 SERVER_PID="$PID_DIR/server.pid"
@@ -106,7 +107,7 @@ start_web() {
     echo "web already running (pid $(cat "$WEB_PID"))"
     return
   fi
-  python3 -m http.server "$WEB_PORT" --bind 127.0.0.1 --directory build/web \
+  python3 -m http.server "$WEB_PORT" --bind "$WEB_BIND" --directory build/web \
     > "$LOG_DIR/web.log" 2>&1 &
   echo $! > "$WEB_PID"
   wait_ready web "$WEB_PORT" "$WEB_PID" "$LOG_DIR/web.log"

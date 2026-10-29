@@ -55,6 +55,8 @@ func _update_text() -> void:
 	var fov := rig.camera.fov if rig else 0.0
 	var hp := "%d/%d" % [health.current, health.max_health] if health else "n/a"
 
+	var pred: Dictionary = _player.prediction_stats() if _player.has_method("prediction_stats") else {}
+
 	var lines := PackedStringArray([
 		"BALL OF DUTY · debug  [F3]",
 		"fps %d   physics %d Hz   tick %d" % [
@@ -79,4 +81,16 @@ func _update_text() -> void:
 			"yes" if rig and rig.is_scoped() else "no",
 		],
 	])
+	if bool(pred.get("enabled", false)):
+		lines.append("pred ack %d   pending %d   replay %d" % [
+			int(pred.get("ack", 0)),
+			int(pred.get("pending", 0)),
+			int(pred.get("replay_depth", 0)),
+		])
+		lines.append("ack err %.3f m   corr %d (%.1f/s)   vis %.3f m" % [
+			float(pred.get("ack_error_m", -1.0)),
+			int(pred.get("corrections", 0)),
+			float(pred.get("corrections_per_sec", 0.0)),
+			float(pred.get("visual_error_m", 0.0)),
+		])
 	_label.text = "\n".join(lines)

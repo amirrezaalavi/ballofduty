@@ -1,6 +1,6 @@
 # Ball of Duty — Roadmap & Acceptance Criteria
 
-Status: **CP4a implemented — awaiting two-player test** (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility** · Tests: **gdUnit4, 27 cases / 371 assertions** ([`TESTING.md`](TESTING.md))
+Status: **CP4b implemented — awaiting latency feel sign-off** (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility** · Tests: **gdUnit4, 30 cases / 400 assertions** ([`TESTING.md`](TESTING.md))
 Platform: **Web (primary) + native desktop/headless Linux (dev & server)**
 
 A checkpoint is **done** only when every acceptance criterion is met and the evidence is recorded
