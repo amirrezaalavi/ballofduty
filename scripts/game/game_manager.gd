@@ -14,6 +14,8 @@ const MAX_INPUT_QUEUE := 16
 const INPUT_RATE_LIMIT := 90
 
 var net_mode: NetMode = NetMode.OFFLINE
+## Dev-server console stats (1 line/s/player); enabled with --net-stats.
+var net_stats := OS.get_cmdline_user_args().has("--net-stats")
 
 # Server state: peer_id -> {id, name, node, frame: PlayerInputFrame, ack: int}
 var _roster: Dictionary = {}
@@ -246,6 +248,13 @@ func _physics_process(delta: float) -> void:
 			"hp": 100,
 			"ack": int(entry["ack"]),
 		})
+	if net_stats and _server_tick % 30 == 0:
+		for peer_id in _roster:
+			var e: Dictionary = _roster[peer_id]
+			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d" % [
+				int(e["id"]), int(e["ack"]), int(e["last_seq"]),
+				(e["queue"] as Array).size(), int(e["inputs_dropped"]),
+			])
 	var net := _net()
 	if net and not entries.is_empty():
 		var snapshot := NetProtocol.encode_snapshot(_server_tick, entries)

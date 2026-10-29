@@ -94,6 +94,9 @@ Test script:
    with `name=Bob`. Both should see each other move; shooting still does nothing on the other
    screen until CP4c.
 
+Server-side intake stats are printed once a second (ack, last_seq, queue, dropped) because
+`tools/dev.sh` starts the server with `--net-stats`; they also land in `.cache/server.log`.
+
 Stop with `tools/dev.sh down`.
 
 ## Known gaps carried into CP4c
