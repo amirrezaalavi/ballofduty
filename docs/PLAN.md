@@ -26,7 +26,7 @@
 | Walk speed | 1.00 m/s | **1.05 m/s** | +5 % |
 | Sprint speed | 2.50 m/s | **2.75 m/s** | +10 %; implement as `move_speed 1.05 × sprint_multiplier 2.62` (2.751 m/s) |
 | Projectile speed | 90 m/s | **81 m/s** | −10 %; 2.5 s lifetime still gives 202 m range |
-| Bullet visual | 0.08 s, 0.9 m box | **visible 2.5 m streak** | 2.8 m dark rim; see §3 |
+| Bullet visual | 0.08 s, 0.9 m box | **long thin tracer** | 2.2 m trail / 2.4 m rim; radial thickness only 5 % |
 | Camera | accepted | unchanged | |
 | Jump/gravity | unchanged | unchanged | separate item (S26) |
 
@@ -52,12 +52,13 @@ The Phase 0 gate is ready for your retest.
 
 Replace the single short tracer with a pooled `BulletVisual`:
 
-- Small glowing capsule, **0.28 m long × 0.045 m**, hot core + short tapered trail.
-- Flies at the real **81 m/s** from the muzzle along the shot direction, max **1.2 s**.
-- Swept ray each frame against world/actors (no damage) so it stops on the first surface.
+- Long, thin tracer: **0.018 m core**, 0.006 m trail, 0.026 m dark rim, **2.2 m / 2.4 m** long.
+- Flies at the real **81 m/s** from the muzzle, max **1.2 s**; grows out of the gun (the streak's
+  back end never sits behind the muzzle), so it cannot read as a camera-origin beam.
+- Swept ray each render frame against world/actors (no damage) so it stops on the first surface.
 - Local fire spawns one immediately; remote `SHOT` events spawn the same visual at the server
   origin/direction.
-- **24-bullet pool**, materials and meshes created once at boot; muzzle flash light for 40 ms.
+- **64-bullet pool**, materials and meshes created once at boot; muzzle flash retained.
 - Impact spark on the client-side stop point, also pooled. Hitmarker stays **server-only**.
 
 This is cosmetic. The authoritative projectile remains server-side; a visible bullet that misses

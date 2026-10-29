@@ -13,7 +13,9 @@
 | Character count | **5 different characters**, each with the full animation set |
 | Head hurtbox | **Keep the current sphere** (0.72 m, r 0.115); do not change hit feel |
 | Mesh strategy | **Merge the 9 character meshes to one skinned mesh** per character and **disable character shadows** |
-| Rifle | **Quaternius CC0 M4** (Poly Pizza `/m/Bgvuu4CUMV`) unless the asset is unavailable; then the AK variant |
+| Rifle | **Quaternius CC0 M4** confirmed (Poly Pizza `/m/Bgvuu4CUMV`) |
+| Bullet visual | Long thin tracer: trail ~2.2 m, rim ~2.4 m, core length ~0.36 m; radial thickness only 5 % (core ~0.018 m, trail ~0.006 m, rim ~0.026 m); grows out of the muzzle |
+| Bot roster | Bots draw from the same five-character pool; no separate subset |
 | Paid content | **No** purchases |
 | Remote aim pose | Keep the rifle-ready pose; **no protocol change** for now |
 | Textures | Local 512×512, remotes 256×256 (recommended) |
