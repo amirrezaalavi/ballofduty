@@ -2,17 +2,21 @@
 # Local server + web build supervisor with pidfiles, so tests never kill the
 # wrong process again.
 #
-#   tools/dev.sh up        # start server :9180 + web :8099 (needs build/web)
+#   tools/dev.sh up        # server :9180 + one-origin web proxy :8099
 #   tools/dev.sh down      # stop both
 #   tools/dev.sh status    # show listeners and log tails
 #
-# Override ports with SERVER_PORT / WEB_PORT. Logs: .cache/server.log, .cache/web.log.
+# Only the web port needs forwarding: tools/serve.py serves build/web and
+# tunnels the browser's /ws upgrade to the game server on SERVER_PORT.
+# Override ports with SERVER_PORT / WEB_PORT (agents: use ephemeral 92xx/82xx).
+# Logs: .cache/server.log, .cache/web.log.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SERVER_PORT="${SERVER_PORT:-9180}"
 WEB_PORT="${WEB_PORT:-8099}"
 WEB_BIND="${WEB_BIND:-127.0.0.1}"
+WS_PATH="${WS_PATH:-/ws}"
 PID_DIR=".cache/pids"
 LOG_DIR=".cache"
 SERVER_PID="$PID_DIR/server.pid"
@@ -107,7 +111,8 @@ start_web() {
     echo "web already running (pid $(cat "$WEB_PID"))"
     return
   fi
-  python3 -m http.server "$WEB_PORT" --bind "$WEB_BIND" --directory build/web \
+  python3 tools/serve.py --root build/web --bind "$WEB_BIND" \
+    --port "$WEB_PORT" --upstream "127.0.0.1:$SERVER_PORT" --ws-path "$WS_PATH" \
     > "$LOG_DIR/web.log" 2>&1 &
   echo $! > "$WEB_PID"
   wait_ready web "$WEB_PORT" "$WEB_PID" "$LOG_DIR/web.log"
@@ -117,6 +122,7 @@ case "${1:-}" in
   up)
     start_server
     start_web
+    echo "one-origin: forward only web port $WEB_PORT; /ws tunnels to 127.0.0.1:$SERVER_PORT"
     ;;
   down)
     stop_one server "$SERVER_PID"

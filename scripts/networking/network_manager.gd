@@ -21,16 +21,36 @@ signal peer_joined(peer_id: int, player_name: String)
 signal peer_left(peer_id: int)
 signal ping_updated(rtt_ms: int)
 signal connection_failed
+## Emitted whenever a retry is scheduled. `delay_msec` is the backoff before
+## the next socket attempt; `attempt` starts at 1 for the first retry.
+signal reconnect_started(attempt: int, delay_msec: int)
+## Emitted when a socket that had dropped is joined again.
+signal reconnected
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
 const JOIN_TIMEOUT_SEC := 5.0
 const PING_INTERVAL_TICKS := 30
 const MAX_DRAIN_PER_FRAME := 64
+## Total time an initial connection may spend retrying before the UI gets a
+## hard failure. Keeping this at 6 s preserves the Phase 0 timeout contract.
+const CONNECT_BUDGET_MSEC := 6000
+## One socket attempt is abandoned after this long, then retried with backoff.
+const ATTEMPT_TIMEOUT_MSEC := 3000
+const RETRY_BASE_DELAY_MSEC := 350
+const RETRY_MAX_DELAY_MSEC := 2400
+## After a socket drops mid-match we keep retrying for this window (showing
+## "reconnecting…") before falling back to offline with a clear error.
+const RECONNECT_GRACE_MSEC := 8000
 
 var mode: Mode = Mode.OFFLINE
 var latency_ms: int = 0
 var jitter_ms: int = 0
+## Optional WebSocket request path (for one-origin proxies, e.g. "/ws").
+## Kept as a property so the frozen start_client(host, port) API still works.
+var client_path: String = ""
+## Force wss:// (the web build also auto-detects an https page).
+var client_tls: bool = false
 
 var snapshots_processed: int = 0
 var snapshots_dropped: int = 0
@@ -51,6 +71,22 @@ var _last_ping_sent_msec: int = 0
 var _join_requested_msec: int = 0
 var _client_started_msec: int = 0
 var _intentional_stop: bool = false
+
+# Client reconnect state.
+var _client_host: String = ""
+var _client_port: int = 0
+var _client_path_cached: String = ""
+var _client_tls_cached: bool = false
+var _attempt_started_msec: int = 0
+var _next_retry_msec: int = 0
+var _retry_scheduled: bool = false
+var _retry_attempt: int = 0
+var _had_connection: bool = false
+var _needs_rejoin: bool = false
+var _join_name: String = ""
+var _grace_deadline_msec: int = 0
+var _reconnecting: bool = false
+var _closing_peer: bool = false
 
 
 func _ready() -> void:
@@ -134,11 +170,64 @@ func server_disconnect(peer_id: int) -> void:
 
 # --- client ---------------------------------------------------------------
 
-func start_client(host: String, port: int) -> int:
+func start_client(host: String, port: int, path: String = "") -> int:
 	stop()
 	last_error = ""
+	_client_host = host.strip_edges()
+	_client_port = port
+	_client_path_cached = path if path.strip_edges() != "" else client_path
+	_client_tls_cached = client_tls or _web_page_is_secure()
+	_client_started_msec = Time.get_ticks_msec()
+	_attempt_started_msec = _client_started_msec
+	_next_retry_msec = 0
+	_retry_scheduled = false
+	_retry_attempt = 0
+	_had_connection = false
+	_needs_rejoin = false
+	_join_name = ""
+	_grace_deadline_msec = 0
+	_reconnecting = false
+	return _open_client_socket()
+
+
+## Build the exact URL the transport uses. One-origin proxy mode appends the
+## request path (for example ws://host:8099/ws) while the legacy two-port path
+## stays ws://host:port.
+static func build_ws_url(host: String, port: int, path: String, secure: bool) -> String:
+	var request_path := path.strip_edges()
+	if request_path != "" and not request_path.begins_with("/"):
+		request_path = "/" + request_path
+	return "%s://%s:%d%s" % ["wss" if secure else "ws", host, port, request_path]
+
+
+func client_url() -> String:
+	if _client_host == "":
+		return ""
+	return build_ws_url(_client_host, _client_port, _client_path_cached, _client_tls_cached)
+
+
+func is_reconnecting() -> bool:
+	return mode == Mode.CLIENT and _reconnecting
+
+
+func reconnect_remaining_msec() -> int:
+	if not _reconnecting or _grace_deadline_msec == 0:
+		return 0
+	return maxi(0, _grace_deadline_msec - Time.get_ticks_msec())
+
+
+func retry_attempt() -> int:
+	return _retry_attempt
+
+
+func _open_client_socket() -> int:
+	if _client_host == "" or _client_port <= 0:
+		last_error = "invalid host or port"
+		return ERR_INVALID_PARAMETER
 	_peer = WebSocketMultiplayerPeer.new()
-	var url := "ws://%s:%d" % [host, port]
+	var url := build_ws_url(
+		_client_host, _client_port, _client_path_cached, _client_tls_cached
+	)
 	var err := _peer.create_client(url)
 	if err != OK:
 		push_error("NetworkManager: WebSocket client failed for %s: %s" % [url, err])
@@ -146,9 +235,19 @@ func start_client(host: String, port: int) -> int:
 		last_error = "invalid host or port"
 		return err
 	mode = Mode.CLIENT
+	_attempt_started_msec = Time.get_ticks_msec()
 	_join_requested_msec = 0
-	_client_started_msec = Time.get_ticks_msec()
+	_pending_joins.clear()
 	return OK
+
+
+func _web_page_is_secure() -> bool:
+	if not OS.has_feature("web"):
+		return false
+	var bridge := Engine.get_singleton("JavaScriptBridge") if Engine.has_singleton("JavaScriptBridge") else null
+	if bridge == null:
+		return false
+	return str(bridge.eval("window.location.protocol", true)) == "https:"
 
 
 func client_send(pkt: PackedByteArray) -> void:
@@ -158,7 +257,7 @@ func client_send(pkt: PackedByteArray) -> void:
 # --- shared ---------------------------------------------------------------
 
 func stop() -> void:
-	if _peer == null and mode == Mode.OFFLINE:
+	if _peer == null and mode == Mode.OFFLINE and not _retry_scheduled:
 		return
 	_intentional_stop = true
 	if _peer != null:
@@ -171,6 +270,17 @@ func stop() -> void:
 	_pending_joins.clear()
 	_known_peers.clear()
 	_join_requested_msec = 0
+	_retry_scheduled = false
+	_retry_attempt = 0
+	_next_retry_msec = 0
+	_had_connection = false
+	_needs_rejoin = false
+	_join_name = ""
+	_grace_deadline_msec = 0
+	_reconnecting = false
+	_client_host = ""
+	_client_port = 0
+	_client_path_cached = ""
 	mode = Mode.OFFLINE
 	server_stopped.emit()
 	disconnected_from_server.emit()
@@ -180,6 +290,7 @@ func stop() -> void:
 func send_join_request(display_name: String) -> void:
 	if mode != Mode.CLIENT:
 		return
+	_join_name = display_name
 	_join_requested_msec = Time.get_ticks_msec()
 	_pending_joins[1] = _join_requested_msec
 	client_send(NetProtocol.encode_join_request(display_name))
@@ -200,38 +311,121 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if mode == Mode.SERVER:
 		peer_left.emit(peer_id)
 	elif mode == Mode.CLIENT:
-		if not _intentional_stop:
-			last_error = "connection lost"
-		stop()
+		if not _intentional_stop and not _closing_peer:
+			_schedule_retry("connection lost")
 
 
 func _process(_delta: float) -> void:
-	if _peer == null:
-		return
-	_peer.poll()
-	_flush_delayed()
-	_drain()
-	_expire_pending_joins()
-	_check_client_connection()
-	_tick_ping()
+	if _peer != null:
+		_peer.poll()
+		_flush_delayed()
+		_drain()
+		_expire_pending_joins()
+		_check_client_connection()
+		_tick_ping()
+	if mode == Mode.CLIENT and _peer == null and _retry_scheduled \
+			and Time.get_ticks_msec() >= _next_retry_msec:
+		_retry_scheduled = false
+		if _open_client_socket() != OK:
+			_schedule_retry("connection refused — check host and port")
 
 
 ## A WebSocket that never opens has no JOIN_REQ pending, so the existing join
-## timeout cannot see it. Detect the dead socket here instead of sitting in a
-## cosmetic-only CLIENT state forever.
+## timeout cannot see it. Detect dead sockets here and retry with backoff inside
+## a bounded budget. Only after that budget expires do we emit a hard failure
+## and return to OFFLINE; a dropped mid-match socket gets a longer grace window.
 func _check_client_connection() -> void:
 	if mode != Mode.CLIENT or _peer == null:
 		return
-	var elapsed := Time.get_ticks_msec() - _client_started_msec
+	var now := Time.get_ticks_msec()
 	var status := _peer.get_connection_status()
-	if status == MultiplayerPeer.CONNECTION_CONNECTING and elapsed > 6000:
-		last_error = "connection timed out"
-		connection_failed.emit()
-		stop()
-	elif status == MultiplayerPeer.CONNECTION_DISCONNECTED and elapsed > 500:
-		last_error = "connection refused — check host and port"
-		connection_failed.emit()
-		stop()
+	# Initial-connect budget applies while the socket is not yet open. This is
+	# also the field the Phase 0 timeout test fast-forwards.
+	if not _had_connection and now - _client_started_msec >= CONNECT_BUDGET_MSEC:
+		_fail_connection(_failure_reason(status))
+		return
+	if status == MultiplayerPeer.CONNECTION_CONNECTED:
+		_retry_attempt = 0
+		_grace_deadline_msec = 0
+		_reconnecting = false
+		last_error = ""
+		if not _had_connection:
+			_had_connection = true
+			connected_to_server.emit()
+		if _needs_rejoin:
+			_needs_rejoin = false
+			_join_requested_msec = Time.get_ticks_msec()
+			_pending_joins[1] = _join_requested_msec
+			client_send(NetProtocol.encode_join_request(_join_name))
+			reconnected.emit()
+		return
+	if _retry_scheduled:
+		return
+	if now - _attempt_started_msec > ATTEMPT_TIMEOUT_MSEC:
+		_schedule_retry("connection lost" if _had_connection else _failure_reason(status))
+	elif status == MultiplayerPeer.CONNECTION_DISCONNECTED \
+			and now - _attempt_started_msec > 500:
+		_schedule_retry(
+			"connection lost" if _had_connection
+			else "connection refused — check host and port"
+		)
+
+
+func _failure_reason(status: int) -> String:
+	if status == MultiplayerPeer.CONNECTION_CONNECTING:
+		return "connection timed out"
+	return "connection refused — check host and port"
+
+
+## Schedule another socket attempt. Initial connects share a 6 s budget; a
+## dropped mid-match socket gets an 8 s grace window. Exhaustion is the only
+## path to OFFLINE, and it always carries `last_error` for the menu banner.
+func _schedule_retry(reason: String) -> void:
+	if mode != Mode.CLIENT:
+		return
+	var now := Time.get_ticks_msec()
+	if _had_connection:
+		if _grace_deadline_msec == 0:
+			_grace_deadline_msec = now + RECONNECT_GRACE_MSEC
+		if now >= _grace_deadline_msec:
+			_fail_connection("%s — reconnect timed out" % reason)
+			return
+	elif now - _client_started_msec >= CONNECT_BUDGET_MSEC:
+		_fail_connection(reason)
+		return
+	_close_peer()
+	_delayed.clear()
+	_pending_joins.clear()
+	_join_requested_msec = 0
+	_retry_attempt += 1
+	var shift := mini(_retry_attempt - 1, 4)
+	var delay := mini(RETRY_BASE_DELAY_MSEC * (1 << shift), RETRY_MAX_DELAY_MSEC)
+	_next_retry_msec = now + delay
+	_retry_scheduled = true
+	if _had_connection:
+		_needs_rejoin = _join_name != ""
+		_reconnecting = true
+	reconnect_started.emit(_retry_attempt, delay)
+
+
+func _close_peer() -> void:
+	if _peer == null:
+		return
+	var peer := _peer
+	_peer = null
+	_closing_peer = true
+	if peer.get_connection_status() != MultiplayerPeer.CONNECTION_DISCONNECTED:
+		peer.close()
+	_closing_peer = false
+
+
+func _fail_connection(reason: String) -> void:
+	last_error = reason
+	_retry_scheduled = false
+	_reconnecting = false
+	_retry_attempt = 0
+	connection_failed.emit()
+	stop()
 
 
 func _send_to(target: int, pkt: PackedByteArray) -> void:
@@ -330,6 +524,9 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 				packets_rejected += 1
 				return
 			_pending_joins.erase(1)
+			last_error = ""
+			_reconnecting = false
+			_grace_deadline_msec = 0
 			join_accepted.emit(int(ok["id"]), {"pos": ok["spawn"], "yaw": float(ok["yaw"]), "tick": int(ok["tick"])})
 		NetProtocol.Msg.DENY:
 			join_denied.emit(pkt[1] if pkt.size() > 1 else -1)
@@ -379,8 +576,7 @@ func _expire_pending_joins() -> void:
 		if mode == Mode.SERVER:
 			server_disconnect(pid)
 		elif mode == Mode.CLIENT:
-			last_error = "join timed out"
-			stop()
+			_schedule_retry("join timed out — server did not accept the join")
 
 
 func _tick_ping() -> void:
