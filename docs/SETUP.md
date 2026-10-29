@@ -38,6 +38,6 @@ tools/serve.sh                            # serve build/web on :8099 (foreground
 ## Web export notes (Godot 4.7, Compatibility)
 
 - `variant/thread_support=false` → no COOP/COEP headers needed on the host.
-- Custom shell at `web/index.html`; Godot replaces the `$GODOT_*` placeholders at export time.
+- Custom shell at `web/shell.html`; Godot replaces the `$GODOT_*` placeholders at export time.
 - Serve `index.wasm` as `application/wasm`, and pre-compress `.wasm`, `.pck`, `.js` with Brotli/gzip.
 - Production uses WSS behind Caddy/Nginx on the same origin as the static build.

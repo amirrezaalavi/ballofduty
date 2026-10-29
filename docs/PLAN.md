@@ -119,7 +119,7 @@ procedural upper-body split stays as the fallback if a clip set is incomplete.
 **Gate:** you retest. Success = bullets trackable, hits/deaths readable, gun behaves, connection
 failure impossible to miss.
 
-### Phase 1 — Parallel build (3 agents + me, ~2–3 days)
+### Phase 1 — Parallel build (3 agents + me) — **implemented 2026-10-29**
 
 | Agent | Scope | Files it owns | Deliverable |
 |---|---|---|---|
@@ -138,6 +138,11 @@ Rules:
 
 **Phase 1 gate:** character/rifle visible and stable at 2.3 m camera distance; menu and loading
 animation complete; 10-minute soak clean; no regression in hit/death/respawn.
+
+**Phase 1 result:** A/B/C merged (`67f2958`, `a8d0053`, `b9f99db`). 83 tests green. Live one-origin
+menu → join verified. Web **13,972 KB gzip** after removing the old UAL. Soak: 4 clients + 4 bots
+30.05 Hz, 26.9 % CPU, 0 dropped snapshots; 8 clients 30.00 Hz, 42.2 % CPU, 0 dropped. KayKit
+characters are one shadowless skinned surface each (70 surfaces for 5 players + arena).
 
 ### Phase 2 — World & polish (optional 4th agent, ~2 days)
 

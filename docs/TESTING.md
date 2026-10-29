@@ -43,9 +43,16 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_server_combat.gd` | 5 | 25 | canonical muzzle, body/head damage, rate/ammo/reload, protection, kill attribution |
 | `tests/gdunit/test_loopback_combat.gd` | 1 | 22 | fire intent through the socket, hit/death/respawn, spoofed damage rejection |
 | `tests/gdunit/test_bots.gd` | 1 | 7 | four bots move, fire, damage each other, stay in the roster |
+| `tests/gdunit/test_kaykit.gd` | 5 | 0 | five variants, one shadowless skinned surface, scale/yaw, clip set, gun/muzzle, budget |
+| `tests/gdunit/test_menu.gd` | 8 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection |
+| `tests/gdunit/test_menu_network.gd` | 4 | 0 | initial timeout, bounded backoff, dropped-socket grace, real drop/rejoin |
+| `tests/gdunit/test_proxy.gd` | 5 | 0 | shell placeholders, static serving/injection, WS handshake/tunnel, real client through proxy |
+| `tests/gdunit/test_bullet_pool.gd` | 4 | 0 | 500-round no-growth, shared materials, muzzle-grown streak, impact pool |
+| `tests/gdunit/test_combat_telemetry.gd` | 4 | 0 | hit/world/expiry/rejection accounting |
+| `tests/gdunit/test_bot_feel.gd` | 2 | 0 | reaction delay, bounded spread, 4-bot lethality |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**51 test cases · ~565 assertions.** `test_net_loopback` stays one integration test: the value is the
+**83 test cases · ~760 assertions.** `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.
@@ -58,6 +65,8 @@ and native `assert_*` when a value diff is more useful.
 Not in gdUnit4:
 
 - `tests/headless/net_client_probe.gd` — cross-process client against a live server (probe mode).
+- `tools/soak.sh` / `tests/headless/soak_runner.gd` — 30 Hz soak with real WS clients and bots,
+  metrics for tick/frame/CPU/RSS/nodes/snapshot/ack/combat. `--full` is the 10-minute gate.
 - `tests/headless/arena_stats.gd` — draw calls / triangles / collider budget report.
 
 ## Tooling

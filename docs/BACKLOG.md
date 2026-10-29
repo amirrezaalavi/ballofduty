@@ -9,19 +9,21 @@ Status: `todo` · `doing` · `done` · `deferred`
 
 | # | Item | Decision / target | Status | Phase |
 |---|---|---|---|---|
-| S44 | Visible bullets | 64-node pool, 0.18 m core + 2.5 m trail + 2.8 m dark rim, 81 m/s, swept stop, 100 ms impact | done | CP4c-fix |
+| S44 | Visible bullets | Long thin tracer: 0.018 m core, 2.2 m trail, 2.4 m rim; muzzle-grown so it never starts at the camera; pooled, 81 m/s | done | CP4c-fix |
 | S43 | Speed retune | Walk 1.05 m/s (+5 %), sprint 2.751 m/s (+10 %), projectile 81 m/s (−10 %) | done | CP4c-fix |
 | S45 | Remote smoothing | 2.5-tick virtual clock (83 ms), 1-tick damped extrapolation, render-offset decay, physics interpolation off on remotes, `_process` updates | done | CP4c-fix |
-| S42 | Revised execution plan | Phase 0 trust/feel, Phase 1 three parallel agents, Phase 2 world, Phase 3 CP4d/CP5 — see `docs/PLAN.md` | doing | next |
-| S41 | Connection state truth | 6 s timeout, refused detection, HUD banner, offline fallback, ghost cleanup. One-origin proxy remains Phase 1 B | done | CP4c-fix |
+| S42 | Revised execution plan | Phase 0 trust/feel, Phase 1 three parallel agents, Phase 2 world, Phase 3 CP4d/CP5 — see `docs/PLAN.md` | done | next |
+| S41 | Connection state truth | 6 s timeout, refused detection, HUD banner, offline fallback, ghost cleanup, one-origin `/ws` proxy | done | CP4c-fix |
 | S40 | Combat telemetry | Server shots/projectiles/hits/deaths/blocked counters every 150 ticks | done | CP4c-fix |
 | S39 | Gun/turn behavior | Gun welded to hand; additive spine aim ±70°; 8°/150 ms turn-then-shoot; ADS locks body; no idle aim overlay | done | CP4c-fix |
-| S38 | Character rig + strafe | KayKit Rig_Medium chosen; it also has no dedicated strafe clips, so use an aim-overlay blend tree + procedural legs. Phase 1 A | doing | CP5 |
-| S37 | Rifle model | Replace the `BoxMesh` gun with a low-poly rifle, grip socket and muzzle marker; keep the asset contract stable | todo | CP5 |
+| S38 | Character rig + strafe | KayKit Adventurers 2.0 + Animations 1.1; five variants, merged shadowless skinned mesh, full walk/run/strafe/backpedal/aim/shoot/reload/hit/death map | done | CP5 |
+| S37 | Rifle model | Quaternius CC0 M4; 3-surface wrapper, grip/muzzle contract preserved; gun welded to `handslot.r` | done | CP5 |
 | S36 | Tracer/impact feel | Long contrast streak + pooled impact; muzzle flash mesh retained | done | CP4c-fix |
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
-| S34 | Loading + quick menu | Animated HTML boot screen and an in-engine main menu (name, host, join, solo, settings entry) instead of the bottom-right dev panel | todo | CP5 |
+| S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S47 | Roster cap | Accepted **8 total actors** (humans + bots) for V1; soak covers 4+4 and 8+0. 8 clients + 4 bots would need MAX_PLAYERS=12 plus 4 more spawns and a 270 B snapshot row | done | CP4d |
+| S46 | Remote death visuals | Remote ghosts hide on hp 0; the KayKit `Death_A/B` clips exist but are not wired to remote DEATH/HP events | todo | CP5 |
 | S32 | Playtest 2026-10-29 | Connection never reached `:9180`; see `docs/PLAYTEST-2026-10-29.md` | done | CP4c |
 | S1 | Jump height +10 % | `jump_velocity` 7.00 → **7.34** (apex 1.23 m → **1.35 m**) | done | CP1 |
 | S2 | Character 20 % smaller | Physical capsule, mesh, hurtboxes scaled to 0.8; camera framing unchanged for now | done | CP1 |
