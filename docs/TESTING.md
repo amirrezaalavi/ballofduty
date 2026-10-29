@@ -33,7 +33,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 6 | 15 | travel distance, diagonal parity, sprint, jump apex, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 204 | weapon data, 20/20 headshots at 5/15/30 m, body damage, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 8 | 45 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
+| `tests/gdunit/test_net_protocol.gd` | 9 | 52 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
@@ -52,7 +52,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_bot_feel.gd` | 2 | 0 | reaction delay, bounded spread, 4-bot lethality |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**84 test cases · ~765 assertions.** `test_net_loopback` stays one integration test: the value is the
+**85 test cases · ~772 assertions.** `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.

@@ -79,7 +79,7 @@ func test_real_drop_reconnects_and_rejoins() -> void:
 	var client := _new_net()
 	expect(server.start_server(port) == OK, "server listens on an ephemeral port")
 	var joins: Array = []
-	server.peer_joined.connect(func(peer_id: int, player_name: String) -> void:
+	server.peer_joined.connect(func(peer_id: int, player_name: String, _class_id: int) -> void:
 		joins.append({"peer": peer_id, "name": player_name}))
 
 	expect(client.start_client("127.0.0.1", port) == OK, "client connects")

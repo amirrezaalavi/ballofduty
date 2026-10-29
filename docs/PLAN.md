@@ -146,7 +146,7 @@ Rules:
 **Phase 1 gate:** character/rifle visible and stable at 2.3 m camera distance; menu and loading
 animation complete; 10-minute soak clean; no regression in hit/death/respawn.
 
-**Phase 1 result:** A/B/C merged (`67f2958`, `a8d0053`, `b9f99db`). 84 tests green. Live one-origin
+**Phase 1 result:** A/B/C merged (`67f2958`, `a8d0053`, `b9f99db`). 85 tests green. Live one-origin
 menu → join verified. Web **13,972 KB gzip** after removing the old UAL. Soak: 4 clients + 4 bots
 30.05 Hz, 26.9 % CPU, 0 dropped snapshots; 8 clients 30.00 Hz, 42.2 % CPU, 0 dropped. KayKit
 characters are one shadowless skinned surface each (70 surfaces for 5 players + arena).
