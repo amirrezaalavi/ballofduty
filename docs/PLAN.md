@@ -44,7 +44,7 @@ separate network RTT from render lag.
 | Connection truth | **Done** | 6 s connect timeout, 500 ms refused detection, HUD banner, offline fallback, ghost cleanup |
 | Combat telemetry | **Done** | shots/projectiles/hits/deaths/blocked counters every 150 ticks |
 | Remote smoothing | **Done** | 83 ms virtual-clock buffer, 1-tick damped extrapolation, render-offset decay, physics interpolation off on puppets |
-| Regression | **Done** | full pipeline green; live 1v4 join, death/respawn, client fire confirmed (`ammo 30 → 26`, server `shots=4`) |
+| Regression | **Done** | 51 cases green; live 1v4 join, death/respawn, client fire confirmed (`ammo 30 → 26`, server `shots=4`) |
 
 The Phase 0 gate is ready for your retest.
 
@@ -62,6 +62,23 @@ Replace the single short tracer with a pooled `BulletVisual`:
 
 This is cosmetic. The authoritative projectile remains server-side; a visible bullet that misses
 while the server hits is expected under lag and is better than an invisible one.
+
+### KayKit findings (Phase 1 A input)
+
+- Adventurers 2.0 free tier + Character Animations 1.1 **Rig_Medium**: 23 bones, identical
+  names/parents, no retargeting. Source height 2.543 m → scale **0.32244** for the 0.82 m capsule;
+  faces **+Z**, so yaw 180°.
+- Free CC0 clips include `Walking_A/B/C`, `Running_A/B`, `Running_Strafe_Left/Right`,
+  `Walking_Backwards`, `Jump_Start/Idle/Land`, `Ranged_2H_Aiming/Reload/Shoot/Shooting`, hit/death.
+  **No aim-walk clip** → use `Ranged_2H_Aiming` as an upper-body overlay, matching the Phase 0
+  spine modifier. `Ranged_2H_Reload` is 1.60 s, matching the rifle.
+- **Draw-call risk:** 9 meshes per character. Merge to one skinned mesh and disable character
+  shadows; 12 unmerged characters would exceed the 150-call budget.
+- **Head hurtbox mismatch:** visual head is ~0.35–0.82 m, current sphere is at 0.72 m / r 0.115.
+  Decide whether to resize/move the head hurtbox (changes hit feel) or keep it.
+- **Rifle:** Quaternius CC0 M4 on Poly Pizza (1,930 tris, 3 materials); AK/musket alternates.
+- Detect `vel` for strafe animation on remotes: snapshot already carries it; the interpolator
+  currently drops it.
 
 ## 4. Gun, turn-to-fire, legs (P0)
 
