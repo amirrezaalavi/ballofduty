@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Resource" path="res://resources/players/default_player.tres" id="2_stats"]
@@ -6,11 +6,12 @@
 [ext_resource type="Script" path="res://scripts/components/input_handler.gd" id="4_input"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="5_rig"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="6_health"]
-[ext_resource type="PackedScene" path="res://assets/quaternius_ual/animation_library.glb" id="7_character"]
+[ext_resource type="PackedScene" path="res://assets/kaykit/adventurers/knight.scn" id="7_character"]
 [ext_resource type="Script" path="res://scripts/player/character_visual.gd" id="8_visual"]
 [ext_resource type="Script" path="res://scripts/components/hurtbox_component.gd" id="9_hurtbox"]
 [ext_resource type="Resource" path="res://resources/weapons/rifle_stats.tres" id="10_weapon"]
 [ext_resource type="Script" path="res://scripts/weapons/weapon_controller.gd" id="11_weapon_controller"]
+[ext_resource type="PackedScene" path="res://assets/weapons/rifle/rifle.scn" id="12_rifle"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
 radius = 0.19
@@ -29,14 +30,6 @@ radius = 0.115
 [sub_resource type="SphereMesh" id="Mesh_flash"]
 radius = 0.05
 height = 0.1
-
-[sub_resource type="BoxMesh" id="Mesh_gun"]
-size = Vector3(0.05, 0.07, 0.30)
-
-[sub_resource type="StandardMaterial3D" id="Mat_gun"]
-albedo_color = Color(0.09, 0.11, 0.15, 1)
-metallic = 0.35
-roughness = 0.55
 
 [sub_resource type="StandardMaterial3D" id="Mat_flash"]
 shading_mode = 0
@@ -71,7 +64,6 @@ max_health = 100
 script = ExtResource("8_visual")
 
 [node name="Character" parent="Visual" instance=ExtResource("7_character")]
-transform = Transform3D(-0.448, 0, 0, 0, 0.448, 0, 0, 0, -0.448, 0, 0, 0)
 
 [node name="BodyHurtbox" type="Area3D" parent="."]
 collision_layer = 8
@@ -108,13 +100,10 @@ muzzle_path = NodePath("../Visual/GunMount/Muzzle")
 [node name="GunMount" type="Node3D" parent="Visual"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06, 0.56, -0.22)
 
-[node name="Gun" type="MeshInstance3D" parent="Visual/GunMount"]
-mesh = SubResource("Mesh_gun")
-material_override = SubResource("Mat_gun")
-cast_shadow = 1
+[node name="Gun" parent="Visual/GunMount" instance=ExtResource("12_rifle")]
 
 [node name="Muzzle" type="Marker3D" parent="Visual/GunMount"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, -0.28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, -0.28)
 
 [node name="Flash" type="MeshInstance3D" parent="Visual/GunMount/Muzzle"]
 visible = false

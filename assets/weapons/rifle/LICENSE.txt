@@ -1,0 +1,11 @@
+# Quaternius Assault Rifle (M4) — CC0 1.0
+
+- **Author:** Quaternius (https://quaternius.com)
+- **Model page:** https://poly.pizza/m/Bgvuu4CUMV
+- **License:** Creative Commons Zero 1.0 Universal (CC0 1.0)
+  — https://creativecommons.org/publicdomain/zero/1.0/
+- **File:** `quat_assault_rifle.glb` (1,930 triangles, 3 materials)
+- **Generated wrapper:** `rifle.scn` (0.1 scale, +90° yaw so the barrel points −Z, shadows off)
+
+No attribution is required. Credit is included here and in `assets/CREDITS.md` as good practice.
+No paid content is used.

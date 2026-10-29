@@ -125,7 +125,7 @@ func test_player_rig() -> void:
 		expect(animation_player != null, "character has an AnimationPlayer")
 		expect(character.find_child("Skeleton3D", true, false) is Skeleton3D, "character is a skinned rig")
 		if animation_player:
-			for clip: StringName in [&"Idle", &"Pistol_Idle", &"Pistol_Aim_Neutral", &"Walk", &"Sprint", &"Jump", &"Jump_Start", &"Jump_Land"]:
+			for clip: StringName in [&"Idle_A", &"Walking_A", &"Walking_Backwards", &"Running_HoldingRifle", &"Running_Strafe_Left", &"Running_Strafe_Right", &"Jump_Start", &"Jump_Idle", &"Jump_Land", &"Ranged_2H_Aiming", &"Ranged_2H_Shoot", &"Ranged_2H_Reload", &"Hit_A", &"Death_A"]:
 				expect(animation_player.has_animation(clip), "character has %s clip" % clip)
 
 	var locomotion := player.get_node_or_null("LocomotionComponent") as LocomotionComponent
