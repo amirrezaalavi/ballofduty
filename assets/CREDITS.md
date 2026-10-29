@@ -35,3 +35,34 @@ license (with a local copy of the license text), and what was modified.
 - **Modifications:** scaled ×0.448 to fit the 0.82 m capsule, yaw-flipped to face −Z.
   `CharacterVisual` maps Idle→Pistol_Idle, still-scoped→Pistol_Aim_Neutral, Walk/Sprint,
   Walk-reversed for backwards, Jump_Start/Jump/Jump_Land for air. No mesh edits.
+- **Phase 1 status:** replaced by the KayKit layer below; the file remains in the repo until the
+  Phase 1 integration removes it.
+
+## KayKit Adventurers 2.0 (free tier)
+
+- **Author:** Kay Lousberg / KayKit (https://kaylousberg.com)
+- **Source:** https://kaylousberg.itch.io/kaykit-adventurers
+- **License:** Creative Commons Zero (CC0 1.0) — see [`kaykit/LICENSE.txt`](./kaykit/LICENSE.txt)
+- **Used:** Knight, Mage, Rogue, Rogue_Hooded, Barbarian (`kaykit/adventurers/*.glb`)
+- **Modifications:** the seven-to-nine character parts are merged into one skinned surface per
+  character, scaled ×0.32244, yawed 180°, character shadows disabled; atlases downsampled to
+  512×512. Generated scenes are `kaykit/adventurers/*.scn`.
+
+## KayKit Character Animations 1.1 (Rig_Medium, free tier)
+
+- **Author:** Kay Lousberg / KayKit (https://kaylousberg.com)
+- **Source:** https://kaylousberg.itch.io/kaykit-character-animations
+- **License:** Creative Commons Zero (CC0 1.0) — see [`kaykit/LICENSE.txt`](./kaykit/LICENSE.txt)
+- **Used:** `General`, `MovementBasic`, `MovementAdvanced`, `CombatRanged` sets
+  (`kaykit/animations/rig_medium_*.glb`)
+- **Modifications:** clips extracted into the shared `kaykit_medium.res`; loop modes baked; root
+  translation tracks stripped; upper-body filtered copies in `kaykit_upper.res`.
+
+## Quaternius Assault Rifle (M4)
+
+- **Author:** Quaternius (https://quaternius.com)
+- **Source:** https://poly.pizza/m/Bgvuu4CUMV
+- **License:** Creative Commons Zero (CC0 1.0) — see [`weapons/rifle/LICENSE.txt`](./weapons/rifle/LICENSE.txt)
+- **Used:** `weapons/rifle/quat_assault_rifle.glb`
+- **Modifications:** wrapper scaled ×0.1, yawed +90° so the barrel points −Z, grip offset applied,
+  shadows disabled. Generated scene: `weapons/rifle/rifle.scn`.
