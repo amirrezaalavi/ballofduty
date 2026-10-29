@@ -54,3 +54,24 @@ license (with a local copy of the license text), and what was modified.
 - **Used:** `weapons/rifle/quat_assault_rifle.glb`
 - **Modifications:** wrapper scaled ×0.1, yawed +90° so the barrel points −Z, grip offset applied,
   shadows disabled. Generated scene: `weapons/rifle/rifle.scn`.
+
+## KayKit Adventurers 2.0 — Phase 2A class weapons
+
+- **Author:** Kay Lousberg / KayKit (https://kaylousberg.com)
+- **Source:** https://github.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0
+  (`addons/kaykit_character_pack_adventures/Assets/gltf/`)
+- **License:** Creative Commons Zero (CC0 1.0) — local copy in
+  [`weapons/class/LICENSE.txt`](./weapons/class/LICENSE.txt); the upstream repo ships the same CC0 text.
+- **Used:** `staff.gltf`, `crossbow_1handed.gltf`, `axe_1handed.gltf`, `arrow.gltf` plus the
+  `mage_texture.png`, `rogue_texture.png` and `barbarian_texture.png` atlases in
+  `weapons/class/source/`.
+- **Generated:** `weapons/class/mage_staff.scn` (staff ×0.36, laid forward, grip at y=−0.15,
+  0.776 m), `hooded_crossbow.scn` (×0.55, yawed 180°, 0.672 m), `barbarian_axe.scn`
+  (×0.50, laid forward, 0.622 m), `rogue_bow.scn` (proxy bow + KayKit arrow ×0.62).
+  All weapons use the hand-grip origin and point down −Z; shadows disabled at runtime.
+  Rebuild with `assets/weapons/class/build_weapons.gd`.
+- **Proxies (missing from the free tier, clearly marked `proxy=true`):**
+  - Knight `knight_spear.scn` — low-poly shaft + cone spearhead, 0.798 m.
+  - Rogue `rogue_bow.scn` — low-poly limbs/grip/string; the nocked arrow is the KayKit
+    `arrow.gltf`. Reported in the Phase 2A hand-off as missing source art.
+

@@ -13,6 +13,15 @@ const MUTED := Color(0.490196, 0.533333, 0.65098)
 const ERROR := Color(1.0, 0.482353, 0.533333)
 const WARN := Color(1.0, 0.768627, 0.419608)
 
+## Locked Phase 2A class map. Order is the wire class_id.
+const CLASSES := [
+	{"name": "KNIGHT", "weapon": "Heavy Javelin", "role": "Frontline anchor"},
+	{"name": "MAGE", "weapon": "Arcane Staff", "role": "Splash artillery"},
+	{"name": "ROGUE", "weapon": "Recurve Longbow", "role": "Charge skirmisher"},
+	{"name": "ROGUE HOODED", "weapon": "Repeating Crossbow", "role": "Burst flanker"},
+	{"name": "BARBARIAN", "weapon": "Heavy Throwing Axes", "role": "Arcing bruiser"},
+]
+
 var title_label: Label
 var name_field: LineEdit
 var host_field: LineEdit
@@ -22,6 +31,9 @@ var solo_button: Button
 var settings_button: Button
 var status_label: Label
 var mode_label: Label
+var class_cards: Array[Button] = []
+var class_hint: Label
+var selected_class_id: int = 0
 
 var _page_host: String = "127.0.0.1"
 var _page_port: int = 9080
@@ -45,6 +57,7 @@ func configure(defaults: Dictionary) -> void:
 		host_field.text = String(defaults.get("host", _page_host))
 	if port_field:
 		port_field.text = str(int(defaults.get("port", 9080)))
+	select_class(int(defaults.get("class_id", selected_class_id)))
 	_update_mode_hint()
 
 
@@ -91,10 +104,30 @@ func join_config() -> Dictionary:
 		"host": host,
 		"port": port,
 		"name": display_name.left(16),
+		"class_id": selected_class_id,
 		"path": _proxy_ws if proxied else "",
 		"secure": _page_secure,
 		"proxied": proxied,
 	}
+
+
+func selected_class() -> int:
+	return selected_class_id
+
+
+func select_class(class_id: int) -> void:
+	selected_class_id = clampi(class_id, 0, CLASSES.size() - 1)
+	for index in class_cards.size():
+		_style_class_card(index)
+	if class_hint:
+		var info: Dictionary = CLASSES[selected_class_id]
+		class_hint.text = "SELECTED · %s — %s" % [
+			String(info["name"]), String(info["weapon"]).to_upper()
+		]
+
+
+func class_summary(class_id: int) -> Dictionary:
+	return CLASSES[clampi(class_id, 0, CLASSES.size() - 1)]
 
 
 func grab_name_focus() -> void:
@@ -143,7 +176,7 @@ func _build_ui() -> void:
 
 	var card := PanelContainer.new()
 	card.name = "Card"
-	card.custom_minimum_size = Vector2(470.0, 0.0)
+	card.custom_minimum_size = Vector2(560.0, 0.0)
 	center.add_child(card)
 
 	var margin := MarginContainer.new()
@@ -177,6 +210,35 @@ func _build_ui() -> void:
 
 	var rule := HSeparator.new()
 	box.add_child(rule)
+
+	box.add_child(_small_label("CLASS"))
+	var class_row := HBoxContainer.new()
+	class_row.name = "ClassRow"
+	class_row.add_theme_constant_override("separation", 6)
+	box.add_child(class_row)
+	for index in CLASSES.size():
+		var info: Dictionary = CLASSES[index]
+		var class_card := Button.new()
+		class_card.name = "ClassCard%d" % index
+		class_card.text = "%s\n%s\n%s" % [
+			String(info["name"]), String(info["weapon"]), String(info["role"]),
+		]
+		class_card.custom_minimum_size = Vector2(0.0, 74.0)
+		class_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		class_card.add_theme_font_size_override("font_size", 9)
+		class_card.focus_mode = Control.FOCUS_NONE
+		class_card.pressed.connect(select_class.bind(index))
+		class_row.add_child(class_card)
+		class_cards.append(class_card)
+
+	class_hint = Label.new()
+	class_hint.name = "ClassHint"
+	class_hint.text = ""
+	class_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	class_hint.add_theme_font_size_override("font_size", 10)
+	class_hint.add_theme_color_override("font_color", ACCENT)
+	box.add_child(class_hint)
+	select_class(0)
 
 	var callsign := _small_label("CALLSIGN")
 	box.add_child(callsign)
@@ -323,6 +385,34 @@ func _button_style(fill: Color, border: Color) -> StyleBoxFlat:
 	style.content_margin_top = 8.0
 	style.content_margin_bottom = 8.0
 	return style
+
+
+func _style_class_card(index: int) -> void:
+	if index < 0 or index >= class_cards.size():
+		return
+	var card := class_cards[index]
+	var selected := index == selected_class_id
+	var fill := Color(0.08, 0.24, 0.23) if selected else Color(0.05, 0.08, 0.15)
+	var border := ACCENT if selected else Color(0.16, 0.22, 0.35)
+	var font := Color(0.94, 1.0, 0.98) if selected else MUTED
+	var border_width := 2 if selected else 1
+	var normal := _button_style(fill, border)
+	normal.set_border_width_all(border_width)
+	normal.content_margin_left = 4.0
+	normal.content_margin_right = 4.0
+	var hover := _button_style(
+		fill.lightened(0.08) if selected else Color(0.08, 0.13, 0.22), border
+	)
+	hover.set_border_width_all(border_width)
+	hover.content_margin_left = 4.0
+	hover.content_margin_right = 4.0
+	card.add_theme_stylebox_override("normal", normal)
+	card.add_theme_stylebox_override("hover", hover)
+	card.add_theme_stylebox_override("pressed", hover)
+	card.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	card.add_theme_color_override("font_color", font)
+	card.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 1.0))
+	card.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0))
 
 
 func _on_join_pressed() -> void:

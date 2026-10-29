@@ -29,6 +29,7 @@ var _in_game: bool = false
 var _solo: bool = false
 var _was_client: bool = false
 var _match_entered: bool = false
+var _selected_class: int = 0
 
 
 func _ready() -> void:
@@ -116,6 +117,7 @@ func _enter_solo() -> void:
 		gm.clear_client_error()
 	_was_client = false
 	_join_endpoint = {}
+	_apply_local_class(NetProtocol.sanitize_class(_selected_class))
 	_in_game = true
 	_solo = true
 	_match_entered = true
@@ -124,6 +126,18 @@ func _enter_solo() -> void:
 	if _loading:
 		_loading.hide_loading()
 	_set_hud_visible(true)
+
+
+## Solo has no GameManager spawn packet, so set the local class directly before
+## the visual/weapon layers sample it.
+func _apply_local_class(class_id: int) -> void:
+	var local := get_node_or_null("Player")
+	if local == null:
+		return
+	local.set("class_id", class_id)
+	var weapon := local.get_node_or_null("WeaponController")
+	if weapon and weapon.has_method("set_class"):
+		weapon.set_class(class_id)
 
 
 func _set_hud_visible(value: bool) -> void:
@@ -200,6 +214,7 @@ func _menu_defaults(endpoint: Dictionary) -> Dictionary:
 		"host": String(endpoint.get("host", "127.0.0.1")),
 		"port": int(endpoint.get("port", DEFAULT_PORT)),
 		"name": String(endpoint.get("name", "Player")),
+		"class_id": _selected_class,
 		"page_host": String(_page.get("host", "127.0.0.1")),
 		"page_port": int(_page.get("port", DEFAULT_PORT)),
 		"page_secure": bool(_page.get("secure", false)),
@@ -209,6 +224,8 @@ func _menu_defaults(endpoint: Dictionary) -> Dictionary:
 
 func _on_menu_join(config: Dictionary) -> void:
 	var params: Dictionary = {"name": String(config.get("name", "Player"))}
+	_selected_class = NetProtocol.sanitize_class(int(config.get("class_id", 0)))
+	params["class"] = _selected_class
 	if bool(config.get("proxied", false)):
 		params["proxy"] = "1"
 		params["ws"] = String(config.get("path", ""))
@@ -219,6 +236,8 @@ func _on_menu_join(config: Dictionary) -> void:
 
 
 func _on_menu_solo() -> void:
+	if _menu:
+		_selected_class = NetProtocol.sanitize_class(_menu.selected_class())
 	_enter_solo()
 
 
@@ -237,6 +256,9 @@ func _begin_join(endpoint: Dictionary) -> void:
 	_was_client = true
 	_in_game = true
 	_match_entered = false
+	_selected_class = NetProtocol.sanitize_class(
+		int(endpoint.get("class_id", _selected_class))
+	)
 	if _menu:
 		_menu.hide_menu()
 	_set_hud_visible(false)
@@ -248,7 +270,8 @@ func _begin_join(endpoint: Dictionary) -> void:
 		self,
 		String(endpoint.get("host", "127.0.0.1")),
 		int(endpoint.get("port", DEFAULT_PORT)),
-		String(endpoint.get("name", "Player"))
+		String(endpoint.get("name", "Player")),
+		_selected_class
 	)
 	if err != OK:
 		_was_client = false
@@ -295,8 +318,12 @@ func _try_autoconnect(args: PackedStringArray) -> void:
 	var ni := args.find("--name")
 	if ni >= 0 and ni + 1 < args.size():
 		params["name"] = args[ni + 1]
+	var cli := args.find("--class")
+	if cli >= 0 and cli + 1 < args.size():
+		params["class"] = args[cli + 1]
 
 	var endpoint := resolve_endpoint(params, _page)
+	_selected_class = NetProtocol.sanitize_class(int(endpoint.get("class_id", 0)))
 	if _menu:
 		_menu.configure(_menu_defaults(endpoint))
 		_menu.show_menu()
@@ -349,6 +376,7 @@ static func resolve_endpoint(params: Dictionary, page: Dictionary) -> Dictionary
 	var display_name := NetProtocol.sanitize_name(String(params.get("name", "Player")))
 	if display_name == "":
 		display_name = "Player"
+	var class_id := NetProtocol.sanitize_class(int(str(params.get("class", "0")).to_int()))
 	return {
 		"host": host,
 		"port": port,
@@ -356,6 +384,7 @@ static func resolve_endpoint(params: Dictionary, page: Dictionary) -> Dictionary
 		"secure": page_secure,
 		"proxied": proxied,
 		"name": display_name,
+		"class_id": class_id,
 		"url": build_ws_url(host, port, path, page_secure),
 	}
 

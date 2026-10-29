@@ -145,7 +145,7 @@ func test_real_godot_client_joins_through_one_origin_proxy() -> void:
 	_nets.append(server)
 	expect(server.start_server(upstream_port) == OK, "real Godot authority starts")
 	var joins: Array = []
-	server.peer_joined.connect(func(_peer_id: int, player_name: String) -> void:
+	server.peer_joined.connect(func(_peer_id: int, player_name: String, _class_id: int) -> void:
 		joins.append(player_name))
 
 	_pids.append(_start_proxy(root, proxy_port, upstream_port))

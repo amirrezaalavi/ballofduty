@@ -27,9 +27,10 @@ func after_test() -> void:
 	_players.clear()
 
 
-func _spawn_player(net_id: int) -> PlayerController:
+func _spawn_player(net_id: int, class_id: int = 0) -> PlayerController:
 	var player := (load("res://scenes/characters/player.tscn") as PackedScene).instantiate() as PlayerController
 	player.net_id = net_id
+	player.class_id = class_id
 	add_child(player)
 	_players.append(player)
 	for _i in 8:
@@ -39,31 +40,33 @@ func _spawn_player(net_id: int) -> PlayerController:
 
 
 func test_variant_selection_is_deterministic() -> void:
-	var seen := {}
-	for net_id in 5:
-		var index := CharacterVisual.variant_index_for(net_id)
-		expect(index == net_id, "net_id %d selects variant %d" % [net_id, net_id])
-		seen[index] = true
-	expect(seen.size() == 5, "ids 0-4 cover all five variants")
-	expect(CharacterVisual.variant_index_for(5) == 0, "id 5 wraps back to Knight")
-	expect(
-		CharacterVisual.variant_index_for(-3) == CharacterVisual.variant_index_for(3),
-		"negative ids map like their absolute value"
-	)
-	expect(CharacterVisual.variant_index_for(42) == CharacterVisual.variant_index_for(7), "large ids are stable")
+	for class_id in 5:
+		expect(CharacterVisual.variant_index_for(class_id) == class_id,
+			"class %d selects variant %d" % [class_id, class_id])
+	expect(CharacterVisual.variant_index_for(5) == 4, "class ids clamp to the last variant")
+	expect(CharacterVisual.variant_index_for(-3) == 0, "negative classes clamp to Knight")
+	# net_id no longer chooses the body: two different peaks with the same class
+	# must render the same variant.
+	var a := await _spawn_player(17, 2)
+	var b := await _spawn_player(300, 2)
+	var ca := a.get_node("Visual/Character") as Node3D
+	var cb := b.get_node("Visual/Character") as Node3D
+	expect(String(ca.get_meta("kaykit_variant", "")) == String(cb.get_meta("kaykit_variant", "")),
+		"same class renders the same variant regardless of net_id")
+	expect(String(ca.get_meta("kaykit_variant", "")) == "Rogue", "class 2 renders the Rogue")
 
 
 func test_five_variants_have_one_shadowless_skinned_mesh() -> void:
 	var variants := {}
-	for net_id in 5:
-		var player := await _spawn_player(net_id)
+	for class_id in 5:
+		var player := await _spawn_player(100 + class_id, class_id)
 		var character := player.get_node_or_null("Visual/Character") as Node3D
-		expect(character != null, "variant %d has a Character node" % net_id)
+		expect(character != null, "variant %d has a Character node" % class_id)
 		if character == null:
 			continue
 		var variant := String(character.get_meta("kaykit_variant", ""))
 		variants[variant] = true
-		expect(variant == CharacterVisual.VARIANT_NAMES[net_id], "variant %d is %s" % [net_id, variant])
+		expect(variant == CharacterVisual.VARIANT_NAMES[class_id], "class %d is %s" % [class_id, variant])
 		expect(
 			character.scale.is_equal_approx(Vector3.ONE * CharacterVisual.SCALE),
 			"%s uses scale %.5f" % [variant, CharacterVisual.SCALE]
@@ -133,12 +136,12 @@ func test_gun_muzzle_and_reload_contract() -> void:
 		)
 
 	var gun_meshes := gun.get_node("Gun").find_children("*", "MeshInstance3D", true, false) if gun else []
-	var rifle_surfaces := 0
+	var weapon_surfaces := 0
 	for node in gun_meshes:
 		var mesh_instance := node as MeshInstance3D
-		rifle_surfaces += mesh_instance.mesh.get_surface_count()
-		expect(mesh_instance.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "rifle casts no shadow")
-	expect(rifle_surfaces == 3, "M4 keeps its three material surfaces (got %d)" % rifle_surfaces)
+		weapon_surfaces += mesh_instance.mesh.get_surface_count()
+		expect(mesh_instance.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF, "class weapon casts no shadow")
+	expect(weapon_surfaces >= 1, "Knight spear has visible geometry (got %d surfaces)" % weapon_surfaces)
 
 	var reload := player.get_node_or_null("ReloadOverlay") as AnimationPlayer
 	expect(reload != null, "reload overlay exists")
