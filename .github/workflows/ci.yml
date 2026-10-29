@@ -29,6 +29,14 @@ jobs:
       - name: Pipeline
         run: tools/check.sh
 
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: reports
+          if-no-files-found: ignore
+
       - name: Upload web build
         uses: actions/upload-artifact@v4
         with:

@@ -26,27 +26,15 @@ if grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_import.log; then
   exit 1
 fi
 
-log "Headless smoke tests"
-"$GODOT" --headless --path . --script tests/headless/smoke_test.gd 2>&1 | tee /tmp/bod_smoke.log
-! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_smoke.log
+log "Tests (gdUnit4)"
+rm -rf reports
+"$GODOT" --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd \
+  -a tests/gdunit -c --ignoreHeadlessMode 2>&1 | tee /tmp/bod_tests.log
+grep -q "Exit code: 0" /tmp/bod_tests.log
 
 log "Arena budget"
 "$GODOT" --headless --path . --script tests/headless/arena_stats.gd 2>&1 | tee /tmp/bod_arena.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error|exceed" /tmp/bod_arena.log
-
-log "Locomotion tests"
-"$GODOT" --headless --path . --script tests/headless/movement_test.gd 2>&1 | tee /tmp/bod_movement.log
-! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_movement.log
-
-log "Combat tests"
-"$GODOT" --headless --path . --script tests/headless/combat_test.gd 2>&1 | tee /tmp/bod_combat.log
-! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_combat.log
-
-log "Netcode tests"
-"$GODOT" --headless --path . --script tests/headless/net_protocol_test.gd 2>&1 | tee /tmp/bod_net_protocol.log
-! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_net_protocol.log
-"$GODOT" --headless --path . --script tests/headless/net_loopback_test.gd 2>&1 | tee /tmp/bod_net_loopback.log
-! grep -E "FAIL|SCRIPT ERROR|Parse Error" /tmp/bod_net_loopback.log
 
 log "Headless client boot"
 "$GODOT" --headless --path . --quit-after 120 --max-fps 60 2>&1 | tee /tmp/bod_client.log

@@ -26,9 +26,13 @@ Verify:
 
 ```bash
 tools/godot --version                     # 4.7.2.stable.official...
-tools/check.sh                            # full pipeline
-tools/check.sh --skip-export              # imports + headless boots + tests
-tools/serve.sh                            # serve build/web on :8099
+tools/check.sh                            # full pipeline (gdUnit4 + boots + exports)
+tools/check.sh --skip-export              # tests + boots only
+tools/dev.sh up|down|status               # server :9180 + web :8099 with pidfiles
+tools/capture.sh URL out.png              # deterministic browser screenshot
+tools/api.sh Class member                 # version-exact engine API lookup
+tools/gdcheck.sh                          # fast parse gate for changed .gd files
+tools/serve.sh                            # serve build/web on :8099 (foreground)
 ```
 
 ## Web export notes (Godot 4.7, Compatibility)

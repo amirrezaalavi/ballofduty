@@ -59,6 +59,16 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   `HurtboxComponent.damage_enabled = false` means clients can never apply damage to another player.
   Only the server applies damage, and the same flag carries CP4c spawn protection.
 
+## Testing
+
+- gdUnit4 suites live in `tests/gdunit/` and run through the vendored CLI runner (headless with
+  `--ignoreHeadlessMode`); JUnit XML lands in `reports/` (git-ignored, uploaded by CI).
+- Shared assertions/helpers live in `tests/gdunit/bod_test_suite.gd`; suites extend `BodTestSuite`.
+- Headless runs do not transport `InputEvent`s, so tests feed `PlayerInputFrame`/physics frames
+  directly instead of simulating mouse or keyboard.
+- `tests/headless/` keeps the cross-process client probe and the arena budget report.
+- The gdUnit4 addon is excluded from both exports; it must never ship in the PCK.
+
 ## Collision layers
 
 Defined in `project.godot` under `layer_names/3d_physics`:

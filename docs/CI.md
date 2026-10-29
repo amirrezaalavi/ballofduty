@@ -6,7 +6,7 @@ no git remote; that is the only open CP0 item.
 ## What the workflow does
 
 1. Installs Godot **4.7.2** + matching export templates (`chickensoft-games/setup-godot@v2`).
-2. Runs `tools/check.sh` with `GODOT_BIN=godot` (import → 42-check smoke → client/server boot →
+2. Runs `tools/check.sh` with `GODOT_BIN=godot` (import → gdUnit4 suite → arena budget → client/server boot →
    Web export → Linux server export → server binary smoke).
 3. Uploads `build/web` and `build/server` as artifacts.
 

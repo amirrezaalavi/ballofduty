@@ -45,12 +45,14 @@
 
 | Suite | Result |
 |---|---|
-| `net_protocol_test.gd` | **27 checks, 0 failures** — roundtrips, quantization, malformed/oversized/truncated rejection |
-| `net_loopback_test.gd` | **25 checks, 0 failures** — real sockets, 2 clients, spawn parity, yaw persistence, ghost convergence, no teleports, leave cleanup, malformed traffic, ghosts immune to local damage |
+| `tests/gdunit/test_net_protocol.gd` | 6 cases / **26 assertions**, 0 failures — roundtrips, quantization, malformed/oversized/truncated rejection |
+| `tests/gdunit/test_net_loopback.gd` | 1 case / **25 assertions**, 0 failures — real sockets, 2 clients, spawn parity, yaw persistence, ghost convergence, no teleports, leave cleanup, malformed traffic, ghosts immune to local damage |
+| `tests/gdunit/test_smoke.gd` | 7 cases / **100 assertions**, 0 failures |
+| `tests/gdunit/test_movement.gd` | 6 cases / **14 assertions**, 0 failures |
+| `tests/gdunit/test_combat.gd` | 5 cases / **204 assertions**, 0 failures |
 | `net_client_probe.gd` | **5 checks, 0 failures** — separate OS process against a live server, 900–1200 snapshots, `remotes=1` |
-| `smoke_test.gd` | 100 checks, 0 failures |
-| `movement_test.gd` / `combat_test.gd` | 14 / 204 checks, 0 failures |
 | `arena_stats.gd` | 50 draw calls, 32,544 tris, 0 blocked spawns |
+| **Full suite** | **27 test cases · 371 assertions · 0 failures** (JUnit XML in `reports/`) |
 
 Measured live values:
 
@@ -80,7 +82,7 @@ Measured live values:
 tools/godot --headless --path . -- --server --port 9180
 
 # terminal 2 — static build
-tools/check.sh && tools/serve.sh 8099
+tools/check.sh && tools/dev.sh up
 # then open http://127.0.0.1:8099/?join=1&host=127.0.0.1&port=9180&name=You
 
 # optional second player (separate process, walks toward the first)
@@ -89,6 +91,13 @@ tools/godot --headless --path . --script tests/headless/net_client_probe.gd \
 ```
 
 Latency test: add `?sim=100,20` to the URL (100 ms each way, ±20 ms jitter).
+
+Test suite only:
+
+```bash
+tools/godot --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd \
+  -a tests/gdunit -c --ignoreHeadlessMode
+```
 
 ## Known gaps carried into CP4b
 

@@ -5,6 +5,7 @@ bragging rights.
 
 **Status:** CP4a implemented — WebSocket client/server replication awaiting a two-player test
 (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first run pending a remote).
+Tests run on gdUnit4 with JUnit XML; see [`docs/TESTING.md`](docs/TESTING.md).
 See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ```bash
@@ -25,11 +26,17 @@ tools/godot --path .                 # run the project
 # headless server
 tools/godot --headless --path . -- --server --port 9080
 
-# full pipeline check (import, boot, exports, tests)
+# full pipeline check (import, gdUnit4 suite, boots, exports, size)
 tools/check.sh
 
-# serve the exported web build (http://127.0.0.1:8099)
-tools/serve.sh
+# serve server + web build with pidfiles, then capture a screenshot
+tools/dev.sh up
+tools/capture.sh "http://127.0.0.1:8099/?solo=1" docs/checkpoints/shot.png
+tools/dev.sh down
+
+# version-exact API lookup and a fast parse gate
+tools/api.sh WebSocketMultiplayerPeer get_peer
+tools/gdcheck.sh
 ```
 
 Requirements: Godot **4.7.2** with matching export templates. If the engine lives elsewhere, set
@@ -65,7 +72,7 @@ res://
 ├── assets/            # third-party low-poly assets + CREDITS.md
 ├── server/            # headless entry points
 ├── web/               # custom HTML shell
-├── tests/             # GUT + headless integration
+├── tests/             # gdUnit4 suites + headless probes
 ├── docs/              # roadmap, architecture, checkpoints, runbooks
 └── tools/             # godot wrapper, pipeline check, deploy
 ```
@@ -77,6 +84,7 @@ res://
 - [`docs/BACKLOG.md`](docs/BACKLOG.md) — short-term feedback and long-term recommendations
 - [`assets/CREDITS.md`](assets/CREDITS.md) — third-party asset licenses
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — authority model, layers, events, directories
+- [`docs/TESTING.md`](docs/TESTING.md) — gdUnit4 suites, reports, dev tooling
 
 ## License
 
