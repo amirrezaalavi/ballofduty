@@ -81,8 +81,8 @@ func test_shoot_overlay_is_upper_body_only() -> void:
 
 	var overlay := _player.get_node_or_null("ShotOverlay") as AnimationPlayer
 	expect(overlay != null, "shot overlay player exists")
-	var clip := overlay.get_animation(&"Ranged_2H_Shoot") if overlay else null
-	expect(clip != null, "filtered Ranged_2H_Shoot clip exists")
+	var clip := overlay.get_animation(&"Throw") if overlay else null
+	expect(clip != null, "filtered class shoot clip exists")
 	if clip:
 		var tracks := clip.get_track_count()
 		var lower_body := 0
@@ -102,6 +102,6 @@ func test_shoot_overlay_is_upper_body_only() -> void:
 	weapon.tick(1.0 / 30.0, frame)
 	await get_tree().process_frame
 	expect(overlay != null and overlay.is_playing(), "firing starts the shot overlay")
-	expect(overlay.current_animation == &"Ranged_2H_Shoot", "shot overlay plays Ranged_2H_Shoot")
+	expect(overlay.current_animation == &"Throw", "Knight shot overlay plays Throw")
 	var main := _player.find_child("AnimationPlayer", true, false) as AnimationPlayer
-	expect(main.current_animation != &"Ranged_2H_Shoot", "main locomotion player keeps its clip")
+	expect(main.current_animation != &"Throw", "main locomotion player keeps its clip")

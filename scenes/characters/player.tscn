@@ -11,7 +11,7 @@
 [ext_resource type="Script" path="res://scripts/components/hurtbox_component.gd" id="9_hurtbox"]
 [ext_resource type="Resource" path="res://resources/weapons/rifle_stats.tres" id="10_weapon"]
 [ext_resource type="Script" path="res://scripts/weapons/weapon_controller.gd" id="11_weapon_controller"]
-[ext_resource type="PackedScene" path="res://assets/weapons/rifle/rifle.scn" id="12_rifle"]
+[ext_resource type="PackedScene" path="res://assets/weapons/class/knight_spear.scn" id="12_rifle"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
 radius = 0.19
@@ -103,7 +103,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06, 0.56, -0.22)
 [node name="Gun" parent="Visual/GunMount" instance=ExtResource("12_rifle")]
 
 [node name="Muzzle" type="Marker3D" parent="Visual/GunMount"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.09, -0.28)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.47)
 
 [node name="Flash" type="MeshInstance3D" parent="Visual/GunMount/Muzzle"]
 visible = false

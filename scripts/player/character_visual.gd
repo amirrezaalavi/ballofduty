@@ -9,12 +9,15 @@ extends Node3D
 ## Layers:
 ##   * main AnimationPlayer (inside the Character scene) - full-body locomotion
 ##     and death, from NetProtocol.AnimState (local) or force_anim (remotes);
-##   * UpperBodyHold - looping Ranged_2H_Aiming overlay, upper body only;
+##   * UpperBodyHold - looping per-class aim/hold overlay, upper body only;
 ##   * ShotOverlay / ReloadOverlay / HitOverlay - one-shot upper-body reactions.
 ##
-## The gun stays welded to handslot.r through an external-skeleton
+## The weapon stays welded to handslot.r through an external-skeleton
 ## BoneAttachment3D. Orientation comes from the body yaw (plus the Phase 0
 ## additive chest aim), never from the camera directly.
+##
+## Phase 2A: the five KayKit variants are selected by `PlayerController.class_id`
+## (never net_id), and each class swaps its signature weapon under GunMount.
 
 const SCALE := 0.32244
 const HAND_BONE := "handslot.r"
@@ -31,6 +34,38 @@ const VARIANT_SCENES := [
 	preload("res://assets/kaykit/adventurers/barbarian.scn"),
 ]
 const VARIANT_NAMES := ["Knight", "Mage", "Rogue", "Rogue_Hooded", "Barbarian"]
+
+## Class weapon wrappers. Origin is the hand grip, muzzle end points down -Z.
+const WEAPON_SCENES := [
+	preload("res://assets/weapons/class/knight_spear.scn"),
+	preload("res://assets/weapons/class/mage_staff.scn"),
+	preload("res://assets/weapons/class/rogue_bow.scn"),
+	preload("res://assets/weapons/class/hooded_crossbow.scn"),
+	preload("res://assets/weapons/class/barbarian_axe.scn"),
+]
+## Muzzle marker offset from the grip, per class weapon (local to GunMount).
+const MUZZLE_LOCAL := [
+	Vector3(0.0, 0.0, -0.47),
+	Vector3(0.0, 0.0, -0.51),
+	Vector3(0.0, 0.0, -0.39),
+	Vector3(0.0, 0.02, -0.47),
+	Vector3(0.0, 0.0, -0.54),
+]
+
+## Per-class aim/hold, shoot and reload clips from the existing KayKit library.
+const CLASS_ANIM := [
+	{"hold": &"Ranged_2H_Aiming", "shoot": &"Throw", "reload": &"Ranged_2H_Reload"},
+	{
+		"hold": &"Ranged_Magic_Spellcasting", "shoot": &"Ranged_Magic_Shoot",
+		"reload": &"Ranged_2H_Reload",
+	},
+	{"hold": &"Ranged_Bow_Draw", "shoot": &"Ranged_Bow_Release", "reload": &"Ranged_Bow_Draw"},
+	{
+		"hold": &"Ranged_1H_Aiming", "shoot": &"Ranged_1H_Shoot",
+		"reload": &"Ranged_1H_Reload",
+	},
+	{"hold": &"Ranged_1H_Aiming", "shoot": &"Throw", "reload": &"Ranged_2H_Reload"},
+]
 const MAIN_LIBRARY := preload("res://assets/kaykit/animations/kaykit_medium.res")
 const UPPER_LIBRARY := preload("res://assets/kaykit/animations/kaykit_upper.res")
 
@@ -39,6 +74,7 @@ const LOOP_CLIPS := [
 	"Running_A", "Running_B", "Running_HoldingRifle",
 	"Running_Strafe_Left", "Running_Strafe_Right", "Jump_Idle",
 	"Ranged_2H_Aiming", "Ranged_2H_Shooting",
+	"Ranged_Magic_Spellcasting", "Ranged_Bow_Draw", "Ranged_1H_Aiming",
 ]
 
 @export var walk_threshold: float = 0.1
@@ -60,7 +96,7 @@ var force_anim: int = -1
 
 var _camera_rig: CameraRig
 var _state: StringName = &""
-var _variant: int = 0
+var _variant: int = -1
 var _was_airborne: bool = false
 var _landed_at_msec: int = 0
 var _dead: bool = false
@@ -80,10 +116,14 @@ var _aim_weight: float = 0.0
 var _aim_was_active: bool = false
 
 
-## Deterministic across every client: net_id 0 (the local host) is the Knight,
-## remotes and bots draw from the same five-character pool.
-static func variant_index_for(net_id: int) -> int:
-	return absi(net_id) % VARIANT_SCENES.size()
+## Deterministic class → variant map. The local player, roster remotes and bots
+## all call this with `PlayerController.class_id`; net_id no longer matters.
+static func variant_index_for(class_id: int) -> int:
+	return clampi(class_id, 0, VARIANT_SCENES.size() - 1)
+
+
+static func class_anim(class_id: int) -> Dictionary:
+	return CLASS_ANIM[variant_index_for(class_id)]
 
 
 func _ready() -> void:
@@ -93,6 +133,10 @@ func _ready() -> void:
 	character = get_node_or_null("Character") as Node3D
 	_build_death_marker()
 	_bind_character()
+	# Select the class variant and weapon before the first rendered frame, so a
+	# class 0 local never flashes the scene default.
+	if body:
+		_swap_character(variant_index_for(body.class_id))
 	_setup_overlays.call_deferred()
 	_setup_hand_attachment.call_deferred()
 	_last_position = body.global_position if body else Vector3.ZERO
@@ -141,14 +185,14 @@ func _process(delta: float) -> void:
 func _ensure_variant() -> void:
 	if body == null:
 		return
-	var wanted := variant_index_for(body.net_id)
+	var wanted := variant_index_for(body.class_id)
 	if wanted == _variant and character != null:
 		return
 	_swap_character(wanted)
 
 
 func _swap_character(index: int) -> void:
-	index = clampi(index, 0, VARIANT_SCENES.size() - 1)
+	index = variant_index_for(index)
 	_detach_gun()
 	if character != null:
 		character.free()
@@ -159,7 +203,45 @@ func _swap_character(index: int) -> void:
 	add_child(character)
 	_variant = index
 	_bind_character()
+	_swap_weapon(index)
 	_setup_hand_attachment.call_deferred()
+
+
+## Replace only the visual model under GunMount; the mount, muzzle marker and
+## flash stay put so WeaponController's cached Muzzle reference never goes stale.
+func _swap_weapon(index: int) -> void:
+	if gun_mount == null:
+		gun_mount = get_node_or_null("GunMount") as Node3D
+	if gun_mount == null:
+		return
+	var old_gun := gun_mount.get_node_or_null("Gun")
+	if old_gun:
+		old_gun.free()
+	var gun := WEAPON_SCENES[variant_index_for(index)].instantiate() as Node3D
+	gun.name = "Gun"
+	gun_mount.add_child(gun)
+	for node in gun.find_children("*", "MeshInstance3D", true, false):
+		(node as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var muzzle := gun_mount.get_node_or_null("Muzzle") as Marker3D
+	if muzzle:
+		muzzle.position = MUZZLE_LOCAL[variant_index_for(index)]
+
+
+func class_id() -> int:
+	return _variant
+
+
+func weapon_name() -> String:
+	if gun_mount == null:
+		return ""
+	var gun := gun_mount.get_node_or_null("Gun")
+	return String(gun.name) if gun else ""
+
+
+func anim_clip(key: String) -> StringName:
+	if _variant < 0:
+		return &""
+	return class_anim(_variant).get(key, &"")
 
 
 func _bind_character() -> void:
@@ -245,7 +327,7 @@ func _on_weapon_shot(_origin: Vector3, _direction: Vector3) -> void:
 	if _hold_player:
 		_hold_player.stop()
 	_shot_player.speed_scale = SHOT_SPEED
-	_shot_player.play(&"Ranged_2H_Shoot", 0.02)
+	_shot_player.play(anim_clip("shoot"), 0.02)
 
 
 func _on_shot_finished(_name: StringName) -> void:
@@ -263,7 +345,7 @@ func _on_reload_state_changed(reloading: bool) -> void:
 		if _hold_player:
 			_hold_player.stop()
 		_reload_player.speed_scale = 1.0
-		_reload_player.play(&"Ranged_2H_Reload", 0.05)
+		_reload_player.play(anim_clip("reload"), 0.05)
 	elif _reload_player:
 		_reload_player.stop()
 
@@ -553,7 +635,7 @@ func _update_aim() -> void:
 		return
 	if _aim_weight > 0.5 and not _action_playing():
 		if not _hold_player.is_playing():
-			_hold_player.play(&"Ranged_2H_Aiming", 0.12)
+			_hold_player.play(anim_clip("hold"), 0.12)
 	elif _hold_player.is_playing():
 		_hold_player.stop()
 

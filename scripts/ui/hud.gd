@@ -1,6 +1,12 @@
 extends Control
-## CP3 HUD: crosshair, health, ammo/reload, hitmarker, damage flash, kill feed.
-## Draws in one CanvasItem to keep the web HUD cheap.
+## CP3/2A HUD: crosshair, health, class weapon name, ammo, heat/charge,
+## hitmarker, damage flash, kill feed. Draws in one CanvasItem to keep the web
+## HUD cheap.
+
+const ACCENT := Color(0.2, 0.85, 0.75, 0.9)
+const HEAT_COLOR := Color(1.0, 0.55, 0.22, 0.95)
+const CHARGE_COLOR := Color(0.36, 0.72, 1.0, 0.95)
+const MUTED := Color(0.55, 0.64, 0.8)
 
 var player: PlayerController
 var weapon: WeaponController
@@ -18,6 +24,13 @@ var _damage_flash: float = 0.0
 var _crosshair_kick: float = 0.0
 var _dead: bool = false
 var _font: Font
+
+# Phase 2A class weapon state.
+var _weapon_name: String = "Heavy Javelin"
+var _fire_mode: String = "SINGLE"
+var _heat: float = 0.0
+var _heat_max: float = 0.0
+var _charge: float = 0.0
 
 # Cheap debug strip (F3 or --combat-hud). Counters are integers; the two text
 # lines are refreshed 4x/s so drawing never allocates per frame.
@@ -38,32 +51,53 @@ func _ready() -> void:
 	_font = ThemeDB.fallback_font
 	_debug = OS.get_cmdline_user_args().has("--combat-hud")
 
-	player = get_tree().current_scene.get_node_or_null("Player") as PlayerController
-	if player == null:
+	var current := get_tree().current_scene
+	var found := current.get_node_or_null("Player") as PlayerController if current else null
+	if found == null:
 		visible = false
 		return
+	bind_player(found)
 
+
+## Bind (or rebind) the HUD to a player. Kept public so class-weapon tests can
+## build a HUD without the full main scene.
+func bind_player(target: PlayerController) -> void:
+	player = target
 	health = player.get_node_or_null("HealthComponent") as HealthComponent
 	weapon = player.get_node_or_null("WeaponController") as WeaponController
 	if health:
-		health.health_changed.connect(_on_health)
+		if not health.health_changed.is_connected(_on_health):
+			health.health_changed.connect(_on_health)
 		_on_health(health.current, health.max_health)
 	if weapon:
-		weapon.ammo_changed.connect(_on_ammo)
-		weapon.reload_state_changed.connect(_on_reload)
-		weapon.hit_confirmed.connect(_on_hit)
-		weapon.shot_fired.connect(_on_shot)
-		_on_ammo(weapon.ammo, -1)
+		_connect(weapon, "ammo_changed", _on_ammo)
+		_connect(weapon, "reload_state_changed", _on_reload)
+		_connect(weapon, "hit_confirmed", _on_hit)
+		_connect(weapon, "shot_fired", _on_shot)
+		_connect(weapon, "heat_changed", _on_heat)
+		_connect(weapon, "charge_changed", _on_charge)
+		_connect(weapon, "weapon_changed", _on_weapon_changed)
+		_on_weapon_changed(weapon.weapon_display_name())
+		_on_ammo(weapon.ammo, weapon.reserve_count())
+		_on_reload(weapon.is_reloading())
+		_on_heat(weapon.heat, weapon.heat_max())
+		_on_charge(weapon.charge)
 	var gm := get_node_or_null("/root/GameManager")
 	if gm:
 		if gm.has_signal("server_hit"):
-			gm.server_hit.connect(_on_hit)
+			_connect(gm, "server_hit", _on_hit)
 		if gm.has_signal("server_death"):
-			gm.server_death.connect(_on_death)
+			_connect(gm, "server_death", _on_death)
 		if gm.has_signal("server_respawn"):
-			gm.server_respawn.connect(_on_respawn)
+			_connect(gm, "server_respawn", _on_respawn)
 		if gm.has_signal("server_shot"):
-			gm.server_shot.connect(_on_server_shot)
+			_connect(gm, "server_shot", _on_server_shot)
+	visible = true
+
+
+func _connect(source: Object, signal_name: String, callback: Callable) -> void:
+	if source.has_signal(signal_name) and not source.is_connected(signal_name, callback):
+		source.connect(signal_name, callback)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -84,6 +118,44 @@ func _process(delta: float) -> void:
 			_debug_timer = 0.25
 			_refresh_debug_text()
 	queue_redraw()
+
+
+# --- testable state -------------------------------------------------------
+
+func weapon_name_text() -> String:
+	return _weapon_name
+
+
+func ammo_text() -> String:
+	return str(_ammo)
+
+
+func reserve_text() -> String:
+	return "∞ reserve" if _reserve < 0 else "%d reserve" % _reserve
+
+
+func state_label() -> String:
+	if _reloading:
+		return "RELOADING"
+	if _heat_max > 0.0 and _heat >= _heat_max - 0.001:
+		return "OVERHEATED"
+	if _charge > 0.001:
+		return "DRAW %d%%" % int(round(_charge * 100.0))
+	if weapon != null:
+		return weapon.state_label()
+	return _fire_mode
+
+
+func fire_mode() -> String:
+	return _fire_mode
+
+
+func heat_ratio() -> float:
+	return clampf(_heat / _heat_max, 0.0, 1.0) if _heat_max > 0.0 else 0.0
+
+
+func charge_ratio() -> float:
+	return clampf(_charge, 0.0, 1.0)
 
 
 func _refresh_debug_text() -> void:
@@ -136,18 +208,30 @@ func _draw() -> void:
 
 	var right := size.x - 24.0
 	draw_string(
-		_font, Vector2(right - 180.0, size.y - 40.0), str(_ammo),
+		_font, Vector2(right - 260.0, size.y - 92.0), _weapon_name.to_upper(),
+		HORIZONTAL_ALIGNMENT_RIGHT, 260.0, 14, ACCENT
+	)
+	draw_string(
+		_font, Vector2(right - 180.0, size.y - 56.0), str(_ammo),
 		HORIZONTAL_ALIGNMENT_RIGHT, 180.0, 32, Color(0.9, 0.96, 1.0)
 	)
 	draw_string(
-		_font, Vector2(right - 180.0, size.y - 20.0),
-		"∞ reserve" if _reserve < 0 else "%d reserve" % _reserve,
-		HORIZONTAL_ALIGNMENT_RIGHT, 180.0, 11, Color(0.55, 0.64, 0.8)
+		_font, Vector2(right - 180.0, size.y - 36.0), reserve_text(),
+		HORIZONTAL_ALIGNMENT_RIGHT, 180.0, 11, MUTED
 	)
-	if _reloading:
+	_draw_weapon_meter(right)
+
+	var state := state_label()
+	if state == "RELOADING" or state == "OVERHEATED" or state.begins_with("DRAW"):
+		var tone := HEAT_COLOR if state == "RELOADING" or state == "OVERHEATED" else CHARGE_COLOR
 		draw_string(
-			_font, Vector2(center.x - 100.0, size.y - 90.0), "RELOADING",
-			HORIZONTAL_ALIGNMENT_CENTER, 200.0, 16, Color(1.0, 0.75, 0.35)
+			_font, Vector2(center.x - 120.0, size.y - 90.0), state,
+			HORIZONTAL_ALIGNMENT_CENTER, 240.0, 16, tone
+		)
+	elif state.begins_with("BURST"):
+		draw_string(
+			_font, Vector2(right - 180.0, size.y - 104.0), state,
+			HORIZONTAL_ALIGNMENT_RIGHT, 180.0, 10, MUTED
 		)
 
 	if _kill_time > 0.0:
@@ -174,6 +258,38 @@ func _draw() -> void:
 			_font, Vector2(24.0, size.y - 74.0), "DBG " + _pool_text + "  " + _net_text,
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, debug_color
 		)
+
+
+## Heat (Mage) or charge (Rogue) meter above the reserve line. Burst classes
+## get simple pips so the hand crossbow still reads as a 3-round weapon.
+func _draw_weapon_meter(right: float) -> void:
+	var meter_x := right - 180.0
+	var meter_y := size.y - 25.0
+	if _heat_max > 0.0:
+		draw_rect(Rect2(Vector2(meter_x, meter_y), Vector2(180.0, 5.0)), Color(0.06, 0.08, 0.12, 0.8))
+		draw_rect(
+			Rect2(Vector2(meter_x, meter_y), Vector2(180.0 * heat_ratio(), 5.0)),
+			HEAT_COLOR
+		)
+		draw_string(
+			_font, Vector2(meter_x - 40.0, meter_y + 5.0), "HEAT",
+			HORIZONTAL_ALIGNMENT_RIGHT, 36.0, 9, MUTED
+		)
+	elif _fire_mode == "CHARGE":
+		draw_rect(Rect2(Vector2(meter_x, meter_y), Vector2(180.0, 5.0)), Color(0.06, 0.08, 0.12, 0.8))
+		draw_rect(
+			Rect2(Vector2(meter_x, meter_y), Vector2(180.0 * charge_ratio(), 5.0)),
+			CHARGE_COLOR
+		)
+		draw_string(
+			_font, Vector2(meter_x - 40.0, meter_y + 5.0), "DRAW",
+			HORIZONTAL_ALIGNMENT_RIGHT, 36.0, 9, MUTED
+		)
+	elif _fire_mode == "BURST" and weapon != null:
+		var count := weapon.burst_count()
+		for i in count:
+			var pip := Rect2(Vector2(meter_x + float(i) * 14.0, meter_y), Vector2(10.0, 5.0))
+			draw_rect(pip, MUTED)
 
 
 func _draw_crosshair(center: Vector2) -> void:
@@ -205,6 +321,23 @@ func _on_ammo(magazine: int, reserve: int) -> void:
 
 func _on_reload(reloading: bool) -> void:
 	_reloading = reloading
+
+
+func _on_weapon_changed(display_name: String) -> void:
+	_weapon_name = display_name
+	if weapon != null:
+		_fire_mode = weapon.fire_mode()
+	else:
+		_fire_mode = "SINGLE"
+
+
+func _on_heat(value: float, maximum: float) -> void:
+	_heat = value
+	_heat_max = maximum
+
+
+func _on_charge(value: float) -> void:
+	_charge = value
 
 
 func _on_hit(headshot: bool, killed: bool) -> void:

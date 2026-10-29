@@ -1,0 +1,23 @@
+# KayKit — CC0 1.0
+
+The character and animation assets in this folder are by **Kay Lousberg (KayKit)** and are
+dedicated to the public domain under **Creative Commons Zero 1.0 Universal (CC0 1.0)**.
+
+- License: https://creativecommons.org/publicdomain/zero/1.0/
+- Author: https://kaylousberg.com
+- Adventurers 2.0: https://kaylousberg.itch.io/kaykit-adventurers
+- Character Animations 1.1: https://kaylousberg.itch.io/kaykit-character-animations
+
+CC0 requires no attribution. Credit is included here and in `assets/CREDITS.md` as good practice.
+
+The original packs are free tiers only. No paid EXTRA or SOURCE content is included.
+
+Contents:
+
+- `adventurers/*.glb` — five Adventurers 2.0 characters (Knight, Mage, Rogue, Rogue_Hooded,
+  Barbarian), 23-joint `Rig_Medium`, one 1024×1024 atlas each.
+- `adventurers/*.scn` — generated merged, shadowless, one-surface skinned scenes (see README).
+- `animations/rig_medium_*.glb` — Character Animations 1.1 General, MovementBasic,
+  MovementAdvanced and CombatRanged sets.
+- `animations/kaykit_medium.res` — shared full clip library extracted from those sets.
+- `animations/kaykit_upper.res` — upper-body filtered overlay clips.

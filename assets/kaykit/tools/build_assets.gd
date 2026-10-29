@@ -45,6 +45,16 @@ const UPPER_BONES := [
 const UPPER_CLIPS := [
 	"Ranged_2H_Aiming", "Ranged_2H_Shoot", "Ranged_2H_Shooting",
 	"Ranged_2H_Reload", "Hit_A", "Hit_B",
+	# Phase 2A class map: every class aims and shoots from the upper body.
+	"Throw",
+	"Ranged_Magic_Spellcasting", "Ranged_Magic_Shoot",
+	"Ranged_Bow_Draw", "Ranged_Bow_Release",
+	"Ranged_1H_Aiming", "Ranged_1H_Shoot", "Ranged_1H_Reload",
+]
+
+const UPPER_LOOP_CLIPS := [
+	"Ranged_2H_Aiming", "Ranged_2H_Shooting", "Ranged_Magic_Spellcasting",
+	"Ranged_Bow_Draw", "Ranged_1H_Aiming",
 ]
 
 
@@ -239,7 +249,7 @@ func _build_upper_library() -> void:
 			if not UPPER_BONES.has(bone):
 				clip.remove_track(track)
 		clip.loop_mode = (
-			Animation.LOOP_LINEAR if clip_name in ["Ranged_2H_Aiming", "Ranged_2H_Shooting"] else Animation.LOOP_NONE
+			Animation.LOOP_LINEAR if clip_name in UPPER_LOOP_CLIPS else Animation.LOOP_NONE
 		)
 		upper.add_animation(clip_name, clip)
 	var error := ResourceSaver.save(upper, "res://assets/kaykit/animations/kaykit_upper.res")
