@@ -813,6 +813,7 @@ func client_start(
 	var local := _world.get_node_or_null("Player") as PlayerController
 	if local:
 		local.net_id = 0
+		local.class_id = _wanted_class
 		local.dead = false
 		var weapon := local.get_node_or_null("WeaponController") as WeaponController
 		if weapon:
