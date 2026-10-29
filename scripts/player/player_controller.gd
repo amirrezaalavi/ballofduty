@@ -22,6 +22,8 @@ const VISUAL_OFFSET_MAX := 2.0
 var net_role: NetRole = NetRole.LOCAL
 var net_id: int = 0
 var last_seq: int = 0
+var dead: bool = false
+var net_dead: bool = false
 ## Camera/view yaw. Independent of body facing: the body turns toward movement,
 ## while the camera can orbit freely (counter-rotated on the CameraPivot).
 var view_yaw: float = 0.0
@@ -65,6 +67,8 @@ func _ready() -> void:
 func make_remote(remote_id: int) -> void:
 	disable_prediction()
 	net_role = NetRole.REMOTE
+	if weapon:
+		weapon.spawn_projectiles = false
 	net_id = remote_id
 	collision_layer = 0
 	collision_mask = 0
@@ -93,6 +97,12 @@ func make_server(server_id: int) -> void:
 	disable_prediction()
 	net_role = NetRole.SERVER
 	net_id = server_id
+	if weapon:
+		weapon.spawn_projectiles = false
+	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+		var hurtbox := get_node_or_null(path) as HurtboxComponent
+		if hurtbox:
+			hurtbox.entity_id = server_id
 	var camera := get_node_or_null("CameraPivot/SpringArm3D/Camera3D") as Camera3D
 	if camera:
 		camera.current = false
@@ -102,7 +112,7 @@ func make_server(server_id: int) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if net_role != NetRole.LOCAL:
+	if net_role != NetRole.LOCAL or dead:
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		# Pointer lock can emit a large synthetic delta on the capture frame.
@@ -144,6 +154,8 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	match net_role:
 		NetRole.LOCAL:
+			if dead:
+				return
 			var frame := input_handler.sample(view_yaw, camera_rig.pitch)
 			simulate_tick(frame, delta)
 			weapon.tick(delta, frame)
@@ -165,6 +177,8 @@ func server_step(frame: PlayerInputFrame, delta: float) -> void:
 ## Used by _physics_process for real input and by tests/bots with explicit frames,
 ## so the predicted path is identical in both cases.
 func simulate_tick(frame: PlayerInputFrame, delta: float) -> void:
+	if dead:
+		return
 	if prediction_enabled and not _pending_correction.is_empty():
 		_apply_correction()
 	last_seq = frame.seq
@@ -192,6 +206,29 @@ func enable_prediction() -> void:
 	camera_rig.position = _camera_base
 
 
+func set_dead(value: bool) -> void:
+	dead = value
+	if dead:
+		velocity = Vector3.ZERO
+		if weapon:
+			weapon.spawn_projectiles = false
+
+
+func respawn_at(position: Vector3, yaw: float) -> void:
+	dead = false
+	global_position = position
+	rotation.y = yaw
+	view_yaw = yaw
+	velocity = Vector3.ZERO
+	reset_physics_interpolation()
+	var health := get_node_or_null("HealthComponent") as HealthComponent
+	if health:
+		health.reset()
+	if weapon:
+		weapon.reset_ammo()
+	enable_prediction()
+
+
 func set_view_yaw(yaw: float) -> void:
 	view_yaw = wrapf(yaw, -PI, PI)
 	camera_rig.rotation.y = wrapf(view_yaw - rotation.y, -PI, PI)
@@ -212,6 +249,13 @@ func disable_prediction() -> void:
 ## Called from GameManager when a snapshot row matches the local player id.
 ## The newest ack wins; stale/older snapshots are ignored.
 func accept_server_state(entry: Dictionary) -> void:
+	# Observe HP even while dead: the death event can arrive one snapshot before
+	# the hp=0 row, and the HUD should not stay at the pre-death value.
+	var health := get_node_or_null("HealthComponent") as HealthComponent
+	if health and entry.has("hp"):
+		health.observe(int(entry["hp"]))
+	if dead:
+		return
 	if not prediction_enabled:
 		return
 	var ack := int(entry.get("ack", -1))
@@ -354,6 +398,9 @@ func _forward_input(frame: PlayerInputFrame) -> void:
 
 
 func _apply_remote(_delta: float) -> void:
+	if net_dead:
+		visible = false
+		return
 	var interp := get_node_or_null("NetworkInterpolator") as NetworkInterpolator
 	if interp == null or not interp.has_data():
 		return

@@ -21,6 +21,9 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S10 | Tree/rock collider fit | Tree trunk radius reduced from 0.36× to 0.12× scale; low-rock height corrected so invisible collision no longer feels spherical | done | CP2 |
 | S11 | Gun attached to character | Gun/muzzle reparented from the player root to `Visual/GunMount`; mount copies camera pitch (+recoil); yaw inherited from the body. Now docks front-center in the mannequin's hands when still, shoulder when moving | done | CP3 |
 | S16 | Server-authoritative spawn pose | `JOIN_OK` now carries spawn position + yaw; fixed a 22 m client/server mismatch and an inverted spawn yaw that faced players at the wall | done | CP4a |
+| S31 | Bot difficulty | Bots have perfect aim and are aggressive; add reaction delay/spread after playtest | open | CP4c |
+| S30 | Remote death presentation | Ghosts hide on hp 0; add a death clip/ragdoll later | open | CP5 |
+| S29 | Combat authority | Server fire intent, canonical muzzle, events, death/respawn/protection, 4 bots | done | CP4c |
 | S28 | Low-FPS input starvation | Max 4 physics steps; 2-tick extrapolation then freeze; ack pinned; regression freezes 16/40 ticks | done | CP4b/4d |
 | S27 | Camera occlusion by players | Dither fade (instance uniform) is the chosen approach; deferred to CP5 polish | planned | CP5 |
 | S26 | Jump scale after speed retune | 1.22 m apex at 1 m/s walk feels high; decide whether to scale jump/gravity | open | CP4c/CP5 |

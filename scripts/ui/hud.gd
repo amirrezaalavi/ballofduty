@@ -16,6 +16,7 @@ var _hit_headshot: bool = false
 var _kill_time: float = 0.0
 var _damage_flash: float = 0.0
 var _crosshair_kick: float = 0.0
+var _dead: bool = false
 var _font: Font
 
 
@@ -40,6 +41,14 @@ func _ready() -> void:
 		weapon.hit_confirmed.connect(_on_hit)
 		weapon.shot_fired.connect(_on_shot)
 		_on_ammo(weapon.ammo, -1)
+	var gm := get_node_or_null("/root/GameManager")
+	if gm:
+		if gm.has_signal("server_hit"):
+			gm.server_hit.connect(_on_hit)
+		if gm.has_signal("server_death"):
+			gm.server_death.connect(_on_death)
+		if gm.has_signal("server_respawn"):
+			gm.server_respawn.connect(_on_respawn)
 
 
 func _process(delta: float) -> void:
@@ -55,6 +64,12 @@ func _draw() -> void:
 		return
 	var center := size * 0.5
 
+	if _dead:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.03, 0.55))
+		draw_string(
+			_font, Vector2(center.x - 120.0, center.y), "RESPAWNING",
+			HORIZONTAL_ALIGNMENT_CENTER, 240.0, 24, Color(1.0, 0.55, 0.35)
+		)
 	if _damage_flash > 0.0:
 		draw_rect(Rect2(Vector2.ZERO, size), Color(0.8, 0.1, 0.1, 0.2 * _damage_flash))
 
@@ -141,3 +156,13 @@ func _on_hit(headshot: bool, killed: bool) -> void:
 
 func _on_shot(_origin: Vector3, _direction: Vector3) -> void:
 	_crosshair_kick = 4.0
+
+
+func _on_death(victim_id: int, _killer_id: int) -> void:
+	if player and victim_id == player.net_id:
+		_dead = true
+
+
+func _on_respawn(player_id: int, _position: Vector3, _yaw: float) -> void:
+	if player and player_id == player.net_id:
+		_dead = false

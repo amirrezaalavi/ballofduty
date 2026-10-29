@@ -91,7 +91,7 @@ start_server() {
     echo "server already running (pid $(cat "$SERVER_PID"))"
     return
   fi
-  ./tools/godot --headless --path . -- --server --port "$SERVER_PORT" --net-stats \
+  ./tools/godot --headless --path . -- --server --port "$SERVER_PORT" --net-stats --bots "${BOTS:-4}" \
     > "$LOG_DIR/server.log" 2>&1 &
   echo $! > "$SERVER_PID"
   wait_ready server "$SERVER_PORT" "$SERVER_PID" "$LOG_DIR/server.log"

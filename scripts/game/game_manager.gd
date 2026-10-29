@@ -6,6 +6,11 @@ extends Node
 
 enum NetMode { OFFLINE, SERVER, CLIENT }
 
+signal server_hit(headshot: bool, killed: bool)
+signal server_death(victim_id: int, killer_id: int)
+signal server_respawn(player_id: int, position: Vector3, yaw: float)
+signal server_shot(shooter_id: int, origin: Vector3, direction: Vector3)
+
 # Preloaded so joining never hits the resource loader mid-match.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
 ## CP4b input intake: one frame is consumed per server tick, so a jitter burst
@@ -18,6 +23,9 @@ const INPUT_RATE_LIMIT := 90
 ## server invented. (Advancing the ack on a repeat would have no client-side
 ## state to compare and would force a snap.)
 const MAX_EXTRAPOLATION_TICKS := 2
+const RESPAWN_DELAY_MSEC := 3000
+const SPAWN_PROTECTION_MSEC := 1500
+const BOT_PEER_BASE := -1000
 
 var net_mode: NetMode = NetMode.OFFLINE
 ## Dev-server console stats (1 line/s/player); enabled with --net-stats.
@@ -31,6 +39,7 @@ var _server_tick: int = 0
 var _world: Node
 var _spawns: Array = [] # Array[Vector3]
 var _used_slots: Dictionary = {} # slot -> peer_id
+var _combat: ServerCombat
 
 # Client state.
 var local_id: int = 0
@@ -74,6 +83,8 @@ func _connect_bus(bus: Node) -> void:
 		bus.roster_updated.connect(_on_roster_updated)
 	if not bus.snapshot_received.is_connected(_on_snapshot_received):
 		bus.snapshot_received.connect(_on_snapshot_received)
+	if not bus.event_received.is_connected(_on_server_event):
+		bus.event_received.connect(_on_server_event)
 	if not bus.disconnected_from_server.is_connected(_on_transport_down):
 		bus.disconnected_from_server.connect(_on_transport_down)
 
@@ -98,7 +109,7 @@ func remote_jitter_ticks() -> int:
 
 # --- server ---------------------------------------------------------------
 
-func server_start(world: Node, port: int) -> int:
+func server_start(world: Node, port: int, bots: int = 0) -> int:
 	_reset()
 	var net := _net()
 	if net == null:
@@ -111,6 +122,16 @@ func server_start(world: Node, port: int) -> int:
 	_spawns = collect_spawn_points(world)
 	_free_ids = range(1, NetProtocol.MAX_PLAYERS + 1)
 	_next_id = 1
+	var stats := load("res://resources/weapons/rifle_stats.tres") as WeaponStats
+	_combat = ServerCombat.new(world, stats)
+	var bus := get_node_or_null("/root/EventBus")
+	if bus:
+		if not bus.damage_dealt.is_connected(_on_server_damage):
+			bus.damage_dealt.connect(_on_server_damage)
+		if not bus.player_died.is_connected(_on_server_death):
+			bus.player_died.connect(_on_server_death)
+	for i in bots:
+		_spawn_bot(i)
 	return OK
 
 
@@ -150,12 +171,7 @@ func _on_peer_joined(peer_id: int, player_name: String) -> void:
 	var spawn_yaw := node.rotation.y
 	var initial := PlayerInputFrame.new()
 	initial.yaw = spawn_yaw
-	_roster[peer_id] = {
-		"id": assigned, "name": player_name, "node": node,
-		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
-		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
-		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "frozen_ticks": 0,
-		}
+	_roster[peer_id] = _new_entry(assigned, player_name, node, peer_id)
 	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
 	net.server_send(peer_id, NetProtocol.encode_join_ok(assigned, _server_tick, spawn_pos, spawn_yaw))
 	_broadcast_roster()
@@ -168,9 +184,9 @@ func _on_peer_left(peer_id: int) -> void:
 		return
 	var entry: Dictionary = _roster[peer_id]
 	print("BALL_OF_DUTY net leave id=%d name=%s peers=%d" % [int(entry["id"]), String(entry["name"]), _roster.size() - 1])
-	var node: Node = entry["node"]
-	if is_instance_valid(node):
-		node.queue_free()
+	var node_ref: Variant = entry["node"]
+	if is_instance_valid(node_ref):
+		(node_ref as Node).queue_free()
 	_roster.erase(peer_id)
 	_free_ids.append(int(entry["id"]))
 	_free_ids.sort()
@@ -206,6 +222,8 @@ func _on_remote_input(peer_id: int, frame: Dictionary) -> void:
 	converted.jump = bool(frame["jump"])
 	converted.sprint = bool(frame["sprint"])
 	converted.aim = bool(frame["scoped"])
+	converted.fire = bool(frame.get("fire", false))
+	converted.reload = bool(frame.get("reload", false))
 	converted.yaw = float(frame["yaw"])
 	converted.pitch = float(frame["pitch"])
 	stored["last_seq"] = seq
@@ -222,68 +240,325 @@ func _physics_process(delta: float) -> void:
 		_poll_client_connection()
 		return
 	_server_tick += 1
+	var now := Time.get_ticks_msec()
 	var entries: Array = []
 	for peer_id in _roster:
 		var entry: Dictionary = _roster[peer_id]
-		# Check validity before casting: casting a freed object raises before the
-		# is_instance_valid guard can run (e.g. teardown between ticks).
-		var node: Node = entry["node"]
-		if not is_instance_valid(node):
+		# Variant first: assigning a freed instance to a typed Node raises before
+		# is_instance_valid can inspect it (teardown between ticks).
+		var node_ref: Variant = entry["node"]
+		if not is_instance_valid(node_ref):
 			continue
-		var actor := node as PlayerController
+		var actor := node_ref as PlayerController
 		if actor == null:
 			continue
-		# Consume exactly one input per tick. If the queue is empty, allow a
-		# couple of extrapolated ticks, then freeze. The ack stays pinned to the
-		# last received input so the client can still replay its real tail.
+
+		# Dead players stay in the roster/snapshot with hp 0 until respawn.
+		if int(entry["dead_until"]) > 0:
+			if now >= int(entry["dead_until"]):
+				_respawn(entry)
+			entries.append(_snapshot_entry(entry, actor, true))
+			continue
+
+		if int(entry["protected_until"]) > 0 and now >= int(entry["protected_until"]):
+			entry["protected_until"] = 0
+			_set_hurtboxes(actor, true)
+		if _combat:
+			_combat.tick(entry, delta)
+
 		var frame: PlayerInputFrame = entry["last_frame"]
-		var queue: Array = entry["queue"]
 		var simulate := true
-		if not queue.is_empty():
-			frame = queue.pop_front()
+		if bool(entry["is_bot"]):
+			frame = _bot_frame(entry, actor, delta)
 			entry["last_frame"] = frame
 			entry["ack"] = frame.seq
 			entry["has_input"] = true
-			entry["starved_ticks"] = 0
-		elif bool(entry["has_input"]):
-			entry["starved_ticks"] = int(entry["starved_ticks"]) + 1
-			if int(entry["starved_ticks"]) > MAX_EXTRAPOLATION_TICKS:
-				entry["frozen_ticks"] = int(entry["frozen_ticks"]) + 1
-				simulate = false
 		else:
-			entry["starved_ticks"] = 0
+			var queue: Array = entry["queue"]
+			if not queue.is_empty():
+				frame = queue.pop_front()
+				entry["last_frame"] = frame
+				entry["ack"] = frame.seq
+				entry["has_input"] = true
+				entry["starved_ticks"] = 0
+			elif bool(entry["has_input"]):
+				entry["starved_ticks"] = int(entry["starved_ticks"]) + 1
+				if int(entry["starved_ticks"]) > MAX_EXTRAPOLATION_TICKS:
+					entry["frozen_ticks"] = int(entry["frozen_ticks"]) + 1
+					simulate = false
+			else:
+				entry["starved_ticks"] = 0
 
 		if simulate:
+			var shot := _combat.process(entry, actor, frame, delta) if _combat else {}
+			if not shot.is_empty():
+				# Firing cancels spawn protection.
+				entry["protected_until"] = 0
+				_set_hurtboxes(actor, true)
+				_broadcast_event(NetProtocol.encode_event_shot(
+					int(shot["shooter_id"]), shot["origin"], shot["direction"]
+				))
 			var before := actor.global_position
 			actor.server_step(frame, delta)
 			if _check_displacement(entry, before, actor.global_position, delta):
-				# Reject the step: impossible travel is rolled back, horizontal
-				# velocity zeroed, and the tick continues from the last good pose.
 				actor.global_position = before
 				actor.velocity = Vector3(0.0, actor.velocity.y, 0.0)
-		entries.append({
-			"id": int(entry["id"]),
-			"pos": actor.global_position,
-			"yaw": actor.rotation.y,
-			"state": actor.anim_state_byte(),
-			"vel": actor.velocity,
-			"on_floor": actor.is_on_floor(),
-			"hp": 100,
-			"ack": int(entry["ack"]),
-		})
+		entries.append(_snapshot_entry(entry, actor))
+
 	if net_stats and _server_tick % 30 == 0:
 		for peer_id in _roster:
 			var e: Dictionary = _roster[peer_id]
-			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d frozen=%d" % [
+			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d frozen=%d hp=%d ammo=%d" % [
 				int(e["id"]), int(e["ack"]), int(e["last_seq"]),
 				(e["queue"] as Array).size(), int(e["inputs_dropped"]),
 				int(e["starved_ticks"]), int(e["frozen_ticks"]),
+				_health(e["node"]).current if _health(e["node"]) else 0,
+				int(e["ammo"]),
 			])
 	var net := _net()
 	if net and not entries.is_empty():
 		var snapshot := NetProtocol.encode_snapshot(_server_tick, entries)
 		for peer_id in _roster:
-			net.server_send(peer_id, snapshot)
+			if int(peer_id) > 0:
+				net.server_send(peer_id, snapshot)
+
+
+func _new_entry(player_id: int, player_name: String, node: PlayerController, peer_id: int) -> Dictionary:
+	var initial := PlayerInputFrame.new()
+	initial.yaw = node.rotation.y
+	var entry := {
+		"id": player_id, "name": player_name, "node": node,
+		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
+		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
+		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "frozen_ticks": 0,
+		"protected_until": Time.get_ticks_msec() + SPAWN_PROTECTION_MSEC,
+		"dead_until": 0, "is_bot": peer_id < 0, "bot_seq": 0,
+		"bot_strafe": 1.0, "bot_strafe_ticks": 0, "kills": 0, "deaths": 0,
+	}
+	if _combat:
+		_combat.reset_player(entry)
+	_set_hurtboxes(node, false)
+	return entry
+
+
+func _set_hurtboxes(node: Node, enabled: bool) -> void:
+	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+		var hurtbox := node.get_node_or_null(path) as HurtboxComponent
+		if hurtbox:
+			hurtbox.damage_enabled = enabled
+
+
+func _health(node: Node) -> HealthComponent:
+	return node.get_node_or_null("HealthComponent") as HealthComponent if node else null
+
+
+func _snapshot_entry(entry: Dictionary, actor: PlayerController, dead: bool = false) -> Dictionary:
+	var health := _health(actor)
+	return {
+		"id": int(entry["id"]),
+		"pos": actor.global_position,
+		"yaw": actor.rotation.y,
+		"state": NetProtocol.AnimState.STILL if dead else int(actor.anim_state_byte()),
+		"vel": Vector3.ZERO if dead else actor.velocity,
+		"on_floor": actor.is_on_floor(),
+		"hp": health.current if health else (0 if dead else 100),
+		"ack": int(entry["ack"]),
+	}
+
+
+func _on_server_damage(target_id: int, source_id: int, damage: int, hitbox: StringName, position: Vector3) -> void:
+	if net_mode != NetMode.SERVER:
+		return
+	var target := _entry_by_id(target_id)
+	if target.is_empty():
+		return
+	var health := _health(target["node"])
+	var killed := health != null and health.current <= 0
+	_broadcast_event(NetProtocol.encode_event_hit(
+		target_id, source_id, damage, String(hitbox) == "head", killed, position
+	))
+
+
+func _on_server_death(victim_id: int, killer_id: int, position: Vector3) -> void:
+	if net_mode != NetMode.SERVER:
+		return
+	var victim := _entry_by_id(victim_id)
+	if victim.is_empty() or int(victim["dead_until"]) > 0:
+		return
+	victim["dead_until"] = Time.get_ticks_msec() + RESPAWN_DELAY_MSEC
+	victim["deaths"] = int(victim["deaths"]) + 1
+	var node: Node = victim["node"]
+	if is_instance_valid(node):
+		(node as PlayerController).velocity = Vector3.ZERO
+		_set_hurtboxes(node, false)
+	var killer := _entry_by_id(killer_id)
+	if not killer.is_empty():
+		killer["kills"] = int(killer["kills"]) + 1
+	print("BALL_OF_DUTY death victim=%d killer=%d" % [victim_id, killer_id])
+	_broadcast_event(NetProtocol.encode_event_death(victim_id, killer_id, position))
+
+
+func _respawn(entry: Dictionary) -> void:
+	var node_ref: Variant = entry["node"]
+	if not is_instance_valid(node_ref):
+		return
+	var actor := node_ref as PlayerController
+	var spawn := _choose_respawn(entry)
+	actor.global_position = spawn["pos"]
+	actor.rotation.y = spawn["yaw"]
+	actor.velocity = Vector3.ZERO
+	actor.reset_physics_interpolation()
+	var health := _health(actor)
+	if health:
+		health.reset()
+	if _combat:
+		_combat.reset_player(entry)
+	entry["dead_until"] = 0
+	entry["protected_until"] = Time.get_ticks_msec() + SPAWN_PROTECTION_MSEC
+	entry["starved_ticks"] = 0
+	entry["has_input"] = false
+	entry["ack"] = 0
+	entry["last_seq"] = 0
+	(entry["queue"] as Array).clear()
+	var initial := PlayerInputFrame.new()
+	initial.yaw = spawn["yaw"]
+	entry["last_frame"] = initial
+	_set_hurtboxes(actor, false)
+	_broadcast_event(NetProtocol.encode_event_respawn(int(entry["id"]), spawn["pos"], spawn["yaw"]))
+
+
+func _choose_respawn(entry: Dictionary) -> Dictionary:
+	var best_pos: Vector3 = _spawns[0] + Vector3(0.0, 0.2, 0.0) if not _spawns.is_empty() else Vector3(0, 0.2, 0)
+	var best_score := -1.0
+	for spawn_point: Vector3 in _spawns:
+		var pos := spawn_point + Vector3(0.0, 0.2, 0.0)
+		var nearest := 999.0
+		var clear := true
+		for other_peer in _roster:
+			var other: Dictionary = _roster[other_peer]
+			if int(other["id"]) == int(entry["id"]) or int(other["dead_until"]) > 0:
+				continue
+			var other_ref: Variant = other["node"]
+			if not is_instance_valid(other_ref):
+				continue
+			var other_node := other_ref as Node3D
+			var dist: float = pos.distance_to(other_node.global_position)
+			nearest = minf(nearest, dist)
+			if dist < 25.0:
+				var query := PhysicsRayQueryParameters3D.create(
+					pos + Vector3(0.0, 0.6, 0.0),
+					(other_node as Node3D).global_position + Vector3(0.0, 0.45, 0.0),
+					1
+				)
+				if not actor_world(_world).direct_space_state.intersect_ray(query).is_empty():
+					clear = false
+		var score := nearest + (5.0 if clear else 0.0)
+		if score > best_score:
+			best_score = score
+			best_pos = pos
+	return {"pos": best_pos, "yaw": atan2(best_pos.x, best_pos.z)}
+
+
+func actor_world(node: Node) -> World3D:
+	return (node as Node3D).get_world_3d() if node is Node3D else null
+
+
+func _spawn_bot(index: int) -> void:
+	if _free_ids.is_empty() or _roster.size() >= NetProtocol.MAX_PLAYERS:
+		return
+	var id: int = _free_ids.pop_front()
+	var peer_id := BOT_PEER_BASE - index
+	var slot := _claim_slot(peer_id)
+	var node := _spawn_server_actor(id, slot)
+	_roster[peer_id] = _new_entry(id, "BOT %d" % (index + 1), node, peer_id)
+	print("BALL_OF_DUTY bot id=%d name=BOT %d" % [id, index + 1])
+
+
+func _bot_frame(entry: Dictionary, actor: PlayerController, _delta: float) -> PlayerInputFrame:
+	entry["bot_seq"] = int(entry["bot_seq"]) + 1
+	var frame := PlayerInputFrame.new()
+	frame.seq = int(entry["bot_seq"])
+	var target := _nearest_enemy(entry)
+	if target.is_empty():
+		frame.yaw = actor.rotation.y
+		return frame
+	var target_node: Node = target["node"]
+	if not is_instance_valid(target_node):
+		frame.yaw = actor.rotation.y
+		return frame
+	var target_actor := target_node as PlayerController
+	var origin := actor.global_position + Vector3(0.0, 0.62, 0.0)
+	var aim_point := target_actor.global_position + Vector3(0.0, 0.45, 0.0)
+	var to_target := aim_point - origin
+	var flat := Vector3(to_target.x, 0.0, to_target.z)
+	var dist := flat.length()
+	frame.yaw = atan2(-to_target.x, -to_target.z)
+	frame.pitch = atan2(to_target.y, maxf(dist, 0.001))
+	frame.fire = dist < 20.0 and _has_los(actor, target_actor)
+	if dist > 7.0:
+		frame.move = Vector2(0.0, -1.0)
+		frame.sprint = dist > 14.0
+	else:
+		frame.aim = true
+		frame.move = Vector2(float(entry["bot_strafe"]), 0.0)
+		entry["bot_strafe_ticks"] = int(entry["bot_strafe_ticks"]) + 1
+		if int(entry["bot_strafe_ticks"]) % 45 == 0:
+			entry["bot_strafe"] = -float(entry["bot_strafe"])
+	# Feelers: sidestep instead of walking into a trunk or cliff.
+	var forward := -actor.global_transform.basis.z
+	var feeler := PhysicsRayQueryParameters3D.create(
+		actor.global_position + Vector3(0.0, 0.45, 0.0),
+		actor.global_position + Vector3(0.0, 0.45, 0.0) + forward * 1.3,
+		1
+	)
+	if not actor.get_world_3d().direct_space_state.intersect_ray(feeler).is_empty():
+		frame.move = Vector2(float(entry["bot_strafe"]), 0.0)
+		frame.aim = true
+	return frame
+
+
+func _nearest_enemy(entry: Dictionary) -> Dictionary:
+	var best: Dictionary = {}
+	var best_dist := INF
+	for other_peer in _roster:
+		var other: Dictionary = _roster[other_peer]
+		if int(other["id"]) == int(entry["id"]) or int(other["dead_until"]) > 0:
+			continue
+		var node_ref: Variant = other["node"]
+		if not is_instance_valid(node_ref):
+			continue
+		var node := node_ref as Node3D
+		var dist: float = node.global_position.distance_to((entry["node"] as Node3D).global_position)
+		if dist < best_dist:
+			best_dist = dist
+			best = other
+	return best
+
+
+func _has_los(from_actor: PlayerController, to_actor: PlayerController) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(
+		from_actor.global_position + Vector3(0.0, 0.6, 0.0),
+		to_actor.global_position + Vector3(0.0, 0.45, 0.0),
+		1
+	)
+	return from_actor.get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+
+func _entry_by_id(player_id: int) -> Dictionary:
+	for peer_id in _roster:
+		var entry: Dictionary = _roster[peer_id]
+		if int(entry["id"]) == player_id:
+			return entry
+	return {}
+
+
+func _broadcast_event(pkt: PackedByteArray) -> void:
+	var net := _net()
+	if net == null:
+		return
+	for peer_id in _roster:
+		if int(peer_id) > 0:
+			net.server_send(peer_id, pkt)
 
 
 ## CP4b displacement guard: every step is authoritative simulation from clamped
@@ -356,7 +631,8 @@ func _broadcast_roster() -> void:
 		return
 	var roster := NetProtocol.encode_roster(server_roster_names())
 	for peer_id in _roster:
-		net.server_send(peer_id, roster)
+		if int(peer_id) > 0:
+			net.server_send(peer_id, roster)
 
 
 static func collect_spawn_points(world: Node) -> Array:
@@ -388,6 +664,11 @@ func client_start(world: Node, host: String, port: int, display_name: String) ->
 	var local := _world.get_node_or_null("Player") as PlayerController
 	if local:
 		local.net_id = 0
+		local.dead = false
+		var weapon := local.get_node_or_null("WeaponController") as WeaponController
+		if weapon:
+			# Damage is server-authoritative from CP4c; local fire is cosmetic.
+			weapon.spawn_projectiles = false
 	return OK
 
 
@@ -399,7 +680,7 @@ func client_send_input(frame: PlayerInputFrame) -> void:
 		return
 	net.client_send(NetProtocol.encode_input(
 		frame.seq, frame.move, frame.jump, frame.sprint, frame.aim,
-		frame.yaw, frame.pitch
+		frame.yaw, frame.pitch, frame.fire, frame.reload
 	))
 
 
@@ -423,6 +704,9 @@ func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 	if net_mode != NetMode.CLIENT:
 		return
 	local_id = player_id
+	var local_player := _world.get_node_or_null("Player") as PlayerController if _world else null
+	if local_player:
+		local_player.dead = false
 	var local := _world.get_node_or_null("Player") as PlayerController if _world else null
 	if local:
 		local.net_id = local_id
@@ -468,6 +752,46 @@ func _on_roster_updated(entries: Array) -> void:
 			_remotes.erase(rid)
 
 
+func _on_server_event(event: Dictionary) -> void:
+	if net_mode != NetMode.CLIENT:
+		return
+	match int(event.get("type", 0)):
+		NetProtocol.EventType.SHOT:
+			var shooter := int(event["shooter_id"])
+			server_shot.emit(shooter, event["origin"], event["direction"])
+			if shooter != local_id:
+				Tracer.spawn(_world, event["origin"], event["direction"], Color(1.0, 0.55, 0.3))
+		NetProtocol.EventType.HIT:
+			if int(event["shooter_id"]) == local_id:
+				server_hit.emit(bool(event["headshot"]), bool(event["killed"]))
+				var audio := get_node_or_null("/root/AudioManager")
+				if audio:
+					audio.play_hit()
+		NetProtocol.EventType.DEATH:
+			server_death.emit(int(event["victim_id"]), int(event["killer_id"]))
+			if int(event["victim_id"]) == local_id:
+				var local := _world.get_node_or_null("Player") as PlayerController if _world else null
+				if local:
+					local.set_dead(true)
+		NetProtocol.EventType.RESPAWN:
+			var pid := int(event["player_id"])
+			server_respawn.emit(pid, event["position"], float(event["yaw"]))
+			if pid == local_id:
+				var local := _world.get_node_or_null("Player") as PlayerController if _world else null
+				if local:
+					local.respawn_at(event["position"], float(event["yaw"]))
+			elif _remotes.has(pid):
+				var remote := _remotes[pid] as PlayerController
+				if is_instance_valid(remote):
+					remote.global_position = event["position"]
+					remote.rotation.y = float(event["yaw"])
+					remote.net_dead = false
+					remote.visible = true
+					var interp := remote.get_node_or_null("NetworkInterpolator") as NetworkInterpolator
+					if interp:
+						interp.reset()
+
+
 func _on_snapshot_received(_tick: int, entries: Array) -> void:
 	if net_mode != NetMode.CLIENT:
 		return
@@ -507,6 +831,12 @@ func stop_all() -> void:
 		var local := _world.get_node_or_null("Player") as PlayerController
 		if local:
 			local.disable_prediction()
+	var local := _world.get_node_or_null("Player") as PlayerController if _world else null
+	if local:
+		local.dead = false
+		var weapon := local.get_node_or_null("WeaponController") as WeaponController
+		if weapon:
+			weapon.spawn_projectiles = true
 	var net := _net()
 	if net:
 		net.stop()

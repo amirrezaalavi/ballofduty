@@ -95,6 +95,19 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 - `tests/headless/` keeps the cross-process client probe and the arena budget report.
 - The gdUnit4 addon is excluded from both exports; it must never ship in the PCK.
 
+## Combat authority (CP4c)
+
+- Clients send fire/reload bits in the input frame; they never send damage or hit points.
+- `ServerCombat` owns cooldown, magazine and reload, derives a canonical muzzle (root + eye +
+  shoulder, never a skeleton bone), traces the view ray to an aim point, then aims from the muzzle to
+  that point. It spawns the swept server projectile; `CombatResolver` is still the only health writer.
+- Server events: `SHOT`, `HIT`, `DEATH`, `RESPAWN`. The client shows a hitmarker only on `HIT`; the
+  local projectile is a cosmetic tracer. Death is a 3 s server timer; respawn picks the farthest
+  spawn from living enemies with an LOS bonus and applies 1.5 s protection (firing cancels it).
+- Bots are ordinary server actors driven by `GameManager._bot_frame()`: nearest-enemy chase, strafe
+  attack inside 7 m, LOS-gated fire, feeler avoidance, same respawn/protection path. V1 uses direct
+  steering; a pre-baked navmesh is the CP4d upgrade.
+
 ## Collision layers
 
 Defined in `project.godot` under `layer_names/3d_physics`:

@@ -3,7 +3,7 @@
 A lightweight, cute, web-first 3D third-person arena shooter. Eight players, one rifle, five minutes,
 bragging rights.
 
-**Status:** CP4b implemented + playtest fixes (camera, speed, turning, gun mount) awaiting retest
+**Status:** CP4c implemented — server-authoritative combat and bots awaiting gameplay test
 (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first run pending a remote).
 Tests run on gdUnit4 with JUnit XML; see [`docs/TESTING.md`](docs/TESTING.md).
 See [`docs/ROADMAP.md`](docs/ROADMAP.md).

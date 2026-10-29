@@ -21,6 +21,15 @@ func reset() -> void:
 	health_changed.emit(current, max_health)
 
 
+## Client-side observation of authoritative HP. Never applies damage locally.
+func observe(value: int) -> void:
+	var clamped := clampi(value, 0, max_health)
+	if clamped == current:
+		return
+	current = clamped
+	health_changed.emit(current, max_health)
+
+
 ## Server-only from CP4c. Returns true if this damage killed the entity.
 func apply_damage(amount: int, source_id: int, position: Vector3) -> bool:
 	if amount <= 0 or current <= 0:

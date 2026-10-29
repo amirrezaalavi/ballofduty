@@ -90,3 +90,45 @@ func test_ping_pong_and_transport_cap() -> void:
 	var pong := NetProtocol.decode_pong(NetProtocol.encode_pong(999, 77))
 	expect(pong == {"client_msec": 999, "server_tick": 77}, "pong roundtrips")
 	expect(NetProtocol.MAX_PACKET_BYTES == 2048, "transport cap is 2048 B")
+
+
+func test_combat_input_bits() -> void:
+	var input := NetProtocol.decode_input(
+		NetProtocol.encode_input(77, Vector2.ZERO, false, false, false, 0.5, -0.2, true, true)
+	)
+	expect(input.get("fire") == true, "fire bit roundtrips")
+	expect(input.get("reload") == true, "reload bit roundtrips")
+	var quiet := NetProtocol.decode_input(
+		NetProtocol.encode_input(78, Vector2.ZERO, false, false, false, 0.0, 0.0, false, false)
+	)
+	expect(quiet.get("fire") == false and quiet.get("reload") == false, "idle input has no combat bits")
+
+
+func test_events_roundtrip() -> void:
+	var origin := Vector3(1.25, 0.6, -3.5)
+	var direction := Vector3(0.0, 0.1, -0.995).normalized()
+	var shot := NetProtocol.decode_event(NetProtocol.encode_event_shot(3, origin, direction))
+	expect(shot.get("type") == NetProtocol.EventType.SHOT, "shot event type")
+	expect(int(shot.get("shooter_id", -1)) == 3, "shot shooter id")
+	expect((shot.get("origin", Vector3.ZERO) as Vector3).distance_to(origin) < 0.002, "shot origin within 2 mm")
+	expect((shot.get("direction", Vector3.ZERO) as Vector3).distance_to(direction) < 0.001, "shot direction quantized")
+
+	var hit := NetProtocol.decode_event(NetProtocol.encode_event_hit(
+		2, 3, 50, true, true, Vector3(2.0, 0.9, 0.0)
+	))
+	expect(hit.get("type") == NetProtocol.EventType.HIT, "hit event type")
+	expect(int(hit.get("target_id", -1)) == 2 and int(hit.get("shooter_id", -1)) == 3, "hit ids")
+	expect(int(hit.get("damage", 0)) == 50, "hit damage")
+	expect(bool(hit.get("headshot")) and bool(hit.get("killed")), "hit headshot/killed flags")
+
+	var death := NetProtocol.decode_event(NetProtocol.encode_event_death(2, 3, Vector3(2, 0, 0)))
+	expect(death.get("type") == NetProtocol.EventType.DEATH, "death event type")
+	expect(int(death.get("victim_id", -1)) == 2 and int(death.get("killer_id", -1)) == 3, "death ids")
+
+	var respawn := NetProtocol.decode_event(NetProtocol.encode_event_respawn(2, Vector3(4, 0.2, 4), -1.2))
+	expect(respawn.get("type") == NetProtocol.EventType.RESPAWN, "respawn event type")
+	expect((respawn.get("position", Vector3.ZERO) as Vector3).distance_to(Vector3(4, 0.2, 4)) < 0.002, "respawn position")
+	expect(absf(float(respawn.get("yaw", 0.0)) - -1.2) < 0.001, "respawn yaw")
+
+	expect(NetProtocol.decode_event(PackedByteArray([10, 1, 1])) == {}, "truncated event rejected")
+	expect(NetProtocol.decode_event(PackedByteArray([10, 99, 1])) == {}, "unknown event rejected")

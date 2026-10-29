@@ -4,12 +4,14 @@ extends RefCounted
 ## layout is unambiguous across native and web exports.
 ##
 ## Snapshot budget: header 6 B + 22 B/player -> 182 B at 8 players (limit 300 B).
+## Events are separate TCP messages (one per shot/hit/death/respawn).
 ## The velocity + on-floor fields exist so CP4b reconciliation can restart the
 ## replay from authoritative motion state instead of guessing it.
 ## Input packet: 12 B at 30 Hz upstream (~360 B/s).
 
-enum Msg { JOIN_REQ = 1, JOIN_OK = 2, DENY = 3, ROSTER = 4, INPUT = 5, SNAPSHOT = 6, LEAVE = 7, PING = 8, PONG = 9 }
+enum Msg { JOIN_REQ = 1, JOIN_OK = 2, DENY = 3, ROSTER = 4, INPUT = 5, SNAPSHOT = 6, LEAVE = 7, PING = 8, PONG = 9, EVENT = 10 }
 enum DenyReason { FULL = 1 }
+enum EventType { SHOT = 1, HIT = 2, DEATH = 3, RESPAWN = 4 }
 enum AnimState { STILL = 0, WALK = 1, SPRINT = 2, AIR = 3 }
 
 const MAX_PLAYERS := 8
@@ -103,7 +105,10 @@ static func decode_roster(pkt: PackedByteArray) -> Dictionary:
 	return {"entries": entries}
 
 
-static func encode_input(seq: int, move: Vector2, jump: bool, sprint: bool, scoped: bool, yaw: float, pitch: float) -> PackedByteArray:
+static func encode_input(
+	seq: int, move: Vector2, jump: bool, sprint: bool, scoped: bool,
+	yaw: float, pitch: float, fire: bool = false, reload: bool = false
+) -> PackedByteArray:
 	var flags := 0
 	if jump:
 		flags |= 1
@@ -111,6 +116,10 @@ static func encode_input(seq: int, move: Vector2, jump: bool, sprint: bool, scop
 		flags |= 2
 	if scoped:
 		flags |= 4
+	if fire:
+		flags |= 8
+	if reload:
+		flags |= 16
 	var pkt := PackedByteArray([Msg.INPUT]) + _u32(seq)
 	pkt.append(clampi(int(roundf(clampf(move.x, -1.0, 1.0) * 127.0)), -128, 127) & 0xFF)
 	pkt.append(clampi(int(roundf(clampf(move.y, -1.0, 1.0) * 127.0)), -128, 127) & 0xFF)
@@ -132,6 +141,8 @@ static func decode_input(pkt: PackedByteArray) -> Dictionary:
 		"jump": (pkt[7] & 1) != 0,
 		"sprint": (pkt[7] & 2) != 0,
 		"scoped": (pkt[7] & 4) != 0,
+		"fire": (pkt[7] & 8) != 0,
+		"reload": (pkt[7] & 16) != 0,
 		"yaw": float(_get_i16(pkt, 8)) / 32767.0 * PI,
 		"pitch": float(_get_i16(pkt, 10)) / 32767.0 * PITCH_RANGE,
 	}
@@ -201,6 +212,94 @@ static func decode_pong(pkt: PackedByteArray) -> Dictionary:
 	if pkt.size() != 9 or pkt[0] != Msg.PONG:
 		return {}
 	return {"client_msec": _get_u32(pkt, 1), "server_tick": _get_u32(pkt, 5)}
+
+
+## Server -> client gameplay events. Each packet is one event; lossless TCP.
+static func encode_event_shot(shooter_id: int, origin: Vector3, direction: Vector3) -> PackedByteArray:
+	var pkt := PackedByteArray([Msg.EVENT, EventType.SHOT, shooter_id & 0xFF])
+	for axis in [origin.x, origin.y, origin.z]:
+		pkt.append_array(_i16(_quant_pos(axis)))
+	for axis in [direction.x, direction.y, direction.z]:
+		pkt.append_array(_i16(int(roundf(clampf(axis, -1.0, 1.0) * 32767.0))))
+	return pkt
+
+
+static func encode_event_hit(
+	target_id: int, shooter_id: int, damage: int,
+	headshot: bool, killed: bool, position: Vector3
+) -> PackedByteArray:
+	var flags := 0
+	if headshot:
+		flags |= 1
+	if killed:
+		flags |= 2
+	var pkt := PackedByteArray([Msg.EVENT, EventType.HIT, target_id & 0xFF, shooter_id & 0xFF])
+	pkt.append(clampi(damage, 0, 255) & 0xFF)
+	pkt.append(flags)
+	for axis in [position.x, position.y, position.z]:
+		pkt.append_array(_i16(_quant_pos(axis)))
+	return pkt
+
+
+static func encode_event_death(victim_id: int, killer_id: int, position: Vector3) -> PackedByteArray:
+	var pkt := PackedByteArray([Msg.EVENT, EventType.DEATH, victim_id & 0xFF, killer_id & 0xFF])
+	for axis in [position.x, position.y, position.z]:
+		pkt.append_array(_i16(_quant_pos(axis)))
+	return pkt
+
+
+static func encode_event_respawn(player_id: int, position: Vector3, yaw: float) -> PackedByteArray:
+	var pkt := PackedByteArray([Msg.EVENT, EventType.RESPAWN, player_id & 0xFF])
+	for axis in [position.x, position.y, position.z]:
+		pkt.append_array(_i16(_quant_pos(axis)))
+	pkt.append_array(_i16(int(roundf(clampf(wrapf(yaw, -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
+	return pkt
+
+
+static func decode_event(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() < 3 or pkt[0] != Msg.EVENT:
+		return {}
+	var kind := pkt[1]
+	if kind == EventType.SHOT:
+		if pkt.size() != 15:
+			return {}
+		return {
+			"type": kind,
+			"shooter_id": pkt[2],
+			"origin": Vector3(_dequant_pos(_get_i16(pkt, 3)), _dequant_pos(_get_i16(pkt, 5)), _dequant_pos(_get_i16(pkt, 7))),
+			"direction": Vector3(_get_i16(pkt, 9) / 32767.0, _get_i16(pkt, 11) / 32767.0, _get_i16(pkt, 13) / 32767.0),
+		}
+	if kind == EventType.HIT:
+		if pkt.size() != 12:
+			return {}
+		return {
+			"type": kind,
+			"target_id": pkt[2],
+			"shooter_id": pkt[3],
+			"damage": pkt[4],
+			"headshot": (pkt[5] & 1) != 0,
+			"killed": (pkt[5] & 2) != 0,
+			"position": Vector3(_dequant_pos(_get_i16(pkt, 6)), _dequant_pos(_get_i16(pkt, 8)), _dequant_pos(_get_i16(pkt, 10))),
+		}
+	if kind == EventType.DEATH:
+		if pkt.size() != 10:
+			return {}
+		return {
+			"type": kind,
+			"victim_id": pkt[2],
+			"killer_id": pkt[3],
+			"position": Vector3(_dequant_pos(_get_i16(pkt, 4)), _dequant_pos(_get_i16(pkt, 6)), _dequant_pos(_get_i16(pkt, 8))),
+		}
+	if kind == EventType.RESPAWN:
+		if pkt.size() != 11:
+			return {}
+		return {
+			"type": kind,
+			"player_id": pkt[2],
+			"position": Vector3(_dequant_pos(_get_i16(pkt, 3)), _dequant_pos(_get_i16(pkt, 5)), _dequant_pos(_get_i16(pkt, 7))),
+			"yaw": float(_get_i16(pkt, 9)) / 32767.0 * PI,
+		}
+	return {}
 
 
 static func msg_type(pkt: PackedByteArray) -> int:

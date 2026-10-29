@@ -70,6 +70,16 @@ func tick(delta: float, frame: PlayerInputFrame) -> void:
 		_fire()
 
 
+func reset_ammo() -> void:
+	ammo = stats.magazine_size if stats else 0
+	_cooldown = 0.0
+	_reload_left = 0.0
+	_reloading = false
+	_trigger_was_down = false
+	ammo_changed.emit(ammo, -1 if stats and stats.infinite_reserve else 0)
+	reload_state_changed.emit(false)
+
+
 func start_reload() -> void:
 	if _reloading or stats == null or ammo >= stats.magazine_size:
 		return
@@ -107,6 +117,7 @@ func _fire() -> void:
 	# spawn_projectiles = false and still needs the tracer/flash/audio/recoil).
 	var direction := _aim_direction()
 	var origin := muzzle.global_position
+	Tracer.spawn(get_tree().current_scene, origin, direction)
 	shot_fired.emit(origin, direction)
 	_audio("play_shoot")
 	_show_muzzle_flash()

@@ -33,15 +33,18 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 6 | 15 | travel distance, diagonal parity, sprint, jump apex, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 204 | weapon data, 20/20 headshots at 5/15/30 m, body damage, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 6 | 30 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
+| `tests/gdunit/test_net_protocol.gd` | 8 | 45 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
 | `tests/gdunit/test_world_geometry.gd` | 2 | 59 | every tree has a collider; camera never enters the cliff |
 | `tests/gdunit/test_rig.gd` | 2 | 16 | gun follows the hand; filtered Pistol_Shoot overlay |
+| `tests/gdunit/test_server_combat.gd` | 5 | 25 | canonical muzzle, body/head damage, rate/ammo/reload, protection, kill attribution |
+| `tests/gdunit/test_loopback_combat.gd` | 1 | 22 | fire intent through the socket, hit/death/respawn, spoofed damage rejection |
+| `tests/gdunit/test_bots.gd` | 1 | 7 | four bots move, fire, damage each other, stay in the roster |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**38 test cases · ~490 assertions.** `test_net_loopback` stays one integration test: the value is the
+**47 test cases · ~550 assertions.** `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.

@@ -15,6 +15,7 @@ signal join_accepted(player_id: int, spawn: Dictionary)
 signal join_denied(reason: int)
 signal roster_updated(entries: Array)
 signal snapshot_received(tick: int, entries: Array)
+signal event_received(event: Dictionary)
 signal remote_input(peer_id: int, frame: Dictionary)
 signal peer_joined(peer_id: int, player_name: String)
 signal peer_left(peer_id: int)
@@ -314,6 +315,12 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			snapshots_processed += 1
 			last_snapshot_bytes = pkt.size()
 			snapshot_received.emit(int(snap["tick"]), snap["entries"])
+		NetProtocol.Msg.EVENT:
+			var event := NetProtocol.decode_event(pkt)
+			if event.is_empty():
+				packets_rejected += 1
+				return
+			event_received.emit(event)
 		NetProtocol.Msg.PONG:
 			var pong := NetProtocol.decode_pong(pkt)
 			if pong.is_empty():

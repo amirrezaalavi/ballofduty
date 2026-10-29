@@ -62,6 +62,10 @@ func _start_server(args: PackedStringArray) -> void:
 	var port_index := args.find("--port")
 	if port_index >= 0 and port_index + 1 < args.size():
 		port = int(args[port_index + 1])
+	var bots := 0
+	var bots_index := args.find("--bots")
+	if bots_index >= 0 and bots_index + 1 < args.size():
+		bots = maxi(0, int(args[bots_index + 1]))
 
 	var local_player := get_node_or_null("Player")
 	if local_player:
@@ -74,7 +78,7 @@ func _start_server(args: PackedStringArray) -> void:
 		_panel.queue_free()
 
 	var gm := get_node_or_null("/root/GameManager")
-	var err: int = gm.server_start(self, port) if gm else ERR_UNAVAILABLE
+	var err: int = gm.server_start(self, port, bots) if gm else ERR_UNAVAILABLE
 	if err != OK:
 		push_error("BALL_OF_DUTY server failed to start: %s" % err)
 		return
