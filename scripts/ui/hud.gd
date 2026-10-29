@@ -19,11 +19,24 @@ var _crosshair_kick: float = 0.0
 var _dead: bool = false
 var _font: Font
 
+# Cheap debug strip (F3 or --combat-hud). Counters are integers; the two text
+# lines are refreshed 4x/s so drawing never allocates per frame.
+var _debug: bool = false
+var _debug_timer: float = 0.0
+var _shots_local: int = 0
+var _hits_local: int = 0
+var _kills_local: int = 0
+var _shots_seen: int = 0
+var _deaths_seen: int = 0
+var _pool_text: String = ""
+var _net_text: String = ""
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_font = ThemeDB.fallback_font
+	_debug = OS.get_cmdline_user_args().has("--combat-hud")
 
 	player = get_tree().current_scene.get_node_or_null("Player") as PlayerController
 	if player == null:
@@ -49,6 +62,15 @@ func _ready() -> void:
 			gm.server_death.connect(_on_death)
 		if gm.has_signal("server_respawn"):
 			gm.server_respawn.connect(_on_respawn)
+		if gm.has_signal("server_shot"):
+			gm.server_shot.connect(_on_server_shot)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3:
+			_debug = not _debug
+			queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -56,7 +78,31 @@ func _process(delta: float) -> void:
 	_kill_time = maxf(0.0, _kill_time - delta)
 	_damage_flash = maxf(0.0, _damage_flash - delta * 2.2)
 	_crosshair_kick = maxf(0.0, _crosshair_kick - delta * 30.0)
+	if _debug:
+		_debug_timer -= delta
+		if _debug_timer <= 0.0:
+			_debug_timer = 0.25
+			_refresh_debug_text()
 	queue_redraw()
+
+
+func _refresh_debug_text() -> void:
+	var stats := BulletField.pool_stats()
+	if stats.is_empty():
+		_pool_text = "bullets=-"
+	else:
+		_pool_text = "bullets=%d/%d ex=%d peak=%d builds=%d" % [
+			int(stats["active"]), int(stats["size"]), int(stats["exhausted"]),
+			int(stats["peak"]), int(stats["builds"]),
+		]
+	var net := get_node_or_null("/root/NetworkManager")
+	if net:
+		_net_text = "snap=%dB tick=%d rtt=%dms fps=%d" % [
+			int(net.last_snapshot_bytes), int(net.server_tick_estimate),
+			int(net.rtt_ms), Engine.get_frames_per_second(),
+		]
+	else:
+		_net_text = "fps=%d" % Engine.get_frames_per_second()
 
 
 func _draw() -> void:
@@ -115,6 +161,20 @@ func _draw() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.2, 0.85, 0.75, 0.85)
 	)
 
+	if _debug:
+		var debug_color := Color(0.55, 0.9, 1.0, 0.8)
+		draw_string(
+			_font, Vector2(24.0, size.y - 86.0),
+			"DBG shots=%d hits=%d kills=%d seen=%d deaths=%d" % [
+				_shots_local, _hits_local, _kills_local, _shots_seen, _deaths_seen,
+			],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, debug_color
+		)
+		draw_string(
+			_font, Vector2(24.0, size.y - 74.0), "DBG " + _pool_text + "  " + _net_text,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 11, debug_color
+		)
+
 
 func _draw_crosshair(center: Vector2) -> void:
 	var gap := 5.0 + _crosshair_kick
@@ -150,15 +210,23 @@ func _on_reload(reloading: bool) -> void:
 func _on_hit(headshot: bool, killed: bool) -> void:
 	_hit_time = 0.14
 	_hit_headshot = headshot
+	_hits_local += 1
 	if killed:
 		_kill_time = 2.2
+		_kills_local += 1
 
 
 func _on_shot(_origin: Vector3, _direction: Vector3) -> void:
+	_shots_local += 1
 	_crosshair_kick = 4.0
 
 
+func _on_server_shot(_shooter_id: int, _origin: Vector3, _direction: Vector3) -> void:
+	_shots_seen += 1
+
+
 func _on_death(victim_id: int, _killer_id: int) -> void:
+	_deaths_seen += 1
 	if player and victim_id == player.net_id:
 		_dead = true
 
