@@ -3,17 +3,36 @@ extends BodTestSuite
 ## filtered Ranged_2H_Shoot clip without touching the locomotion legs.
 
 var _player: PlayerController
+var _floor: StaticBody3D
 
 
 func after_test() -> void:
 	if is_instance_valid(_player):
 		_player.free()
+	if is_instance_valid(_floor):
+		_floor.free()
 
 
 func _setup() -> void:
+	# A floor lets the grip calibrate in the settled idle pose; without it the
+	# measurement could catch a falling arm and flake under load.
+	_floor = StaticBody3D.new()
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(20, 1, 20)
+	shape.shape = box
+	_floor.add_child(shape)
+	add_child(_floor)
+	_floor.position = Vector3(0, -0.55, 0)
+
 	_player = (load("res://scenes/characters/player.tscn") as PackedScene).instantiate() as PlayerController
 	add_child(_player)
-	for _i in 8:
+	_player.global_position = Vector3(0, 0.2, 0)
+	for _i in 60:
+		await get_tree().physics_frame
+		if _player.visual is CharacterVisual and (_player.visual as CharacterVisual)._grip_calibrated:
+			break
+	for _i in 2:
 		await get_tree().process_frame
 	_player.set_physics_process(false)
 
