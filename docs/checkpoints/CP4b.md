@@ -1,7 +1,7 @@
 # CP4b — Movement prediction & reconciliation
 
 - **Date:** 2026-10-29
-- **Status:** implementation complete — **awaiting latency/feel sign-off**
+- **Status:** implementation + playtest fixes complete — **awaiting retest**
 - **Engine:** Godot 4.7.2, 30 Hz physics, binary WebSocket transport
 - **Depends on:** CP4a (accepted)
 
@@ -25,6 +25,25 @@
 - **Metrics** in the F3 overlay: `ack`, `pending`, `replay`, `ack err`, `corr` (total and per second),
   `vis` (size of the current render offset).
 
+## Playtest pass (2026-10-29)
+
+Browser feedback from the first CP4b test, and what changed:
+
+| Report | Fix | Evidence |
+|---|---|---|
+| Camera ends up behind/inside walls | `SpringArm3D` uses `cast_motion`, which ignores initial overlap. Pivot moved to the capsule center, shoulder offset moved to the camera, cast sphere 0.22 → 0.05, shoulder collapses as the arm compresses | `test_world_geometry.test_camera_stays_out_of_the_cliff`; camera x=29.097 vs cliff face 29.15 |
+| Speed too high for a 0.82 m character | Walk **1.0 m/s**, sprint **2.5 m/s**; animation thresholds/speed scales retuned | `test_movement`; overlay speed 1.00 m/s |
+| Sprint worked in the air | Sprint target only applies on the floor; air preserves momentum but cannot accelerate | `test_release_and_sprint` airborne sprint = 1.00 m/s |
+| Character slid with its back to the camera | View yaw is independent; WASD is camera-relative; body turns toward movement at 14 rad/s; movement scales by facing alignment so it turns before translating. Aiming locks facing to the view and allows strafing | `test_turning` 4 cases; 180° tie-break regression |
+| Gun floated while walking | Gun reparented to `DEF-hand.R` through an external `BoneAttachment3D` (bone index resolved after the skeleton), stabilised to the aim direction; upper-body `Pistol_Aim_Neutral` hold overlay keeps it in a ready pose while the legs animate | `test_rig`; gun-to-hand gap **0.020 m** |
+| No shooting animation | Filtered `Pistol_Shoot` overlay (12 upper-body tracks, zero lower-body) on the real `shot_fired` signal | `test_rig`; overlay plays `Pistol_Shoot`, main player keeps locomotion |
+| Trees could be walked through | Border ring now gets trunk colliders too (diagonals fall inside the square cliff) | `test_world_geometry`; colliders 117 → 145 |
+| `ERR_CONNECTION_REFUSED` once | A tab opened while the server was being restarted; clients do not retry until CP4d. Refresh fixes it | no code change |
+
+Also: a 180° turn could resolve to opposite rotation directions on client and server after yaw quantization, producing ~0.4 m corrections. Fixed with a deterministic +PI tie-break and covered by a regression test. The overlay now reports the recent ack error and current visual offset instead of stale values.
+
+Screenshots: [`cp4b-gun-ready.png`](./cp4b-gun-ready.png), [`cp4b-turn.png`](./cp4b-turn.png).
+
 ## Bugs found while building it
 
 | Bug | Symptom | Fix |
@@ -42,7 +61,7 @@
 | `tests/gdunit/test_prediction.gd` | **3 cases / 13 assertions** — deterministic replay, divergence correction + decay, stale ack ignored |
 | `tests/gdunit/test_net_loopback.gd` | **1 case / 37 assertions** — adds prediction p95, forced divergence recovery, ordered/duplicate/flooded input |
 | `tests/gdunit/test_net_protocol.gd` | **6 cases / 30 assertions** — 182 B budget, velocity + ground flag roundtrip |
-| Full suite | **30 test cases · 400 assertions · 0 failures** |
+| Full suite | **38 test cases · ~488 assertions · 0 failures** |
 
 Measured on this machine:
 
@@ -63,6 +82,7 @@ Measured on this machine:
 | No rubber-banding; corrections invisible | **Awaiting your feel test** |
 | Replay depth ≤ 8 at 150 ms | **Pass** — 1–5 at 100 ms |
 | Impossible displacement rejected and logged | **Pass** — step rolled back, legitimate movement never rejected |
+| Walk/sprint scale, airborne sprint, body-facing turn, gun-in-hand, camera at walls | **Awaiting retest** — see the playtest table |
 | Disconnect/reconnect with grace | CP4d (not in scope) |
 | **Your sign-off** | Pending |
 
@@ -97,7 +117,7 @@ Test script:
 Server-side intake stats are printed once a second (ack, last_seq, queue, dropped) because
 `tools/dev.sh` starts the server with `--net-stats`; they also land in `.cache/server.log`.
 
-Stop with `tools/dev.sh down`.
+The server/web are left running for the retest. Stop with `tools/dev.sh down`.
 
 ## Known gaps carried into CP4c
 

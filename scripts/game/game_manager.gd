@@ -162,7 +162,7 @@ func _on_peer_left(peer_id: int) -> void:
 		return
 	var entry: Dictionary = _roster[peer_id]
 	print("BALL_OF_DUTY net leave id=%d name=%s peers=%d" % [int(entry["id"]), String(entry["name"]), _roster.size() - 1])
-	var node := entry["node"] as Node
+	var node: Node = entry["node"]
 	if is_instance_valid(node):
 		node.queue_free()
 	_roster.erase(peer_id)
@@ -219,8 +219,13 @@ func _physics_process(delta: float) -> void:
 	var entries: Array = []
 	for peer_id in _roster:
 		var entry: Dictionary = _roster[peer_id]
-		var actor := entry["node"] as PlayerController
-		if not is_instance_valid(actor):
+		# Check validity before casting: casting a freed object raises before the
+		# is_instance_valid guard can run (e.g. teardown between ticks).
+		var node: Node = entry["node"]
+		if not is_instance_valid(node):
+			continue
+		var actor := node as PlayerController
+		if actor == null:
 			continue
 		# Consume exactly one input per tick. If the queue is empty, repeat the
 		# last frame but keep the ack pinned, so the client knows what was applied.
@@ -232,7 +237,7 @@ func _physics_process(delta: float) -> void:
 			entry["ack"] = frame.seq
 			entry["has_input"] = true
 		var before := actor.global_position
-		actor.server_step(frame, delta, bool(entry.get("has_input", false)))
+		actor.server_step(frame, delta)
 		if _check_displacement(entry, before, actor.global_position, delta):
 			# Reject the step: impossible travel is rolled back, horizontal
 			# velocity zeroed, and the tick continues from the last good pose.
@@ -407,10 +412,11 @@ func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 			local.rotation.y = float(spawn["yaw"])
 			local.velocity = Vector3.ZERO
 			local.reset_physics_interpolation()
+			local.set_view_yaw(float(spawn["yaw"]))
 		local.enable_prediction()
 	# A snapshot can arrive before JOIN_OK; drop any ghost we made of ourselves.
 	if _remotes.has(local_id):
-		var self_ghost := _remotes[local_id] as Node
+		var self_ghost: Node = _remotes[local_id]
 		if is_instance_valid(self_ghost):
 			self_ghost.queue_free()
 		_remotes.erase(local_id)
@@ -454,9 +460,10 @@ func _on_snapshot_received(_tick: int, entries: Array) -> void:
 			continue
 		if not _remotes.has(rid):
 			_spawn_remote(rid, "Player%d" % rid)
-		var remote := _remotes[rid] as PlayerController
-		if not is_instance_valid(remote):
+		var remote_node: Node = _remotes[rid]
+		if not is_instance_valid(remote_node):
 			continue
+		var remote := remote_node as PlayerController
 		var interp := remote.get_node_or_null("NetworkInterpolator") as NetworkInterpolator
 		if interp:
 			var pos: Vector3 = entry["pos"]
@@ -483,7 +490,7 @@ func stop_all() -> void:
 	if net:
 		net.stop()
 	for rid in _remotes.keys():
-		var node := _remotes[rid] as Node
+		var node: Node = _remotes[rid]
 		if is_instance_valid(node):
 			node.queue_free()
 	_remotes.clear()

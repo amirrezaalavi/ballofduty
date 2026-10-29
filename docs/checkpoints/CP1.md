@@ -1,5 +1,8 @@
 # CP1 — Movement, camera & feel
 
+> **Post-playtest note (CP4b):** walk/sprint were later retuned to **1.0 / 2.5 m/s** for the 0.82 m
+> avatar. The numbers below are the original CP1 measurements and remain as accepted history.
+
 - **Date:** 2026-10-28
 - **Build:** `34b354e` (feedback revision: smaller avatar, higher jump)
 - **Engine:** Godot 4.7.2-stable, Compatibility, 30 Hz physics + physics interpolation

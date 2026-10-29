@@ -21,6 +21,12 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S10 | Tree/rock collider fit | Tree trunk radius reduced from 0.36× to 0.12× scale; low-rock height corrected so invisible collision no longer feels spherical | done | CP2 |
 | S11 | Gun attached to character | Gun/muzzle reparented from the player root to `Visual/GunMount`; mount copies camera pitch (+recoil); yaw inherited from the body. Now docks front-center in the mannequin's hands when still, shoulder when moving | done | CP3 |
 | S16 | Server-authoritative spawn pose | `JOIN_OK` now carries spawn position + yaw; fixed a 22 m client/server mismatch and an inverted spawn yaw that faced players at the wall | done | CP4a |
+| S25 | Playtest: camera at walls | Centred pivot, camera-side shoulder offset, 5 cm cast sphere, collapsing shoulder; regression test | done | CP4b |
+| S24 | Playtest: gun mount | Gun follows `DEF-hand.R`, upper-body aim hold, filtered Pistol_Shoot overlay | done | CP4b |
+| S23 | Playtest: movement axes | Independent view yaw, body turns to movement, aim strafe, deterministic 180° tie-break | done | CP4b |
+| S22 | Playtest: speed scale | Walk 1.0 m/s / sprint 2.5 m/s; airborne sprint cannot start; animation scales retuned | done | CP4b |
+| S21 | Playtest: border tree collision | Decorative diagonal trees lacked colliders; added trunk colliders (145 total) | done | CP4b |
+| S20 | Upper-body shoot animation | Filtered second AnimationPlayer; upper body only, no leg snapping | done | CP4b |
 | S19 | Client prediction & reconciliation | Input queue + ack, snapshot velocity/ground flags, replay of unacked frames, ~100 ms visual correction smoothing, displacement rejection | done | CP4b |
 | S18 | Ghosts were locally damageable | Shooting a remote ghost applied client-side damage and showed a false hitmarker; added `HurtboxComponent.damage_enabled` and disabled it on ghosts | done | CP4a |
 | S17 | Remote ghost animation | Snapshot state byte drives Walk/Sprint/Jump/Pistol_Idle on remotes; fixed a shared-state bug that left ghosts in T-pose | done | CP4a |

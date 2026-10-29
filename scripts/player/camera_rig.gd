@@ -1,7 +1,9 @@
 class_name CameraRig
 extends Node3D
-## Third-person spring-arm camera. Yaw lives on the player body (so movement and
-## aim share a frame); this node owns pitch, shoulder framing and scope FOV.
+## Third-person spring-arm camera. Camera yaw is independent of body facing:
+## PlayerController sets this node's y-rotation to view_yaw - body_yaw each frame.
+## The pivot stays centered inside the capsule; the shoulder offset lives on the
+## camera so a compressed arm collapses toward the head instead of into a wall.
 
 @export_group("Framing")
 @export var spring_length: float = 2.3
@@ -10,6 +12,9 @@ extends Node3D
 @export var scope_transition_degrees_per_second: float = 300.0
 @export var pitch_min: float = -1.35
 @export var pitch_max: float = 0.25
+@export var shoulder_offset: float = 0.35
+@export var shoulder_collapse_start: float = 0.2
+@export var shoulder_collapse_end: float = 0.6
 
 @onready var spring_arm: SpringArm3D = $SpringArm3D
 @onready var camera: Camera3D = $SpringArm3D/Camera3D
@@ -22,6 +27,7 @@ var _settings: Node
 
 func _ready() -> void:
 	spring_arm.spring_length = spring_length
+	camera.position = Vector3(shoulder_offset, 0.0, 0.0)
 	camera.fov = normal_fov
 	_settings = get_node_or_null("/root/Settings")
 
@@ -45,6 +51,14 @@ func update_aim(aiming: bool, delta: float) -> void:
 	camera.fov = move_toward(camera.fov, target, scope_transition_degrees_per_second * delta)
 	recoil_pitch = lerpf(recoil_pitch, 0.0, clampf(delta * 14.0, 0.0, 1.0))
 	rotation.x = pitch + recoil_pitch
+	# Collapse the shoulder framing as the arm compresses against geometry; the
+	# camera ends up at the head instead of hanging inside the wall.
+	var t := clampf(
+		(spring_arm.get_hit_length() - shoulder_collapse_start)
+		/ maxf(shoulder_collapse_end - shoulder_collapse_start, 0.01),
+		0.0, 1.0
+	)
+	camera.position.x = shoulder_offset * t
 
 
 func is_scoped() -> bool:

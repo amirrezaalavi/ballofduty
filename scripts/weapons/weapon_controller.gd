@@ -103,28 +103,29 @@ func _fire() -> void:
 	_cooldown = 1.0 / maxf(stats.fire_rate, 0.1)
 	ammo_changed.emit(ammo, -1 if stats.infinite_reserve else 0)
 
+	# Cosmetic events happen even when authority owns the projectile (CP4c sets
+	# spawn_projectiles = false and still needs the tracer/flash/audio/recoil).
+	var direction := _aim_direction()
+	var origin := muzzle.global_position
+	shot_fired.emit(origin, direction)
+	_audio("play_shoot")
+	_show_muzzle_flash()
+	camera_rig.add_recoil(stats.recoil_degrees)
+
 	if not spawn_projectiles:
 		return
 	if stats.projectile_scene == null:
 		push_error("WeaponStats.projectile_scene is not assigned")
 		return
 
-	var direction := _aim_direction()
 	var projectile := stats.projectile_scene.instantiate() as Projectile
 	var scene := get_tree().current_scene
 	if projectile == null or scene == null:
 		return
-
-	var origin := muzzle.global_position
 	scene.add_child(projectile)
 	projectile.global_position = origin
 	projectile.setup(direction, stats, service_rifle_id, _exclusion_rids())
 	projectile.hit_confirmed.connect(_on_hit_confirmed)
-
-	shot_fired.emit(origin, direction)
-	_audio("play_shoot")
-	_show_muzzle_flash()
-	camera_rig.add_recoil(stats.recoil_degrees)
 
 
 func _aim_direction() -> Vector3:

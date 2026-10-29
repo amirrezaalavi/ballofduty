@@ -23,7 +23,7 @@ func test_ground_travel_and_speed() -> void:
 		distance += velocity.length() * DT
 	print("  travel_3s=%.2f m  speed=%.2f m/s" % [distance, velocity.length()])
 	expect(is_equal_approx(velocity.length(), _stats.move_speed), "ground speed settles at move_speed")
-	expect(distance > 16.0 and distance < 17.0, "3 s travel distance is ~16.6 m (got %.2f)" % distance)
+	expect(distance > 2.8 and distance < 3.1, "3 s travel distance is ~3.0 m at 1 m/s (got %.2f)" % distance)
 
 
 func test_diagonal_is_not_faster() -> void:
@@ -58,6 +58,16 @@ func test_release_and_sprint() -> void:
 	expect(
 		is_equal_approx(sprint.length(), _stats.move_speed * _stats.sprint_multiplier),
 		"sprint reaches move_speed * sprint_multiplier"
+	)
+
+	# Sprint must not start or accelerate in the air.
+	var airborne := Vector3.ZERO
+	for _i in 30:
+		airborne = loco.horizontal_velocity(airborne, Vector3.FORWARD, true, false, DT)
+	print("  airborne sprint=%.2f m/s" % airborne.length())
+	expect(
+		airborne.length() <= _stats.move_speed + 0.01,
+		"sprint does not accelerate in the air (%.2f m/s)" % airborne.length()
 	)
 
 

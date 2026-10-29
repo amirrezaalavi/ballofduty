@@ -49,6 +49,19 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 
 - Position quantization is millimetres over ±32.768 m (2 mm round-trip error in tests); velocity is
   centimetres per second. Flags bit 0 is `on_floor`.
+- **Movement model (CP4b):** `view_yaw` is client-owned and independent of the body. WASD is
+  camera-relative; the body turns toward the movement direction (14 rad/s) and only translates as its
+  facing aligns, so turns read as turns. Aiming locks the body to the view and allows strafing. The
+  `CameraPivot` is counter-rotated by `view_yaw - body_yaw`.
+- **Camera:** the spring-arm pivot is centred inside the capsule; the shoulder offset lives on the
+  `Camera3D` and collapses as the arm compresses. The cast is a 5 cm sphere (Godot's `cast_motion`
+  ignores initial overlap, so a large sphere started inside walls). Camera occlusion by other
+  players is still deferred (dither fade, CP5).
+- **Weapon presentation:** the gun follows `DEF-hand.R` via an external `BoneAttachment3D`, with a
+  filtered upper-body `Pistol_Aim_Neutral` hold overlay and a filtered `Pistol_Shoot` one-shot.
+  Lower-body tracks stay with the main `AnimationPlayer`, so walking and shooting compose.
+- **Web loop:** `Engine.max_physics_steps_per_frame = 2` and `physics_jitter_fix = 0` prevent
+  background-tab catch-up bursts from flooding the input queue.
 - **Prediction & reconciliation (CP4b):** the client stores every locally simulated frame with its
   resulting state. A snapshot for the local id rewinds the body to the acked pose+velocity and
   replays all unacked inputs through `LocomotionComponent`. The collision body takes authority

@@ -73,7 +73,9 @@ func test_movement_tuning() -> void:
 	var stats := load("res://resources/players/default_player.tres") as PlayerStats
 	expect(stats != null, "default PlayerStats resource loads")
 	if stats:
-		expect(is_equal_approx(stats.move_speed, 5.6), "move speed comes from PlayerStats")
+		expect(is_equal_approx(stats.move_speed, 1.0), "walk speed is ~1 m/s for the 0.82 m avatar")
+		expect(is_equal_approx(stats.sprint_multiplier, 2.5), "sprint is ~2.5x walk")
+		expect(stats.turn_speed > 0.0, "body turn speed is data-driven")
 		expect(is_equal_approx(stats.jump_velocity, 7.34), "jump velocity is the +10% value")
 		expect(stats.ground_acceleration > stats.air_acceleration, "air control is weaker than ground control")
 
