@@ -6,7 +6,7 @@
 [ext_resource type="Script" path="res://scripts/components/input_handler.gd" id="4_input"]
 [ext_resource type="Script" path="res://scripts/player/camera_rig.gd" id="5_rig"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="6_health"]
-[ext_resource type="PackedScene" path="res://assets/kenney_blocky/character-a.glb" id="7_character"]
+[ext_resource type="PackedScene" path="res://assets/quaternius_ual/animation_library.glb" id="7_character"]
 [ext_resource type="Script" path="res://scripts/player/character_visual.gd" id="8_visual"]
 [ext_resource type="Script" path="res://scripts/components/hurtbox_component.gd" id="9_hurtbox"]
 [ext_resource type="Resource" path="res://resources/weapons/rifle_stats.tres" id="10_weapon"]
@@ -31,7 +31,7 @@ radius = 0.05
 height = 0.1
 
 [sub_resource type="BoxMesh" id="Mesh_gun"]
-size = Vector3(0.07, 0.09, 0.45)
+size = Vector3(0.05, 0.07, 0.30)
 
 [sub_resource type="StandardMaterial3D" id="Mat_gun"]
 albedo_color = Color(0.09, 0.11, 0.15, 1)
@@ -71,7 +71,7 @@ max_health = 100
 script = ExtResource("8_visual")
 
 [node name="Character" parent="Visual" instance=ExtResource("7_character")]
-transform = Transform3D(-0.408, 0, 0, 0, 0.408, 0, 0, 0, -0.408, 0, 0, 0)
+transform = Transform3D(-0.448, 0, 0, 0, 0.448, 0, 0, 0, -0.448, 0, 0, 0)
 
 [node name="BodyHurtbox" type="Area3D" parent="."]
 collision_layer = 8
@@ -106,7 +106,7 @@ camera_rig_path = NodePath("../CameraPivot")
 muzzle_path = NodePath("../Visual/GunMount/Muzzle")
 
 [node name="GunMount" type="Node3D" parent="Visual"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34, 0.70, -0.30)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06, 0.56, -0.22)
 
 [node name="Gun" type="MeshInstance3D" parent="Visual/GunMount"]
 mesh = SubResource("Mesh_gun")

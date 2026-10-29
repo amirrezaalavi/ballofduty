@@ -122,10 +122,10 @@ func _init() -> void:
 		if character:
 			var animation_player := character.find_child("AnimationPlayer", true, false) as AnimationPlayer
 			_check(animation_player != null, "character has an AnimationPlayer")
+			_check(character.find_child("Skeleton3D", true, false) is Skeleton3D, "character is a skinned rig")
 			if animation_player:
-				_check(animation_player.has_animation(&"idle"), "character has idle animation")
-				_check(animation_player.has_animation(&"walk"), "character has walk animation")
-				_check(animation_player.has_animation(&"sprint"), "character has sprint animation")
+				for clip: StringName in [&"Idle", &"Pistol_Idle", &"Pistol_Aim_Neutral", &"Walk", &"Sprint", &"Jump", &"Jump_Start", &"Jump_Land"]:
+					_check(animation_player.has_animation(clip), "character has %s clip" % clip)
 
 		var locomotion := player.get_node_or_null("LocomotionComponent") as LocomotionComponent
 		_check(locomotion != null and locomotion.stats != null, "locomotion component has PlayerStats")

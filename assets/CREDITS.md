@@ -25,3 +25,13 @@ license (with a local copy of the license text), and what was modified.
   `CharacterVisual` (idle/walk/sprint). No mesh edits.
 - **Note:** the GLB references its palette texture as an external URI; the texture is applied explicitly in
   `CharacterVisual` because the Godot importer does not bind it automatically.
+
+## Quaternius Universal Animation Library (Standard) 1.0
+
+- **Author:** Quaternius (https://quaternius.com)
+- **Source:** https://opengameart.org/content/universal-animation-library (Standard version, 45 animations)
+- **License:** Creative Commons Zero (CC0) — see [`quaternius_ual/License.txt`](./quaternius_ual/License.txt)
+- **Used:** `animation_library.glb` (Godot version: rigged mannequin + 46 clips incl. T-pose)
+- **Modifications:** scaled ×0.448 to fit the 0.82 m capsule, yaw-flipped to face −Z.
+  `CharacterVisual` maps Idle→Pistol_Idle, still-scoped→Pistol_Aim_Neutral, Walk/Sprint,
+  Walk-reversed for backwards, Jump_Start/Jump/Jump_Land for air. No mesh edits.
