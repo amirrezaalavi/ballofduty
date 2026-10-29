@@ -4,9 +4,9 @@ extends Node3D
 ## aim share a frame); this node owns pitch, shoulder framing and scope FOV.
 
 @export_group("Framing")
-@export var spring_length: float = 3.6
+@export var spring_length: float = 2.3
 @export var normal_fov: float = 75.0
-@export var scope_fov: float = 55.0
+@export var scope_fov: float = 48.0
 @export var scope_transition_degrees_per_second: float = 300.0
 @export var pitch_min: float = -1.35
 @export var pitch_max: float = 0.25

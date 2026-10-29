@@ -19,6 +19,10 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S8 | Character model | Replaced the capsule with Kenney Blocky `character-a`, 1.36 m, animated idle/walk/sprint | done | CP2 |
 | S9 | Log/stump collision | Logs and stumps now have solid box/cylinder colliders (were walk-through) | done | CP2 |
 | S10 | Tree/rock collider fit | Tree trunk radius reduced from 0.36× to 0.12× scale; low-rock height corrected so invisible collision no longer feels spherical | done | CP2 |
+| S11 | Gun attached to character | Gun/muzzle reparented from the player root to `Visual/GunMount` at the right shoulder; mount copies camera pitch (+recoil) so vertical aim moves the gun; yaw inherited from the body | done | CP3 |
+| S12 | Backwards/jump animation states | Backwards plays the walk cycle reversed and never sprints; airborne gets separate `air_move`/`air_idle` states with a procedural rise/fall lean (pack has no jump clip) | done | CP3 |
+| S13 | Character 40 % smaller | Capsule 1.36 m → **0.82 m**, hurtboxes/head/camera-shoulder scaled ×0.6; camera spring 3.6 m → **2.3 m** | done | CP3 |
+| S14 | Scope zoom stronger | Scope FOV 55 → **48** (75→48 = 27° of zoom vs 20° before, +35 %) | done | CP3 |
 
 ## Long term (record now, decide later)
 
@@ -30,13 +34,13 @@ Status: `todo` · `doing` · `done` · `deferred`
 | L4 | Larger map performance | Current map is 35 draw calls / 31k tris. A larger final map needs occlusion/LOD/fog decisions and a new budget measurement | todo |
 | L5 | Movement set | Add slide/dash/roll later only if the core loop needs it; do not add before netcode so prediction scope stays small | deferred |
 | L6 | Settings UI | Expose sensitivity, invert Y, scope scale, volume, quality in CP5; persistence already exists | todo |
-| L7 | Animation / stride | Character shrink makes stride more visible; add run/jump/fall states from replicated state flags | todo |
+| L7 | Animation / stride | Backwards-reversed + air-lean states landed (S12). Still needs a pack with real jump/back/strafe clips — candidates listed in the 2026-10-29 changelog entry | doing |
 | L8 | Server parity | Character scale, hurtboxes, camera-independent stats, jump values must come from the same resources on client and server | todo |
 | L9 | Browser matrix | Real Firefox/Safari, low-end laptop, 720p/60 target (CP5) | todo |
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
 | L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |
 | L12 | Character variants | Remote players need distinct Blocky Characters textures/colors; same animation rig. Add in CP4a roster work. | todo |
-| L13 | Weapon viewmodel polish | Gun is currently a simple mesh viewed end-on. Add hand-held pose, muzzle light, impact decals, damage numbers, richer kill feed before release. | todo |
+| L13 | Weapon viewmodel polish | Gun is shoulder-mounted and aim-pitched but still a plain box viewed butt-on. Add hand-held pose, muzzle light, impact decals, damage numbers, richer kill feed before release. | todo |
 | L14 | Player damage feedback | Damage vignette/health loss are wired but untestable until CP4c bots can shoot back. Validate then. | todo |
 
 ## Changelog
@@ -48,3 +52,14 @@ Status: `todo` · `doing` · `done` · `deferred`
   Minecraft-style chunk limits recorded as **L11**.
 - **2026-10-29 — CP3:** rifle/projectile/damage/HUD/audio/training dummies landed. Combat test covers
   20/20 headshots at 5/15/30 m. Weapon viewmodel and player damage feedback recorded as **L13/L14**.
+- **2026-10-29 — animation/feel pass:** gun shoulder-mounted + aim-pitched (S11); backwards-reversed
+  and air-lean states (S12); character ×0.6 → 0.82 m with 2.3 m camera (S13); scope FOV 48 (S14).
+  Animation-pack candidates for real jump/back/strafe clips: Kenney character hub
+  (https://kenney.nl/assets/tag:character), Animated Characters Survivors
+  (https://kenney.nl/assets/animated-characters-survivors), Quaternius Ultimate Animated Character Pack
+  (https://quaternius.com/packs/ultimatedanimatedcharacter.html), Quaternius Universal Animation Library
+  (https://quaternius.com/packs/universalanimationlibrary.html), KayKit Character Animations
+  (https://kaylousberg.itch.io/kaykit-character-animations), KayKit Adventurers
+  (https://kaylousberg.itch.io/kaykit-adventurers), Mixamo
+  (https://www.mixamo.com/), Quaternius pack on the Godot asset store
+  (https://store.godotengine.org/asset/quaternius/universal-animation-library/).

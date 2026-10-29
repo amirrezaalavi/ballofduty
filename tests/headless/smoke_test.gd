@@ -97,7 +97,7 @@ func _init() -> void:
 			var capsule := body_shape.shape as CapsuleShape3D
 			_check(capsule != null, "body hurtbox is a capsule")
 			if capsule:
-				_check(is_equal_approx(capsule.height, 0.96), "body hurtbox excludes the head")
+				_check(is_equal_approx(capsule.height, 0.58), "body hurtbox excludes the head")
 				var body_bottom := body_shape.position.y - capsule.height * 0.5
 				_check(body_bottom >= -0.01, "body hurtbox does not extend below the floor")
 
@@ -107,15 +107,15 @@ func _init() -> void:
 			_check(sphere != null, "head hurtbox is a sphere")
 			if sphere:
 				var head_top := head_shape.position.y + sphere.radius
-				_check(head_top <= 1.4, "head hurtbox is inside the 1.36 m avatar silhouette")
+				_check(head_top <= 0.9, "head hurtbox is inside the 0.82 m avatar silhouette")
 
 		_check_equal(player.collision_mask, 1, "player collides with world only (no predicted body collisions)")
 
 		var physical_shape := (player.get_node("CollisionShape3D") as CollisionShape3D).shape as CapsuleShape3D
 		_check(
-			physical_shape != null and is_equal_approx(physical_shape.height, 1.36)
-			and is_equal_approx(physical_shape.radius, 0.32),
-			"character is 20% smaller (1.36 m capsule)"
+			physical_shape != null and is_equal_approx(physical_shape.height, 0.82)
+			and is_equal_approx(physical_shape.radius, 0.19),
+			"character is 40% smaller (0.82 m capsule)"
 		)
 		var character := player.get_node_or_null("Visual/Character")
 		_check(character != null, "animated character model is present")
@@ -138,8 +138,24 @@ func _init() -> void:
 		var rig := player.get_node_or_null("CameraPivot") as CameraRig
 		_check(rig != null, "camera pivot uses CameraRig")
 		if rig:
-			_check(is_equal_approx(rig.spring_length, 3.6), "camera spring length is data-driven")
+			_check(is_equal_approx(rig.spring_length, 2.3), "camera spring length is data-driven")
 			_check(rig.scope_fov < rig.normal_fov, "scope FOV is tighter than hip FOV")
+			_check(
+				(rig.normal_fov - rig.scope_fov) >= (75.0 - 55.0) * 1.2,
+				"scope zoom is at least 20% stronger than before"
+			)
+		var gun_mount := player.get_node_or_null("Visual/GunMount") as Node3D
+		_check(gun_mount != null, "gun is mounted on the character visual")
+		if gun_mount:
+			var gun_local: Vector3 = gun_mount.position
+			_check(
+				absf(gun_local.x) < 0.45 and gun_local.y > 0.3 and gun_local.y < 0.9,
+				"gun sits close to the body, not floating"
+			)
+			_check(
+				player.get_node_or_null("Visual/GunMount/Muzzle") != null,
+				"muzzle follows the gun mount"
+			)
 		player.free()
 
 	var arena_scene := load("res://scenes/maps/arena_greybox.tscn") as PackedScene

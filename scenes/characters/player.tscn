@@ -13,25 +13,25 @@
 [ext_resource type="Script" path="res://scripts/weapons/weapon_controller.gd" id="11_weapon_controller"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_body"]
-radius = 0.32
-height = 1.36
+radius = 0.19
+height = 0.82
 
 [sub_resource type="SphereShape3D" id="Shape_camera"]
 radius = 0.22
 
 [sub_resource type="CapsuleShape3D" id="Shape_hit_body"]
-radius = 0.32
-height = 0.96
+radius = 0.19
+height = 0.58
 
 [sub_resource type="SphereShape3D" id="Shape_hit_head"]
-radius = 0.192
+radius = 0.115
 
 [sub_resource type="SphereMesh" id="Mesh_flash"]
 radius = 0.05
 height = 0.1
 
 [sub_resource type="BoxMesh" id="Mesh_gun"]
-size = Vector3(0.1, 0.12, 0.55)
+size = Vector3(0.07, 0.09, 0.45)
 
 [sub_resource type="StandardMaterial3D" id="Mat_gun"]
 albedo_color = Color(0.09, 0.11, 0.15, 1)
@@ -53,7 +53,7 @@ floor_max_angle = 0.785398
 script = ExtResource("1_player")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.68, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.41, 0)
 shape = SubResource("Capsule_body")
 
 [node name="LocomotionComponent" type="Node" parent="."]
@@ -71,7 +71,7 @@ max_health = 100
 script = ExtResource("8_visual")
 
 [node name="Character" parent="Visual" instance=ExtResource("7_character")]
-transform = Transform3D(-0.68, 0, 0, 0, 0.68, 0, 0, 0, -0.68, 0, 0, 0)
+transform = Transform3D(-0.408, 0, 0, 0, 0.408, 0, 0, 0, -0.408, 0, 0, 0)
 
 [node name="BodyHurtbox" type="Area3D" parent="."]
 collision_layer = 8
@@ -83,7 +83,7 @@ hitbox_name = &"body"
 health_path = NodePath("../HealthComponent")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="BodyHurtbox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.48, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.29, 0)
 shape = SubResource("Shape_hit_body")
 
 [node name="HeadHurtbox" type="Area3D" parent="."]
@@ -96,36 +96,38 @@ hitbox_name = &"head"
 health_path = NodePath("../HealthComponent")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="HeadHurtbox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.192, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
 shape = SubResource("Shape_hit_head")
 
 [node name="WeaponController" type="Node" parent="."]
 script = ExtResource("11_weapon_controller")
 stats = ExtResource("10_weapon")
 camera_rig_path = NodePath("../CameraPivot")
-muzzle_path = NodePath("../Muzzle")
+muzzle_path = NodePath("../Visual/GunMount/Muzzle")
 
-[node name="Gun" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.68, 1.0, -0.32)
+[node name="GunMount" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.34, 0.70, -0.30)
+
+[node name="Gun" type="MeshInstance3D" parent="Visual/GunMount"]
 mesh = SubResource("Mesh_gun")
 material_override = SubResource("Mat_gun")
 cast_shadow = 1
 
-[node name="Muzzle" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.68, 1.02, -0.62)
+[node name="Muzzle" type="Marker3D" parent="Visual/GunMount"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, -0.28)
 
-[node name="Flash" type="MeshInstance3D" parent="Muzzle"]
+[node name="Flash" type="MeshInstance3D" parent="Visual/GunMount/Muzzle"]
 visible = false
 mesh = SubResource("Mesh_flash")
 material_override = SubResource("Mat_flash")
 cast_shadow = 0
 
 [node name="CameraPivot" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.55, 1.55, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.35, 0.95, 0)
 script = ExtResource("5_rig")
 
 [node name="SpringArm3D" type="SpringArm3D" parent="CameraPivot"]
-spring_length = 3.6
+spring_length = 2.3
 margin = 0.15
 collision_mask = 1
 shape = SubResource("Shape_camera")
