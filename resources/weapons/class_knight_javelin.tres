@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponStats" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/components/weapon_stats.gd" id="1_stats"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/projectile.tscn" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_stats")
+display_name = "Heavy Javelin"
+weapon_id = &"knight_javelin"
+class_id = 0
+fire_mode = &"semi"
+shot_clip = &"Throw"
+charge_clip = &"Ranged_2H_Aiming"
+reload_clip = &"Ranged_2H_Aiming"
+effect = &"knockback"
+damage = 60
+headshot_multiplier = 1.75
+projectile_speed = 58.0
+projectile_lifetime = 4.0
+fire_rate = 0.77
+automatic = false
+spread_degrees = 0.2
+magazine_size = 3
+infinite_reserve = true
+reload_time = 2.2
+recoil_degrees = 2.0
+projectile_gravity = 20.0
+pierce = 1
+armour_pierce = false
+knockback = 5.0
+projectile_scene = ExtResource("2_projectile")

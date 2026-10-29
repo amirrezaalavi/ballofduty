@@ -87,7 +87,10 @@ func test_authoritative_combat_roundtrip() -> void:
 	var target_shape := server_b.get_node("BodyHurtbox/CollisionShape3D") as Node3D
 	var aim := ServerCombat.aim_angles(server_a.global_position, target_shape.global_position)
 	var seq: int = int(client_a_gm.local_id) * 1000
-	for i in 4:
+	# Phase 2A: client_start() without a class joins as class 0 (Knight). The
+	# javelin deals 60 body damage on a ~1.3 s cycle, so two throws kill and the
+	# rifle-era 25-damage/rapid-fire assertions are retired here.
+	for i in 2:
 		seq += 1
 		var frame := PlayerInputFrame.new()
 		frame.seq = seq
@@ -96,19 +99,30 @@ func test_authoritative_combat_roundtrip() -> void:
 		frame.fire = true
 		local_a.simulate_tick(frame, DT)
 		client_a_gm.client_send_input(frame)
-		for _k in 8:
-			await get_tree().physics_frame
 		if i == 0:
-			expect(health_b.current == 75, "first confirmed shot deals 25 (hp %d)" % health_b.current)
-		if i == 2:
-			expect(health_b.current == 25, "third shot leaves 25 (hp %d)" % health_b.current)
+			for _k in 100:
+				await get_tree().physics_frame
+			expect(health_b.current == 40, "first confirmed javelin hit deals 60 (hp %d)" % health_b.current)
+		else:
+			for _k in 8:
+				await get_tree().physics_frame
+		# Semi-auto needs a release edge before the next throw.
+		seq += 1
+		var release := PlayerInputFrame.new()
+		release.seq = seq
+		release.yaw = aim.x
+		release.pitch = aim.y
+		release.fire = false
+		client_a_gm.client_send_input(release)
+		for _k in 3:
+			await get_tree().physics_frame
 
-	expect(hits.size() >= 4, "shooter received server hit confirmations (%d)" % hits.size())
-	await wait_for(func() -> bool: return health_b.current == 0, 30)
+	await wait_for(func() -> bool: return health_b.current == 0, 40)
+	expect(hits.size() >= 2, "shooter received server hit confirmations (%d)" % hits.size())
 	expect(health_b.current == 0, "target reaches zero (hp %d)" % health_b.current)
 	expect(local_b.dead, "target client is marked dead by the server event")
-	expect(int(server_gm._combat.projectiles_fired) == 4,
-		"server fired exactly four authoritative projectiles (%d)" % int(server_gm._combat.projectiles_fired))
+	expect(int(server_gm._combat.projectiles_fired) == 2,
+		"server fired exactly two authoritative projectiles (%d)" % int(server_gm._combat.projectiles_fired))
 
 	# Respawn is server-owned: 3 s later the client is moved and healed.
 	await wait_for(func() -> bool: return not local_b.dead, 140)

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="WeaponStats" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/components/weapon_stats.gd" id="1_stats"]
+[ext_resource type="PackedScene" path="res://scenes/weapons/projectile.tscn" id="2_projectile"]
+
+[resource]
+script = ExtResource("1_stats")
+display_name = "Repeating Crossbow"
+weapon_id = &"rogue_hooded_crossbow"
+class_id = 3
+fire_mode = &"burst"
+shot_clip = &"Ranged_1H_Shoot"
+charge_clip = &"Ranged_1H_Aiming"
+reload_clip = &"Ranged_1H_Aiming"
+effect = &"bleed"
+damage = 22
+headshot_multiplier = 2.0
+projectile_speed = 82.0
+projectile_lifetime = 4.0
+fire_rate = 1.5
+automatic = false
+spread_degrees = 0.8
+magazine_size = 12
+infinite_reserve = true
+reload_time = 1.5
+recoil_degrees = 0.6
+burst_count = 3
+burst_interval = 0.08
+bleed_dps = 4.0
+bleed_duration = 2.0
+projectile_scene = ExtResource("2_projectile")
