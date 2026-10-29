@@ -1,10 +1,8 @@
 extends BodTestSuite
-## CP3 combat checks: weapon data, swept projectile hits at 5/15/30 m,
-## headshot multiplier, and hitbox reporting.
+## CP3 combat checks: weapon data and swept projectile hits at 5/15/30 m.
 
 const DISTANCES := [5.0, 15.0, 30.0]
 const BODY_Y := 0.55
-const HEAD_Y := 1.35
 
 var _stats: WeaponStats
 
@@ -16,7 +14,6 @@ func before_test() -> void:
 
 func test_weapon_data() -> void:
 	expect(_stats.damage == 25, "body damage is 25")
-	expect(is_equal_approx(_stats.headshot_multiplier, 2.0), "headshot multiplier is 2x")
 	expect(is_equal_approx(_stats.fire_rate, 10.0), "fire rate is 10 rps")
 	expect(_stats.magazine_size == 30, "magazine is 30")
 	expect(is_equal_approx(_stats.reload_time, 1.6), "reload is 1.6 s")
@@ -36,13 +33,12 @@ func test_hits_at_30m() -> void:
 
 
 func _hit_suite(distance: float) -> void:
-	await _check_hit(distance, BODY_Y, false, 75)
-	# 20 headshots per distance; the acceptance target is 20/20 with no tunneling.
+	# 20 body shots per distance; the acceptance target is 20/20 with no tunneling.
 	for _i in 20:
-		await _check_hit(distance, HEAD_Y, true, 50)
+		await _check_hit(distance, BODY_Y, 75)
 
 
-func _check_hit(distance: float, target_y: float, expect_headshot: bool, expected_hp: int) -> void:
+func _check_hit(distance: float, target_y: float, expected_hp: int) -> void:
 	var dummy := (load("res://scenes/characters/training_dummy.tscn") as PackedScene).instantiate()
 	add_child(dummy)
 	await get_tree().physics_frame
@@ -54,11 +50,10 @@ func _check_hit(distance: float, target_y: float, expect_headshot: bool, expecte
 	add_child(projectile)
 	projectile.global_position = origin
 
-	var report := {"hit": false, "headshot": false}
+	var report := {"hit": false}
 	projectile.hit_confirmed.connect(
-		func(headshot: bool, _killed: bool) -> void:
+		func(_killed: bool) -> void:
 			report["hit"] = true
-			report["headshot"] = headshot
 	)
 	projectile.setup((target - origin).normalized(), _stats, 0, [] as Array[RID])
 
@@ -69,10 +64,6 @@ func _check_hit(distance: float, target_y: float, expect_headshot: bool, expecte
 
 	var health := dummy.get_node("HealthComponent") as HealthComponent
 	expect(bool(report["hit"]), "hit registered at %.0f m (y=%.2f)" % [distance, target_y])
-	expect(
-		bool(report["headshot"]) == expect_headshot,
-		"hitbox reported %s at %.0f m" % ["head" if expect_headshot else "body", distance]
-	)
 	expect(
 		health.current == expected_hp,
 		"damage at %.0f m is %d (got %d)" % [distance, expected_hp, health.current]

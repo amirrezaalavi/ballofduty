@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/characters/training_dummy.gd" id="1_dummy"]
 [ext_resource type="Script" path="res://scripts/components/health_component.gd" id="2_health"]
@@ -51,11 +51,8 @@ albedo_color = Color(0.05, 0.04, 0.04, 1)
 roughness = 1.0
 
 [sub_resource type="CapsuleShape3D" id="Shape_hit_body"]
-radius = 0.4
-height = 1.1
-
-[sub_resource type="SphereShape3D" id="Shape_hit_head"]
-radius = 0.28
+radius = 0.36
+height = 1.62
 
 [node name="TrainingDummy" type="AnimatableBody3D"]
 collision_layer = 1
@@ -101,25 +98,11 @@ collision_mask = 0
 monitoring = false
 script = ExtResource("3_hurtbox")
 entity_id = 1001
-hitbox_name = &"body"
 health_path = NodePath("../HealthComponent")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="BodyHurtbox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.81, 0)
 shape = SubResource("Shape_hit_body")
-
-[node name="HeadHurtbox" type="Area3D" parent="."]
-collision_layer = 8
-collision_mask = 0
-monitoring = false
-script = ExtResource("3_hurtbox")
-entity_id = 1001
-hitbox_name = &"head"
-health_path = NodePath("../HealthComponent")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="HeadHurtbox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.35, 0)
-shape = SubResource("Shape_hit_head")
 
 [node name="Label3D" type="Label3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.9, 0)

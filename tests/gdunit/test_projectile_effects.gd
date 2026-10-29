@@ -1,6 +1,6 @@
 extends BodTestSuite
-## Phase 2A projectile effects: gravity drop, pierce, splash, and the
-## knockback/slow/bleed hooks. All resolution is server-side.
+## Phase 2A projectile effects: flat flight, pierce, splash, and the
+## knockback/slow hooks. All resolution is server-side.
 
 const DT := 1.0 / 30.0
 
@@ -77,7 +77,7 @@ func _body_shape(player: PlayerController) -> Node3D:
 	return player.get_node("BodyHurtbox/CollisionShape3D") as Node3D
 
 
-func test_knight_projectile_gravity_drop() -> void:
+func test_knight_projectile_flies_flat() -> void:
 	await _setup(0, Vector3(0, 0.2, -20), Vector3(0, 0.2, -40), false)
 	var stats := WeaponRegistry.stats_for(0)
 	var projectile := stats.projectile_scene.instantiate() as Projectile
@@ -87,9 +87,8 @@ func test_knight_projectile_gravity_drop() -> void:
 	var start_y := projectile.global_position.y
 	for _i in 10:
 		await get_tree().physics_frame
-	expect(projectile.velocity.y < -0.5, "thrown weapon gains downward velocity (%.2f)" % projectile.velocity.y)
-	expect(projectile.global_position.y < start_y - 0.05,
-		"thrown weapon visibly drops (y %.2f)" % projectile.global_position.y)
+	expect(is_zero_approx(projectile.velocity.y), "javelin keeps a flat line (vy %.3f)" % projectile.velocity.y)
+	expect(is_equal_approx(projectile.global_position.y, start_y), "javelin does not drop")
 	projectile.free()
 
 
@@ -109,10 +108,11 @@ func test_mage_projectile_is_flat() -> void:
 
 func test_knight_javelin_pierces_one_target() -> void:
 	await _setup(0, Vector3(0, 0.2, -4), Vector3(0, 0.2, -8))
-	var shot := await _fire_at(_body_shape(_c), 12)
+	# Aim through the first target: the round keeps its line to the second one.
+	var shot := await _fire_at(_body_shape(_b), 14)
 	expect(not shot.is_empty(), "piercing throw accepted")
-	expect(_health(_b).current == 40, "first target takes 60 (hp %d)" % _health(_b).current)
-	expect(_health(_c).current == 40, "second target behind takes 60 (hp %d)" % _health(_c).current)
+	expect(_health(_b).current == 66, "first target takes 34 (hp %d)" % _health(_b).current)
+	expect(_health(_c).current == 66, "second target behind takes 34 (hp %d)" % _health(_c).current)
 	expect(_combat.pierce_hits >= 1, "pierce contact recorded")
 	expect(_combat.projectile_hits == 1, "one projectile accounts for both contacts")
 
@@ -121,17 +121,17 @@ func test_mage_splash_damages_neighbour() -> void:
 	await _setup(1, Vector3(0, 0.2, -4), Vector3(1.0, 0.2, -4))
 	var shot := await _fire_at(_body_shape(_b), 12)
 	expect(not shot.is_empty(), "Mage bolt accepted")
-	expect(_health(_b).current == 72, "direct target takes 28 (hp %d)" % _health(_b).current)
+	expect(_health(_b).current == 82, "direct target takes 18 (hp %d)" % _health(_b).current)
 	var splash_lost := 100 - _health(_c).current
 	expect(splash_lost > 0, "neighbour takes splash damage (lost %d)" % splash_lost)
-	expect(splash_lost <= 12, "splash never exceeds its 12 damage cap (lost %d)" % splash_lost)
+	expect(splash_lost <= 8, "splash never exceeds its 8 damage cap (lost %d)" % splash_lost)
 
 
 func test_barbarian_knockback_and_slow_hook() -> void:
 	await _setup(4, Vector3(0, 0.2, -4), Vector3(4, 0.2, -4))
 	var shot := await _fire_at(_body_shape(_b), 12)
 	expect(not shot.is_empty(), "Barbarian axe accepted")
-	expect(_health(_b).current == 50, "axe body hit deals 50 (hp %d)" % _health(_b).current)
+	expect(_health(_b).current == 66, "axe body hit deals 34 (hp %d)" % _health(_b).current)
 	expect(Vector2(_b.velocity.x, _b.velocity.z).length() > 0.5,
 		"knockback pushes the victim (%.2f m/s)" % Vector2(_b.velocity.x, _b.velocity.z).length())
 	expect(_combat.statuses.has(2), "slow status installed on the victim")
@@ -152,22 +152,3 @@ func test_barbarian_knockback_and_slow_hook() -> void:
 	cleared.move = Vector2(1.0, 0.0)
 	_combat.process(_entry_b, _b, cleared, DT)
 	expect(is_equal_approx(cleared.move.x, 1.0), "movement is restored after the slow")
-
-
-func test_crossbow_bleed_hook_ticks_damage() -> void:
-	await _setup(3, Vector3(0, 0.2, -4), Vector3(4, 0.2, -4))
-	await _fire_at(_body_shape(_b), 8)
-	expect(_health(_b).current == 82, "bolt body hit deals 18 (hp %d)" % _health(_b).current)
-	expect(_combat.statuses.has(2), "bleed status installed on the victim")
-	var hp_after_hit := _health(_b).current
-	var damage_before := _combat.damage_hits
-	_combat.tick(_entry_b, 0.5)
-	expect(_health(_b).current == hp_after_hit - 2,
-		"first bleed slice deals 2 (hp %d)" % _health(_b).current)
-	expect(_combat.damage_hits == damage_before + 1, "bleed damage is telemetered")
-	# Two seconds of bleed: four 2-damage slices in total.
-	for _i in 3:
-		_combat.tick(_entry_b, 0.5)
-	expect(_health(_b).current == hp_after_hit - 8,
-		"bleed totals 8 over its duration (hp %d)" % _health(_b).current)
-	expect(not _combat.statuses.has(2), "bleed expires")

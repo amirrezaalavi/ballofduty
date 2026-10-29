@@ -245,13 +245,11 @@ static func encode_event_shot(shooter_id: int, origin: Vector3, direction: Vecto
 
 static func encode_event_hit(
 	target_id: int, shooter_id: int, damage: int,
-	headshot: bool, killed: bool, position: Vector3
+	killed: bool, position: Vector3
 ) -> PackedByteArray:
 	var flags := 0
-	if headshot:
-		flags |= 1
 	if killed:
-		flags |= 2
+		flags |= 1
 	var pkt := PackedByteArray([Msg.EVENT, EventType.HIT, target_id & 0xFF, shooter_id & 0xFF])
 	pkt.append(clampi(damage, 0, 255) & 0xFF)
 	pkt.append(flags)
@@ -296,8 +294,7 @@ static func decode_event(pkt: PackedByteArray) -> Dictionary:
 			"target_id": pkt[2],
 			"shooter_id": pkt[3],
 			"damage": pkt[4],
-			"headshot": (pkt[5] & 1) != 0,
-			"killed": (pkt[5] & 2) != 0,
+			"killed": (pkt[5] & 1) != 0,
 			"position": Vector3(_dequant_pos(_get_i16(pkt, 6)), _dequant_pos(_get_i16(pkt, 8)), _dequant_pos(_get_i16(pkt, 10))),
 		}
 	if kind == EventType.DEATH:

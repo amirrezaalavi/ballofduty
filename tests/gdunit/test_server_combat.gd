@@ -1,6 +1,6 @@
 extends BodTestSuite
 ## CP4c authoritative combat: canonical muzzle, fire rate/ammo, server hit
-## resolution, headshots, spawn protection, and death events.
+## resolution, spawn protection, and death events.
 
 var _world: Node3D
 var _a: PlayerController
@@ -8,7 +8,6 @@ var _b: PlayerController
 var _combat: ServerCombat
 var _entry: Dictionary
 var _body_target: Vector3
-var _head_target: Vector3
 
 
 func after_test() -> void:
@@ -34,12 +33,11 @@ func _setup() -> void:
 	_entry = {"id": 1, "ammo": 30, "cooldown": 0.0, "reload_left": 0.0}
 	_combat.reset_player(_entry)
 	_body_target = (_b.get_node("BodyHurtbox/CollisionShape3D") as Node3D).global_position
-	_head_target = (_b.get_node("HeadHurtbox/CollisionShape3D") as Node3D).global_position
 	_set_target_damage(true)
 
 
 func _set_target_damage(enabled: bool) -> void:
-	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+	for path: String in ["BodyHurtbox"]:
 		var hurtbox := _b.get_node(path) as HurtboxComponent
 		hurtbox.damage_enabled = enabled
 
@@ -87,12 +85,6 @@ func test_body_hit_and_fire_rate() -> void:
 	_entry["cooldown"] = 0.0
 	await _fire_at(_body_target)
 	expect(_body().current == 50, "next allowed shot deals 25 (hp %d)" % _body().current)
-
-
-func test_headshot_is_double() -> void:
-	await _setup()
-	await _fire_at(_head_target)
-	expect(_body().current == 50, "headshot deals 50 (hp %d)" % _body().current)
 
 
 func test_ammo_and_reload() -> void:

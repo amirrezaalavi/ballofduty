@@ -49,7 +49,7 @@ func _setup() -> void:
 
 
 func _set_target_damage(enabled: bool) -> void:
-	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+	for path: String in ["BodyHurtbox"]:
 		var hurtbox := _b.get_node(path) as HurtboxComponent
 		hurtbox.damage_enabled = enabled
 

@@ -18,7 +18,6 @@ var _ammo: int = 30
 var _reserve: int = -1
 var _reloading: bool = false
 var _hit_time: float = 0.0
-var _hit_headshot: bool = false
 var _kill_time: float = 0.0
 var _damage_flash: float = 0.0
 var _crosshair_kick: float = 0.0
@@ -302,9 +301,8 @@ func _draw_crosshair(center: Vector2) -> void:
 		draw_line(center + offset * gap, center + offset * (gap + length), color, 1.6)
 
 	if _hit_time > 0.0:
-		var hit_color := Color(1.0, 0.65, 0.25) if _hit_headshot else Color(0.95, 0.97, 1.0)
 		for dir: Vector2 in [Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1), Vector2(-1, -1)]:
-			draw_line(center + dir * 7.0, center + dir * 14.0, hit_color, 2.0)
+			draw_line(center + dir * 7.0, center + dir * 14.0, Color(0.95, 0.97, 1.0), 2.0)
 
 
 func _on_health(current: int, maximum: int) -> void:
@@ -340,9 +338,8 @@ func _on_charge(value: float) -> void:
 	_charge = value
 
 
-func _on_hit(headshot: bool, killed: bool) -> void:
+func _on_hit(killed: bool) -> void:
 	_hit_time = 0.14
-	_hit_headshot = headshot
 	_hits_local += 1
 	if killed:
 		_kill_time = 2.2

@@ -55,6 +55,11 @@ func test_authoritative_combat_roundtrip() -> void:
 		await get_tree().physics_frame
 	local_a.set_physics_process(false)
 	local_b.set_physics_process(false)
+	# All test worlds share one physics space, so the client copies would
+	# otherwise intercept server rays. Keep only ServerWorld shootable.
+	for client_world in [world_a, world_b]:
+		for area in client_world.find_children("*", "Area3D", true, false):
+			(area as Area3D).collision_layer = 0
 	var local_weapon := local_a.get_node("WeaponController") as WeaponController
 	expect(not local_weapon.spawn_projectiles, "client weapon is cosmetic-only (no local damage)")
 
@@ -76,22 +81,24 @@ func test_authoritative_combat_roundtrip() -> void:
 		if int(server_gm._roster[peer_id]["id"]) == client_b_gm.local_id:
 			peer_b = int(peer_id)
 	_server_net._route(peer_b, NetProtocol.encode_event_hit(
-		client_b_gm.local_id, client_a_gm.local_id, 100, false, true, Vector3.ZERO
+		client_b_gm.local_id, client_a_gm.local_id, 100, true, Vector3.ZERO
 	))
 	expect(int(_server_net.packets_rejected) == rejected_before + 1, "spoofed damage event is rejected")
 	expect(health_b.current == 100, "spoofed damage changes nothing")
 
 	var hits: Array = []
-	client_a_gm.server_hit.connect(func(headshot: bool, killed: bool) -> void:
-		hits.append([headshot, killed]))
+	client_a_gm.server_hit.connect(func(killed: bool) -> void:
+		hits.append(killed))
 	var target_shape := server_b.get_node("BodyHurtbox/CollisionShape3D") as Node3D
-	var aim := ServerCombat.aim_angles(server_a.global_position, target_shape.global_position)
 	var seq: int = int(client_a_gm.local_id) * 1000
 	# Phase 2A: client_start() without a class joins as class 0 (Knight). The
-	# javelin deals 60 body damage on a ~1.3 s cycle, so two throws kill and the
-	# rifle-era 25-damage/rapid-fire assertions are retired here.
-	for i in 2:
+	# javelin deals 34 body damage on a ~1.3 s cycle, so three throws kill.
+	for i in 3:
 		seq += 1
+		# Re-aim each throw: the javelin's knockback nudges the target between hits.
+		var aim := ServerCombat.aim_angles(
+			server_a.global_position, target_shape.global_position
+		)
 		var frame := PlayerInputFrame.new()
 		frame.seq = seq
 		frame.yaw = aim.x
@@ -99,13 +106,17 @@ func test_authoritative_combat_roundtrip() -> void:
 		frame.fire = true
 		local_a.simulate_tick(frame, DT)
 		client_a_gm.client_send_input(frame)
-		if i == 0:
+		if i < 2:
 			for _k in 100:
 				await get_tree().physics_frame
-			expect(health_b.current == 40, "first confirmed javelin hit deals 60 (hp %d)" % health_b.current)
 		else:
 			for _k in 8:
 				await get_tree().physics_frame
+		if i == 0:
+			expect(health_b.current == 66, "first confirmed javelin hit deals 34 (hp %d)" % health_b.current)
+		elif i == 1:
+			expect(health_b.current == 32, "second confirmed javelin hit deals 34 (hp %d)" % health_b.current)
+
 		# Semi-auto needs a release edge before the next throw.
 		seq += 1
 		var release := PlayerInputFrame.new()
@@ -117,12 +128,12 @@ func test_authoritative_combat_roundtrip() -> void:
 		for _k in 3:
 			await get_tree().physics_frame
 
-	await wait_for(func() -> bool: return health_b.current == 0, 40)
-	expect(hits.size() >= 2, "shooter received server hit confirmations (%d)" % hits.size())
+	await wait_for(func() -> bool: return health_b.current == 0, 120)
+	expect(hits.size() >= 3, "shooter received server hit confirmations (%d)" % hits.size())
 	expect(health_b.current == 0, "target reaches zero (hp %d)" % health_b.current)
 	expect(local_b.dead, "target client is marked dead by the server event")
-	expect(int(server_gm._combat.projectiles_fired) == 2,
-		"server fired exactly two authoritative projectiles (%d)" % int(server_gm._combat.projectiles_fired))
+	expect(int(server_gm._combat.projectiles_fired) == 3,
+		"server fired exactly three authoritative projectiles (%d)" % int(server_gm._combat.projectiles_fired))
 
 	# Respawn is server-owned: 3 s later the client is moved and healed.
 	await wait_for(func() -> bool: return not local_b.dead, 140)

@@ -11,7 +11,7 @@ extends Node
 signal ammo_changed(magazine: int, reserve: int)
 signal reload_state_changed(reloading: bool)
 signal shot_fired(origin: Vector3, direction: Vector3)
-signal hit_confirmed(headshot: bool, killed: bool)
+signal hit_confirmed(killed: bool)
 signal heat_changed(heat: float, maximum: float)
 signal charge_changed(charge: float)
 signal weapon_changed(display_name: String)
@@ -142,10 +142,6 @@ func start_reload() -> void:
 	_reload_left = stats.reload_time
 	reload_state_changed.emit(true)
 	_audio("play_reload")
-
-
-func get_spread_degrees() -> float:
-	return stats.spread_degrees if stats else 0.0
 
 
 func is_reloading() -> bool:
@@ -394,6 +390,11 @@ func _fire() -> void:
 	# Cosmetic events happen even when authority owns the projectile (CP4c sets
 	# spawn_projectiles = false and still needs the tracer/flash/audio/recoil).
 	var direction := _aim_direction()
+	# Networked clients only draw a tracer, so mirror the server's experimental
+	# velocity inheritance here. Offline rounds inherit inside Projectile.setup.
+	if not spawn_projectiles and Projectile.INHERIT_SHOOTER_VELOCITY:
+		var inherited := Projectile.inherited_velocity(player.velocity)
+		direction = (direction * stats.projectile_speed + inherited).normalized()
 	var origin := muzzle.global_position
 	# Networked clients do not spawn local projectiles, so draw the round here.
 	# Offline play already has a visible Projectile node.
@@ -418,7 +419,10 @@ func _fire() -> void:
 		return
 	scene.add_child(projectile)
 	projectile.global_position = origin
-	projectile.setup(direction, stats, service_rifle_id, _exclusion_rids())
+	projectile.setup(
+		direction, stats, service_rifle_id, _exclusion_rids(),
+		-1.0, -1, Projectile.inherited_velocity(player.velocity)
+	)
 	projectile.hit_confirmed.connect(_on_hit_confirmed)
 
 
@@ -436,18 +440,12 @@ func _aim_direction() -> Vector3:
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(query)
 	var aim_point: Vector3 = hit.position if not hit.is_empty() else ray_origin + ray_normal * 250.0
 
-	var direction := (aim_point - muzzle.global_position).normalized()
-	var spread := deg_to_rad(stats.spread_degrees)
-	if spread > 0.0:
-		var right := camera.global_transform.basis.x.normalized()
-		direction = direction.rotated(Vector3.UP, randf_range(-spread, spread))
-		direction = direction.rotated(right, randf_range(-spread, spread))
-	return direction.normalized()
+	return (aim_point - muzzle.global_position).normalized()
 
 
 func _exclusion_rids() -> Array[RID]:
 	var rids: Array[RID] = [player.get_rid()]
-	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+	for path: String in ["BodyHurtbox"]:
 		var area := player.get_node_or_null(path) as Area3D
 		if area:
 			rids.append(area.get_rid())
@@ -460,8 +458,8 @@ func _show_muzzle_flash() -> void:
 		muzzle_flash.visible = true
 
 
-func _on_hit_confirmed(headshot: bool, killed: bool) -> void:
-	hit_confirmed.emit(headshot, killed)
+func _on_hit_confirmed(killed: bool) -> void:
+	hit_confirmed.emit(killed)
 	_audio("play_hit")
 
 

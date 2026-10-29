@@ -100,7 +100,7 @@ func make_remote(remote_id: int, player_class: int = 0) -> void:
 	# A ghost is a picture, not an authority. Keep hurtboxes so shots stop on the
 	# body, but never let a client apply damage to another player locally: that
 	# produced hitmarkers and drained ghost HP with no server involvement.
-	for hurtbox_path in ["BodyHurtbox", "HeadHurtbox"]:
+	for hurtbox_path in ["BodyHurtbox"]:
 		var hurtbox := get_node_or_null(hurtbox_path) as HurtboxComponent
 		if hurtbox:
 			hurtbox.damage_enabled = false
@@ -117,7 +117,7 @@ func make_server(server_id: int, player_class: int = 0) -> void:
 	class_id = player_class
 	if weapon:
 		weapon.spawn_projectiles = false
-	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+	for path: String in ["BodyHurtbox"]:
 		var hurtbox := get_node_or_null(path) as HurtboxComponent
 		if hurtbox:
 			hurtbox.entity_id = server_id

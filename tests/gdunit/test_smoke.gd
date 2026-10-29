@@ -43,14 +43,14 @@ func test_input_and_autoloads() -> void:
 func test_scenes_have_required_nodes() -> void:
 	_check_scene("res://scenes/main.tscn", ["Arena", "Player", "HUD", "DebugOverlay"])
 	_check_scene("res://scenes/characters/player.tscn",
-		["CollisionShape3D", "Visual", "BodyHurtbox", "HeadHurtbox", "CameraPivot",
+		["CollisionShape3D", "Visual", "BodyHurtbox", "CameraPivot",
 		"LocomotionComponent", "InputHandler", "HealthComponent"])
 	_check_scene("res://scenes/maps/arena_greybox.tscn",
 		["Floor", "Ramp", "PlatformA", "PlatformB", "CameraWall", "Spawn01", "Spawn08"])
 	_check_scene("res://scenes/maps/arena_nature.tscn",
 		["Floor", "PlatformA", "PlatformB", "CameraWall", "Props", "DummyA", "DummyB", "DummyC", "Spawn01", "Spawn08"])
 	_check_scene("res://scenes/characters/training_dummy.tscn",
-		["HealthComponent", "BodyHurtbox", "HeadHurtbox"])
+		["HealthComponent", "BodyHurtbox"])
 
 
 func test_arena_spawns() -> void:
@@ -89,26 +89,19 @@ func test_player_rig() -> void:
 		expect(spring_arm.collision_mask == 1, "spring arm collides with world only")
 
 	var body_hurtbox := player.get_node_or_null("BodyHurtbox") as Area3D
-	var head_hurtbox := player.get_node_or_null("HeadHurtbox") as Area3D
+	expect(player.get_node_or_null("HeadHurtbox") == null, "single body hurtbox (no headshot volume)")
 	expect(body_hurtbox != null and body_hurtbox.collision_layer == 8, "body hurtbox on hurtbox layer")
-	expect(head_hurtbox != null and head_hurtbox.collision_layer == 8, "head hurtbox on hurtbox layer")
 
 	if body_hurtbox:
 		var body_shape := body_hurtbox.get_node("CollisionShape3D") as CollisionShape3D
 		var capsule := body_shape.shape as CapsuleShape3D
 		expect(capsule != null, "body hurtbox is a capsule")
 		if capsule:
-			expect(is_equal_approx(capsule.height, 0.58), "body hurtbox excludes the head")
+			expect(is_equal_approx(capsule.height, 0.80), "body hurtbox covers the whole avatar")
 			var body_bottom := body_shape.position.y - capsule.height * 0.5
+			var body_top := body_shape.position.y + capsule.height * 0.5
 			expect(body_bottom >= -0.01, "body hurtbox does not extend below the floor")
-
-	if head_hurtbox:
-		var head_shape := head_hurtbox.get_node("CollisionShape3D") as CollisionShape3D
-		var sphere := head_shape.shape as SphereShape3D
-		expect(sphere != null, "head hurtbox is a sphere")
-		if sphere:
-			var head_top := head_shape.position.y + sphere.radius
-			expect(head_top <= 0.9, "head hurtbox is inside the 0.82 m avatar silhouette")
+			expect(body_top <= 0.85, "body hurtbox stays inside the 0.82 m silhouette")
 
 	expect(player.collision_mask == 1, "player collides with world only (no predicted body collisions)")
 

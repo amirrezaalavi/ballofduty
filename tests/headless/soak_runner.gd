@@ -75,7 +75,7 @@ func _boot(args: PackedStringArray) -> void:
 	_bus.name = "EventBus"
 	root.add_child(_bus)
 	_bus.damage_dealt.connect(
-		func(_target: int, _source: int, _amount: int, _hitbox: StringName, _pos: Vector3) -> void:
+		func(_target: int, _source: int, _amount: int, _pos: Vector3) -> void:
 			_damage_signals += 1
 	)
 

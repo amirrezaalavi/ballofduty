@@ -24,10 +24,6 @@ const SHOULDER := Vector3(0.14, 0.0, -0.30)
 const CAMERA_PIVOT_HEIGHT := 0.95
 const CAMERA_SHOULDER_X := 0.35
 const CAMERA_BACK := 2.3
-## Damage-over-time is applied in fixed slices so the telemetry/HIT events stay
-## bounded and deterministic across frame rates.
-const BLEED_TICK_SEC := 0.5
-
 var stats: WeaponStats
 var world: Node
 
@@ -54,7 +50,7 @@ var rejections_by_weapon: Dictionary = {}
 ## weapon_id (String) -> accepted shots
 var shots_by_weapon: Dictionary = {}
 
-## entity_id -> {slow_left, slow_scale, bleed_left, bleed_dps, bleed_tick, source_id}
+## entity_id -> {slow_left, slow_scale}
 var statuses: Dictionary = {}
 
 
@@ -262,7 +258,7 @@ func _fire_one(
 	var yaw := frame.yaw
 	var pitch := frame.pitch
 	var origin := canonical_muzzle(actor.global_position, yaw, pitch)
-	var direction := _aim_direction(actor, yaw, pitch, origin, entry, weapon)
+	var direction := _aim_direction(actor, yaw, pitch, origin)
 	_spawn_projectile(actor, origin, direction, weapon, speed, damage)
 	return {
 		"shooter_id": actor.net_id,
@@ -291,10 +287,10 @@ func note_projectile_pierce() -> void:
 
 
 ## Called by Projectile on every damaging hurtbox contact. Applies the class
-## status hooks (slow/bleed) server-side; knockback is applied by the projectile
+## slow hook server-side; knockback is applied by the projectile
 ## directly to the victim body.
 func note_projectile_effect(
-	entity_id: int, source_id: int, weapon: WeaponStats, _direction: Vector3
+	entity_id: int, _source_id: int, weapon: WeaponStats, _direction: Vector3
 ) -> void:
 	if weapon == null or entity_id <= 0:
 		return
@@ -304,13 +300,6 @@ func note_projectile_effect(
 			float(status.get("slow_left", 0.0)), weapon.slow_duration
 		)
 		status["slow_scale"] = clampf(1.0 - weapon.slow_amount, 0.0, 1.0)
-	if weapon.bleed_dps > 0.0 and weapon.bleed_duration > 0.0:
-		status["bleed_left"] = maxf(
-			float(status.get("bleed_left", 0.0)), weapon.bleed_duration
-		)
-		status["bleed_dps"] = maxf(float(status.get("bleed_dps", 0.0)), weapon.bleed_dps)
-		status["bleed_tick"] = float(status.get("bleed_tick", BLEED_TICK_SEC))
-		status["source_id"] = source_id
 	if not status.is_empty():
 		statuses[entity_id] = status
 
@@ -424,35 +413,10 @@ func _tick_status(entry: Dictionary, delta: float) -> void:
 	var status: Dictionary = statuses[entity_id]
 	if float(status.get("slow_left", 0.0)) > 0.0:
 		status["slow_left"] = maxf(0.0, float(status["slow_left"]) - delta)
-	if float(status.get("bleed_left", 0.0)) > 0.0:
-		status["bleed_left"] = maxf(0.0, float(status["bleed_left"]) - delta)
-		status["bleed_tick"] = float(status.get("bleed_tick", BLEED_TICK_SEC)) - delta
-		if float(status["bleed_tick"]) <= 0.0:
-			status["bleed_tick"] = BLEED_TICK_SEC
-			var slice := int(round(float(status.get("bleed_dps", 0.0)) * BLEED_TICK_SEC))
-			if slice > 0:
-				_apply_bleed(entry, int(status.get("source_id", 0)), slice)
-	if float(status.get("slow_left", 0.0)) <= 0.0 and float(status.get("bleed_left", 0.0)) <= 0.0:
+	if float(status.get("slow_left", 0.0)) <= 0.0:
 		statuses.erase(entity_id)
 	else:
 		statuses[entity_id] = status
-
-
-func _apply_bleed(entry: Dictionary, source_id: int, amount: int) -> void:
-	var node_ref: Variant = entry.get("node", null)
-	if not is_instance_valid(node_ref):
-		return
-	var actor := node_ref as Node
-	if actor == null:
-		return
-	var hurtbox := actor.get_node_or_null("BodyHurtbox") as HurtboxComponent
-	if hurtbox == null:
-		return
-	var health := hurtbox.get_health()
-	var hp_before := health.current if health else 0
-	CombatResolver.apply_hit(hurtbox, amount, 1.0, source_id, actor.global_position)
-	if health != null and health.current < hp_before:
-		note_damage_hit()
 
 
 static func canonical_muzzle(actor_position: Vector3, yaw: float, pitch: float) -> Vector3:
@@ -465,7 +429,7 @@ static func canonical_direction(yaw: float, pitch: float) -> Vector3:
 
 
 ## The camera aims at a point, while the muzzle sits off to the shoulder. Firing
-## parallel to the view makes close headshots miss, so trace the view first and
+## parallel to the view makes close shots miss, so trace the view first and
 ## aim from the muzzle at the resulting point (the same correction the client
 ## applies in WeaponController._aim_direction).
 ## Yaw/pitch that put `target` under the crosshair from the third-person camera.
@@ -492,8 +456,7 @@ static func camera_origin(actor_position: Vector3, yaw: float, pitch: float) -> 
 
 
 func _aim_direction(
-	actor: PlayerController, yaw: float, pitch: float, muzzle: Vector3,
-	entry: Dictionary, weapon: WeaponStats
+	actor: PlayerController, yaw: float, pitch: float, muzzle: Vector3
 ) -> Vector3:
 	var cam := camera_origin(actor.global_position, yaw, pitch)
 	var view := canonical_direction(yaw, pitch)
@@ -502,12 +465,6 @@ func _aim_direction(
 	query.exclude = _exclusion_rids(actor)
 	var hit := actor.get_world_3d().direct_space_state.intersect_ray(query)
 	var aim_point: Vector3 = hit.position if not hit.is_empty() else cam + view * 250.0
-	# Bots aim flat like a human crosshair, but a thrown weapon drops on the way
-	# to the target. Lead the arc for bots only; players learn the drop.
-	if weapon.projectile_gravity > 0.0 and bool(entry.get("is_bot", false)):
-		var distance := aim_point.distance_to(muzzle)
-		var travel := distance / maxf(weapon.projectile_speed, 1.0)
-		aim_point += Vector3.UP * (0.5 * weapon.projectile_gravity * travel * travel)
 	return (aim_point - muzzle).normalized()
 
 
@@ -523,16 +480,17 @@ func _spawn_projectile(
 	world.add_child(projectile)
 	projectile.global_position = origin
 	projectile.telemetry = self
+	var inherited := Projectile.inherited_velocity(actor.velocity)
 	projectile.setup(
 		direction, weapon, actor.net_id, _exclusion_rids(actor),
-		speed_override, damage_override
+		speed_override, damage_override, inherited
 	)
 	projectiles_fired += 1
 
 
 func _exclusion_rids(actor: PlayerController) -> Array[RID]:
 	var rids: Array[RID] = [actor.get_rid()]
-	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+	for path: String in ["BodyHurtbox"]:
 		var area := actor.get_node_or_null(path) as Area3D
 		if area:
 			rids.append(area.get_rid())

@@ -118,7 +118,7 @@ func test_reset_player_seeds_per_class_state() -> void:
 
 	_entry["class_id"] = 1
 	_combat.reset_player(_entry)
-	expect(int(_entry["ammo"]) == 24, "Mage resets to 24 bolts")
+	expect(int(_entry["ammo"]) == 12, "Mage resets to 12 bolts")
 	expect((_entry["stats"] as WeaponStats).heat_max == 6.0, "Mage has a 6-shot heat meter")
 
 	_entry["class_id"] = 2
@@ -136,25 +136,21 @@ func test_reset_player_seeds_per_class_state() -> void:
 	expect(int(_entry["ammo"]) == 2, "Barbarian resets to two axes")
 
 
-func test_knight_body_and_head_damage() -> void:
+func test_knight_three_hits_to_kill() -> void:
 	await _setup(0)
 	var shot := await _fire_once()
 	expect(not shot.is_empty(), "Knight throw accepted")
 	expect(is_equal_approx(float(shot.get("speed", 0.0)), 40.0), "Knight projectile is 40 m/s")
-	expect(_body().current == 40, "Knight body hit deals 60 (hp %d)" % _body().current)
+	expect(_body().current == 66, "Knight body hit deals 34 (hp %d)" % _body().current)
 
-	_entry["cooldown"] = 0.0
-	_combat.reset_player(_entry)
-	_body().reset()
-	var head := (_b.get_node("HeadHurtbox/CollisionShape3D") as Node3D).global_position
-	var angles := ServerCombat.aim_angles(_a.global_position, head)
-	var frame := PlayerInputFrame.new()
-	frame.yaw = angles.x
-	frame.pitch = angles.y
-	frame.fire = true
-	_combat.process(_entry, _a, frame, DT)
-	await _settle_shot()
-	expect(_body().current == 0, "Knight head hit deals 105 and kills (hp %d)" % _body().current)
+	# Two more accepted throws end the target: 34 x 3 = 102.
+	for _i in 2:
+		_entry["cooldown"] = 0.0
+		# Semi-auto: release the trigger before the next throw.
+		_combat.process(_entry, _a, _aim_frame(false), DT)
+		_combat.process(_entry, _a, _aim_frame(true), DT)
+		await _settle_shot(10)
+	expect(_body().current == 0, "three Knight hits kill (hp %d)" % _body().current)
 
 
 func test_mage_body_damage_and_heat_lockout() -> void:
@@ -162,7 +158,7 @@ func test_mage_body_damage_and_heat_lockout() -> void:
 	var shot := await _fire_once()
 	expect(not shot.is_empty(), "Mage bolt accepted")
 	expect(is_equal_approx(float(shot.get("speed", 0.0)), 64.0), "Mage bolt is 64 m/s")
-	expect(_body().current == 72, "Mage direct body hit deals 28 (hp %d)" % _body().current)
+	expect(_body().current == 82, "Mage direct body hit deals 18 (hp %d)" % _body().current)
 	expect(_entry["overheated"] == false, "one shot is not an overheat")
 
 	# Five more accepted shots fill the meter; the seventh intent is locked out.
@@ -204,10 +200,10 @@ func test_rogue_charge_hold_then_release() -> void:
 	expect(_combat.shots_fired == shots_before + 1, "exactly one arrow on release")
 	expect(float(released.get("speed", 0.0)) > 70.0,
 		"full draw flies near 77 m/s (%.1f)" % float(released.get("speed", 0.0)))
-	expect(int(released.get("damage", 0)) >= 70,
-		"full draw deals near 75 (got %d)" % int(released.get("damage", 0)))
+	expect(int(released.get("damage", 0)) >= 55,
+		"full draw deals near 60 (got %d)" % int(released.get("damage", 0)))
 	await _settle_shot()
-	expect(_body().current <= 30 and _body().current >= 20, "full-draw body hit deals about 75 (hp %d)" % _body().current)
+	expect(_body().current == 41, "full-draw body hit deals ~59 at 98%% (hp %d)" % _body().current)
 
 	# A tap below the minimum draw ratio does not fire.
 	_entry["cooldown"] = 0.0

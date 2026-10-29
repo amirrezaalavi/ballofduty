@@ -6,7 +6,7 @@ extends Node
 
 enum NetMode { OFFLINE, SERVER, CLIENT }
 
-signal server_hit(headshot: bool, killed: bool)
+signal server_hit(killed: bool)
 signal server_death(victim_id: int, killer_id: int)
 signal server_respawn(player_id: int, position: Vector3, yaw: float)
 signal server_shot(shooter_id: int, origin: Vector3, direction: Vector3)
@@ -396,7 +396,7 @@ func _new_entry(
 
 
 func _set_hurtboxes(node: Node, enabled: bool) -> void:
-	for path: String in ["BodyHurtbox", "HeadHurtbox"]:
+	for path: String in ["BodyHurtbox"]:
 		var hurtbox := node.get_node_or_null(path) as HurtboxComponent
 		if hurtbox:
 			hurtbox.damage_enabled = enabled
@@ -420,7 +420,7 @@ func _snapshot_entry(entry: Dictionary, actor: PlayerController, dead: bool = fa
 	}
 
 
-func _on_server_damage(target_id: int, source_id: int, damage: int, hitbox: StringName, position: Vector3) -> void:
+func _on_server_damage(target_id: int, source_id: int, damage: int, position: Vector3) -> void:
 	if net_mode != NetMode.SERVER:
 		return
 	var target := _entry_by_id(target_id)
@@ -430,7 +430,7 @@ func _on_server_damage(target_id: int, source_id: int, damage: int, hitbox: Stri
 	_hits_total += 1
 	var killed := health != null and health.current <= 0
 	_broadcast_event(NetProtocol.encode_event_hit(
-		target_id, source_id, damage, String(hitbox) == "head", killed, position
+		target_id, source_id, damage, killed, position
 	))
 
 
@@ -919,7 +919,7 @@ func _on_server_event(event: Dictionary) -> void:
 				)
 		NetProtocol.EventType.HIT:
 			if int(event["shooter_id"]) == local_id:
-				server_hit.emit(bool(event["headshot"]), bool(event["killed"]))
+				server_hit.emit(bool(event["killed"]))
 				var audio := get_node_or_null("/root/AudioManager")
 				if audio:
 					audio.play_hit()

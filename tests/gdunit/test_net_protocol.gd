@@ -114,12 +114,13 @@ func test_events_roundtrip() -> void:
 	expect((shot.get("direction", Vector3.ZERO) as Vector3).distance_to(direction) < 0.001, "shot direction quantized")
 
 	var hit := NetProtocol.decode_event(NetProtocol.encode_event_hit(
-		2, 3, 50, true, true, Vector3(2.0, 0.9, 0.0)
+		2, 3, 34, true, Vector3(2.0, 0.9, 0.0)
 	))
 	expect(hit.get("type") == NetProtocol.EventType.HIT, "hit event type")
 	expect(int(hit.get("target_id", -1)) == 2 and int(hit.get("shooter_id", -1)) == 3, "hit ids")
-	expect(int(hit.get("damage", 0)) == 50, "hit damage")
-	expect(bool(hit.get("headshot")) and bool(hit.get("killed")), "hit headshot/killed flags")
+	expect(int(hit.get("damage", 0)) == 34, "hit damage")
+	expect(bool(hit.get("killed")), "hit killed flag")
+	expect(not hit.has("headshot"), "hit events carry no headshot flag")
 
 	var death := NetProtocol.decode_event(NetProtocol.encode_event_death(2, 3, Vector3(2, 0, 0)))
 	expect(death.get("type") == NetProtocol.EventType.DEATH, "death event type")

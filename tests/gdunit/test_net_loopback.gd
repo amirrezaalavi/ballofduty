@@ -142,7 +142,7 @@ func test_replication_pipeline() -> void:
 	var ghost_health := ghost_hurtbox.get_health() if ghost_hurtbox else null
 	if ghost_hurtbox and ghost_health:
 		var hp_before: int = ghost_health.current
-		var damaged := CombatResolver.apply_hit(ghost_hurtbox, 25, 2.0, client_b_gm.local_id, Vector3.ZERO)
+		var damaged := CombatResolver.apply_hit(ghost_hurtbox, 25, client_b_gm.local_id, Vector3.ZERO)
 		expect(not ghost_hurtbox.damage_enabled, "ghost hurtbox is non-authoritative")
 		expect(
 			not damaged and ghost_health.current == hp_before,

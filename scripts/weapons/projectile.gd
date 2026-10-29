@@ -2,20 +2,31 @@ class_name Projectile
 extends Node3D
 ## Swept projectile. A ray from the previous position to the new position each
 ## physics tick prevents tunneling at 81 m/s / 30 Hz. Phase 2A adds class
-## ballistics: gravity drop, pierce, splash and status-effect hooks. All of it
-## resolves on the authoritative server with normal physics queries; clients
-## still only see SHOT/HIT events.
+## ballistics: pierce, splash and a slow hook. All of it resolves on the
+## authoritative server with normal physics queries; clients still only see
+## SHOT/HIT events. Rounds fly flat and optionally inherit shooter velocity.
 ##
 ## Phase 1 C: resolution is reported to an optional telemetry sink (ServerCombat)
 ## so the soak can prove that every spawned round ends as a hit, a world impact
 ## or an expiry. Impacts use the shared BulletField pool: a shot no longer
 ## allocates a mesh/material per hit.
 
-signal hit_confirmed(headshot: bool, killed: bool)
+signal hit_confirmed(killed: bool)
+
+## EXPERIMENTAL: a round keeps the shooter's velocity, so strafing, sprinting or
+## jumping nudges the throw. Flip this off (or set the scale to 0) to return to
+## purely muzzle-relative shots. Shared by the server and offline play.
+const INHERIT_SHOOTER_VELOCITY := true
+const INHERIT_SHOOTER_VELOCITY_SCALE := 1.0
+
+
+static func inherited_velocity(shooter_velocity: Vector3) -> Vector3:
+	if not INHERIT_SHOOTER_VELOCITY:
+		return Vector3.ZERO
+	return shooter_velocity * INHERIT_SHOOTER_VELOCITY_SCALE
 
 var velocity: Vector3 = Vector3.ZERO
 var damage: int = 25
-var headshot_multiplier: float = 2.0
 var source_id: int = 0
 var lifetime: float = 2.5
 var exclusion_rids: Array[RID] = []
@@ -24,7 +35,6 @@ var telemetry: Object = null
 
 # Class ballistics/effects snapshot.
 var weapon: WeaponStats = null
-var gravity: float = 0.0
 var pierce_left: int = 0
 var splash_radius: float = 0.0
 var splash_damage: int = 0
@@ -41,19 +51,18 @@ func setup(
 	shooter_id: int,
 	exclude: Array[RID],
 	speed_override: float = -1.0,
-	damage_override: int = -1
+	damage_override: int = -1,
+	inherit_velocity: Vector3 = Vector3.ZERO
 ) -> void:
 	weapon = stats
 	var speed := stats.projectile_speed
 	if speed_override >= 0.0:
 		speed = speed_override
-	velocity = direction.normalized() * speed
+	velocity = direction.normalized() * speed + inherit_velocity
 	damage = stats.damage
 	if damage_override >= 0:
 		damage = damage_override
-	headshot_multiplier = stats.headshot_multiplier
 	lifetime = stats.projectile_lifetime
-	gravity = stats.projectile_gravity
 	pierce_left = stats.pierce
 	splash_radius = stats.splash_radius
 	splash_damage = stats.splash_damage
@@ -69,8 +78,6 @@ func _physics_process(delta: float) -> void:
 	if velocity.length_squared() < 0.001:
 		return
 
-	if gravity != 0.0:
-		velocity.y -= gravity * delta
 	var from := global_position
 	var to := from + velocity * delta
 	var query := PhysicsRayQueryParameters3D.create(from, to, 1 | 8)
@@ -104,7 +111,7 @@ func _impact(hit: Dictionary) -> void:
 	var damaged := false
 	if not already_hit:
 		_hit_entities[entity_key] = true
-		damaged = _damage_hurtbox(hurtbox, damage, headshot_multiplier, hit.position)
+		damaged = _damage_hurtbox(hurtbox, damage, hit.position)
 		if damaged:
 			_apply_hit_effects(hurtbox)
 	else:
@@ -134,18 +141,17 @@ func _impact(hit: Dictionary) -> void:
 
 ## Returns true when the contact actually removed HP.
 func _damage_hurtbox(
-	hurtbox: HurtboxComponent, base_damage: int, multiplier: float, position: Vector3
+	hurtbox: HurtboxComponent, base_damage: int, position: Vector3
 ) -> bool:
 	var health := hurtbox.get_health()
 	var hp_before := health.current if health else 0
-	var headshot := hurtbox.hitbox_name == &"head"
 	var killed := CombatResolver.apply_hit(
-		hurtbox, base_damage, multiplier, source_id, position
+		hurtbox, base_damage, source_id, position
 	)
 	var damaged := health != null and health.current < hp_before
 	if damaged and hurtbox.entity_id > 0 and telemetry != null:
 		telemetry.call("note_damage_hit")
-	hit_confirmed.emit(headshot, killed)
+	hit_confirmed.emit(killed)
 	return damaged
 
 
@@ -162,7 +168,7 @@ func _apply_hit_effects(hurtbox: HurtboxComponent) -> void:
 			body.velocity.y += weapon.knockback * 0.2
 	if telemetry == null:
 		return
-	if weapon.slow_amount > 0.0 or weapon.bleed_dps > 0.0:
+	if weapon.slow_amount > 0.0:
 		telemetry.call(
 			"note_projectile_effect", hurtbox.entity_id, source_id, weapon, velocity.normalized()
 		)
@@ -199,7 +205,7 @@ func _apply_splash(point: Vector3, direct: HurtboxComponent) -> void:
 		var amount := int(round(splash_damage * lerpf(1.0, splash_edge_scale, t)))
 		if amount <= 0:
 			continue
-		_damage_hurtbox(hurtbox, amount, 1.0, point)
+		_damage_hurtbox(hurtbox, amount, point)
 
 
 func _entity_key(hurtbox: HurtboxComponent) -> int:

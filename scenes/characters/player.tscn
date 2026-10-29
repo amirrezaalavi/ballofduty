@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://scripts/player/player_controller.gd" id="1_player"]
 [ext_resource type="Resource" path="res://resources/players/default_player.tres" id="2_stats"]
@@ -22,10 +22,7 @@ radius = 0.05
 
 [sub_resource type="CapsuleShape3D" id="Shape_hit_body"]
 radius = 0.19
-height = 0.58
-
-[sub_resource type="SphereShape3D" id="Shape_hit_head"]
-radius = 0.115
+height = 0.80
 
 [sub_resource type="SphereMesh" id="Mesh_flash"]
 radius = 0.05
@@ -71,25 +68,11 @@ collision_mask = 0
 monitoring = false
 script = ExtResource("9_hurtbox")
 entity_id = 0
-hitbox_name = &"body"
 health_path = NodePath("../HealthComponent")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="BodyHurtbox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.29, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.40, 0)
 shape = SubResource("Shape_hit_body")
-
-[node name="HeadHurtbox" type="Area3D" parent="."]
-collision_layer = 8
-collision_mask = 0
-monitoring = false
-script = ExtResource("9_hurtbox")
-entity_id = 0
-hitbox_name = &"head"
-health_path = NodePath("../HealthComponent")
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="HeadHurtbox"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.72, 0)
-shape = SubResource("Shape_hit_head")
 
 [node name="WeaponController" type="Node" parent="."]
 script = ExtResource("11_weapon_controller")
