@@ -17,7 +17,7 @@ signal roster_updated(entries: Array)
 signal snapshot_received(tick: int, entries: Array)
 signal event_received(event: Dictionary)
 signal remote_input(peer_id: int, frame: Dictionary)
-signal peer_joined(peer_id: int, player_name: String)
+signal peer_joined(peer_id: int, player_name: String, class_id: int)
 signal peer_left(peer_id: int)
 signal ping_updated(rtt_ms: int)
 signal connection_failed
@@ -84,6 +84,7 @@ var _retry_attempt: int = 0
 var _had_connection: bool = false
 var _needs_rejoin: bool = false
 var _join_name: String = ""
+var _join_class: int = 0
 var _grace_deadline_msec: int = 0
 var _reconnecting: bool = false
 var _closing_peer: bool = false
@@ -287,13 +288,14 @@ func stop() -> void:
 	_intentional_stop = false
 
 
-func send_join_request(display_name: String) -> void:
+func send_join_request(display_name: String, class_id: int = 0) -> void:
 	if mode != Mode.CLIENT:
 		return
 	_join_name = display_name
+	_join_class = NetProtocol.sanitize_class(class_id)
 	_join_requested_msec = Time.get_ticks_msec()
 	_pending_joins[1] = _join_requested_msec
-	client_send(NetProtocol.encode_join_request(display_name))
+	client_send(NetProtocol.encode_join_request(_join_name, _join_class))
 
 
 func _on_peer_connected(peer_id: int) -> void:
@@ -356,7 +358,7 @@ func _check_client_connection() -> void:
 			_needs_rejoin = false
 			_join_requested_msec = Time.get_ticks_msec()
 			_pending_joins[1] = _join_requested_msec
-			client_send(NetProtocol.encode_join_request(_join_name))
+			client_send(NetProtocol.encode_join_request(_join_name, _join_class))
 			reconnected.emit()
 		return
 	if _retry_scheduled:
@@ -497,7 +499,7 @@ func _route_server(sender: int, msg: int, pkt: PackedByteArray) -> void:
 				packets_rejected += 1
 				return
 			_pending_joins.erase(sender)
-			peer_joined.emit(sender, req["name"])
+			peer_joined.emit(sender, req["name"], int(req.get("class_id", 0)))
 		NetProtocol.Msg.INPUT:
 			var frame := NetProtocol.decode_input(pkt)
 			if frame.is_empty():
@@ -527,7 +529,10 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			last_error = ""
 			_reconnecting = false
 			_grace_deadline_msec = 0
-			join_accepted.emit(int(ok["id"]), {"pos": ok["spawn"], "yaw": float(ok["yaw"]), "tick": int(ok["tick"])})
+			join_accepted.emit(int(ok["id"]), {
+				"pos": ok["spawn"], "yaw": float(ok["yaw"]),
+				"tick": int(ok["tick"]), "class_id": int(ok["class_id"]),
+			})
 		NetProtocol.Msg.DENY:
 			join_denied.emit(pkt[1] if pkt.size() > 1 else -1)
 		NetProtocol.Msg.ROSTER:

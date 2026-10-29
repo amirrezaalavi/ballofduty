@@ -24,6 +24,7 @@ const AIM_HOLD_MSEC := 1500
 
 var net_role: NetRole = NetRole.LOCAL
 var net_id: int = 0
+var class_id: int = 0
 var last_seq: int = 0
 var dead: bool = false
 var net_dead: bool = false
@@ -74,9 +75,10 @@ func _ready() -> void:
 			camera.current = false
 
 
-func make_remote(remote_id: int) -> void:
+func make_remote(remote_id: int, player_class: int = 0) -> void:
 	disable_prediction()
 	net_role = NetRole.REMOTE
+	class_id = player_class
 	# Remote puppets are driven from _process; engine physics interpolation
 	# would add a second, conflicting 30 Hz interpolation pass.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -108,10 +110,11 @@ func make_remote(remote_id: int) -> void:
 		add_child(interp)
 
 
-func make_server(server_id: int) -> void:
+func make_server(server_id: int, player_class: int = 0) -> void:
 	disable_prediction()
 	net_role = NetRole.SERVER
 	net_id = server_id
+	class_id = player_class
 	if weapon:
 		weapon.spawn_projectiles = false
 	for path: String in ["BodyHurtbox", "HeadHurtbox"]:

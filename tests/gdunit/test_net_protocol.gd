@@ -132,3 +132,18 @@ func test_events_roundtrip() -> void:
 
 	expect(NetProtocol.decode_event(PackedByteArray([10, 1, 1])) == {}, "truncated event rejected")
 	expect(NetProtocol.decode_event(PackedByteArray([10, 99, 1])) == {}, "unknown event rejected")
+
+
+func test_class_id_roundtrip() -> void:
+	var req := NetProtocol.decode_join_request(NetProtocol.encode_join_request("Mage", 4))
+	expect(int(req.get("class_id", -1)) == 4, "join request carries class 4")
+	var clamped := NetProtocol.decode_join_request(NetProtocol.encode_join_request("X", 99))
+	expect(int(clamped.get("class_id", -1)) == NetProtocol.CLASS_COUNT - 1, "class id is clamped")
+	var ok := NetProtocol.decode_join_ok(NetProtocol.encode_join_ok(2, 10, Vector3.ZERO, 0.0, 3))
+	expect(int(ok.get("class_id", -1)) == 3, "join ok carries class 3")
+	var roster := NetProtocol.decode_roster(NetProtocol.encode_roster([
+		{"id": 1, "name": "A", "class_id": 2},
+		{"id": 2, "name": "B", "class_id": 4},
+	]))
+	expect(int(roster["entries"][0]["class_id"]) == 2, "roster class 2")
+	expect(int(roster["entries"][1]["class_id"]) == 4, "roster class 4")

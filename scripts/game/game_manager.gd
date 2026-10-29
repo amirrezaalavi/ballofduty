@@ -77,6 +77,7 @@ var net: Node = null:
 var _remotes: Dictionary = {} # id -> PlayerController
 var _join_sent: bool = false
 var _wanted_name: String = "Player"
+var _wanted_class: int = 0
 
 
 func _net() -> Node:
@@ -178,11 +179,15 @@ func server_player_count() -> int:
 func server_roster_names() -> Array:
 	var out: Array = []
 	for peer_id in _roster:
-		out.append({"id": _roster[peer_id]["id"], "name": _roster[peer_id]["name"]})
+		out.append({
+			"id": int(_roster[peer_id]["id"]),
+			"name": String(_roster[peer_id]["name"]),
+			"class_id": int(_roster[peer_id].get("class_id", 0)),
+		})
 	return out
 
 
-func _on_peer_joined(peer_id: int, player_name: String) -> void:
+func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> void:
 	if net_mode != NetMode.SERVER:
 		return
 	var net := _net()
@@ -200,16 +205,19 @@ func _on_peer_joined(peer_id: int, player_name: String) -> void:
 	var assigned: int = _free_ids.pop_front() if not _free_ids.is_empty() else _next_id
 	_next_id = maxi(_next_id, assigned + 1)
 	var slot := _claim_slot(peer_id)
-	var node := _spawn_server_actor(assigned, slot)
+	var player_class := NetProtocol.sanitize_class(class_id)
+	var node := _spawn_server_actor(assigned, slot, player_class)
 	# The client must start where authority put it, or every other player sees it
 	# 20+ m away from where its owner does.
 	var spawn_pos := node.global_position
 	var spawn_yaw := node.rotation.y
 	var initial := PlayerInputFrame.new()
 	initial.yaw = spawn_yaw
-	_roster[peer_id] = _new_entry(assigned, player_name, node, peer_id)
+	_roster[peer_id] = _new_entry(assigned, player_name, node, peer_id, player_class)
 	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
-	net.server_send(peer_id, NetProtocol.encode_join_ok(assigned, _server_tick, spawn_pos, spawn_yaw))
+	net.server_send(peer_id, NetProtocol.encode_join_ok(
+		assigned, _server_tick, spawn_pos, spawn_yaw, player_class
+	))
 	_broadcast_roster()
 
 
@@ -364,11 +372,16 @@ func _physics_process(delta: float) -> void:
 				net.server_send(peer_id, snapshot)
 
 
-func _new_entry(player_id: int, player_name: String, node: PlayerController, peer_id: int) -> Dictionary:
+func _new_entry(
+	player_id: int, player_name: String, node: PlayerController, peer_id: int,
+	player_class: int = 0
+) -> Dictionary:
 	var initial := PlayerInputFrame.new()
 	initial.yaw = node.rotation.y
+	node.class_id = NetProtocol.sanitize_class(player_class)
 	var entry := {
 		"id": player_id, "name": player_name, "node": node,
+		"class_id": node.class_id,
 		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
 		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
 		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "frozen_ticks": 0,
@@ -512,8 +525,9 @@ func _spawn_bot(index: int) -> void:
 	var id: int = _free_ids.pop_front()
 	var peer_id := BOT_PEER_BASE - index
 	var slot := _claim_slot(peer_id)
-	var node := _spawn_server_actor(id, slot)
-	_roster[peer_id] = _new_entry(id, "BOT %d" % (index + 1), node, peer_id)
+	var bot_class := index % NetProtocol.CLASS_COUNT
+	var node := _spawn_server_actor(id, slot, bot_class)
+	_roster[peer_id] = _new_entry(id, "BOT %d" % (index + 1), node, peer_id, bot_class)
 	print("BALL_OF_DUTY bot id=%d name=BOT %d" % [id, index + 1])
 
 
@@ -724,11 +738,11 @@ func server_player_stats(player_id: int) -> Dictionary:
 	return {}
 
 
-func _spawn_server_actor(assigned_id: int, slot: int) -> PlayerController:
+func _spawn_server_actor(assigned_id: int, slot: int, player_class: int = 0) -> PlayerController:
 	var actor := PLAYER_SCENE.instantiate() as PlayerController
 	actor.name = "ServerPlayer_%d" % assigned_id
 	_world.add_child(actor)
-	actor.make_server(assigned_id)
+	actor.make_server(assigned_id, player_class)
 	var pos := Vector3(0.0, 0.2, 0.0)
 	var yaw := 0.0
 	if slot >= 0 and slot < _spawns.size():
@@ -780,7 +794,9 @@ static func collect_spawn_points(world: Node) -> Array:
 
 # --- client ---------------------------------------------------------------
 
-func client_start(world: Node, host: String, port: int, display_name: String) -> int:
+func client_start(
+	world: Node, host: String, port: int, display_name: String, class_id: int = 0
+) -> int:
 	_reset()
 	_client_error = ""
 	var net := _net()
@@ -792,6 +808,7 @@ func client_start(world: Node, host: String, port: int, display_name: String) ->
 	net_mode = NetMode.CLIENT
 	_world = world
 	_wanted_name = NetProtocol.sanitize_name(display_name)
+	_wanted_class = NetProtocol.sanitize_class(class_id)
 	_join_sent = false
 	var local := _world.get_node_or_null("Player") as PlayerController
 	if local:
@@ -829,7 +846,7 @@ func _poll_client_connection() -> void:
 	var peer_status: int = net.connection_status()
 	if peer_status == MultiplayerPeer.CONNECTION_CONNECTED:
 		_join_sent = true
-		net.send_join_request(_wanted_name)
+		net.send_join_request(_wanted_name, _wanted_class)
 
 
 func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
@@ -843,6 +860,7 @@ func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 	var local := _world.get_node_or_null("Player") as PlayerController if _world else null
 	if local:
 		local.net_id = local_id
+		local.class_id = NetProtocol.sanitize_class(int(spawn.get("class_id", _wanted_class)))
 		# Adopt the authoritative spawn pose so this client and every other
 		# client agree on where this player is standing from tick one.
 		if spawn.has("pos"):
@@ -875,7 +893,7 @@ func _on_roster_updated(entries: Array) -> void:
 			continue
 		seen[rid] = true
 		if not _remotes.has(rid):
-			_spawn_remote(rid, String(entry["name"]))
+			_spawn_remote(rid, String(entry["name"]), int(entry.get("class_id", 0)))
 	if local_id > 0:
 		seen[local_id] = true
 	for rid in _remotes.keys():
@@ -961,13 +979,13 @@ func _on_snapshot_received(_tick: int, entries: Array) -> void:
 			)
 
 
-func _spawn_remote(rid: int, display_name: String) -> void:
+func _spawn_remote(rid: int, display_name: String, player_class: int = 0) -> void:
 	if _world == null or rid == local_id:
 		return
 	var remote := PLAYER_SCENE.instantiate() as PlayerController
 	remote.name = "Remote_%d" % rid
 	_world.add_child(remote)
-	remote.make_remote(rid)
+	remote.make_remote(rid, player_class)
 	remote.visible = false
 	_remotes[rid] = remote
 

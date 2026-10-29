@@ -15,11 +15,16 @@ enum EventType { SHOT = 1, HIT = 2, DEATH = 3, RESPAWN = 4 }
 enum AnimState { STILL = 0, WALK = 1, SPRINT = 2, AIR = 3 }
 
 const MAX_PLAYERS := 8
+const CLASS_COUNT := 5
 const MAX_NAME_BYTES := 16
 const MAX_PACKET_BYTES := 2048
 const POS_RANGE := 32.768
 const PITCH_RANGE := 1.6
 const VEL_RANGE := 327.67
+
+
+static func sanitize_class(raw: int) -> int:
+	return clampi(raw, 0, CLASS_COUNT - 1)
 
 
 static func sanitize_name(raw: String) -> String:
@@ -31,39 +36,47 @@ static func sanitize_name(raw: String) -> String:
 	return out if out != "" else "Player"
 
 
-static func encode_join_request(display_name: String) -> PackedByteArray:
+static func encode_join_request(display_name: String, class_id: int = 0) -> PackedByteArray:
 	var body := sanitize_name(display_name).to_utf8_buffer().slice(0, MAX_NAME_BYTES)
-	var pkt := PackedByteArray([Msg.JOIN_REQ, body.size()])
+	var pkt := PackedByteArray([Msg.JOIN_REQ, body.size(), sanitize_class(class_id)])
 	pkt.append_array(body)
 	return pkt
 
 
 static func decode_join_request(pkt: PackedByteArray) -> Dictionary:
-	if pkt.size() < 2 or pkt[0] != Msg.JOIN_REQ:
+	if pkt.size() < 3 or pkt[0] != Msg.JOIN_REQ:
 		return {}
 	var name_len := pkt[1]
-	if name_len > MAX_NAME_BYTES or pkt.size() != 2 + name_len:
+	if name_len > MAX_NAME_BYTES or pkt.size() != 3 + name_len:
 		return {}
-	return {"name": sanitize_name(pkt.slice(2).get_string_from_utf8())}
+	return {
+		"name": sanitize_name(pkt.slice(3).get_string_from_utf8()),
+		"class_id": sanitize_class(pkt[2]),
+	}
 
 
-static func encode_join_ok(player_id: int, server_tick: int, spawn: Vector3 = Vector3.ZERO, yaw: float = 0.0) -> PackedByteArray:
+static func encode_join_ok(
+	player_id: int, server_tick: int, spawn: Vector3 = Vector3.ZERO,
+	yaw: float = 0.0, class_id: int = 0
+) -> PackedByteArray:
 	var pkt := PackedByteArray([Msg.JOIN_OK, player_id & 0xFF]) + _u32(server_tick)
 	pkt.append_array(_i16(_quant_pos(spawn.x)))
 	pkt.append_array(_i16(_quant_pos(spawn.y)))
 	pkt.append_array(_i16(_quant_pos(spawn.z)))
 	pkt.append_array(_i16(int(roundf(clampf(wrapf(yaw, -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
+	pkt.append(sanitize_class(class_id))
 	return pkt
 
 
 static func decode_join_ok(pkt: PackedByteArray) -> Dictionary:
-	if pkt.size() != 14 or pkt[0] != Msg.JOIN_OK:
+	if pkt.size() != 15 or pkt[0] != Msg.JOIN_OK:
 		return {}
 	return {
 		"id": pkt[1],
 		"tick": _get_u32(pkt, 2),
 		"spawn": Vector3(_dequant_pos(_get_i16(pkt, 6)), _dequant_pos(_get_i16(pkt, 8)), _dequant_pos(_get_i16(pkt, 10))),
 		"yaw": float(_get_i16(pkt, 12)) / 32767.0 * PI,
+		"class_id": sanitize_class(pkt[14]),
 	}
 
 
@@ -72,11 +85,12 @@ static func encode_deny(reason: int) -> PackedByteArray:
 
 
 static func encode_roster(entries: Array) -> PackedByteArray:
-	# entries: Array of {id: int, name: String}
+	# entries: Array of {id: int, class_id: int, name: String}
 	var pkt := PackedByteArray([Msg.ROSTER, mini(entries.size(), MAX_PLAYERS)])
 	for entry in entries:
 		var body := String(entry["name"]).to_utf8_buffer().slice(0, MAX_NAME_BYTES)
 		pkt.append(entry["id"] & 0xFF)
+		pkt.append(sanitize_class(int(entry.get("class_id", 0))))
 		pkt.append(body.size())
 		pkt.append_array(body)
 	return pkt
@@ -91,14 +105,19 @@ static func decode_roster(pkt: PackedByteArray) -> Dictionary:
 	var entries: Array = []
 	var offset := 2
 	for _i in count:
-		if offset + 2 > pkt.size():
+		if offset + 3 > pkt.size():
 			return {}
 		var pid := pkt[offset]
-		var name_len := pkt[offset + 1]
-		offset += 2
+		var class_id := sanitize_class(pkt[offset + 1])
+		var name_len := pkt[offset + 2]
+		offset += 3
 		if name_len > MAX_NAME_BYTES or offset + name_len > pkt.size():
 			return {}
-		entries.append({"id": pid, "name": sanitize_name(pkt.slice(offset, offset + name_len).get_string_from_utf8())})
+		entries.append({
+			"id": pid,
+			"class_id": class_id,
+			"name": sanitize_name(pkt.slice(offset, offset + name_len).get_string_from_utf8()),
+		})
 		offset += name_len
 	if offset != pkt.size():
 		return {}
