@@ -60,8 +60,11 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 - **Weapon presentation:** the gun follows `DEF-hand.R` via an external `BoneAttachment3D`, with a
   filtered upper-body `Pistol_Aim_Neutral` hold overlay and a filtered `Pistol_Shoot` one-shot.
   Lower-body tracks stay with the main `AnimationPlayer`, so walking and shooting compose.
-- **Web loop:** `Engine.max_physics_steps_per_frame = 2` and `physics_jitter_fix = 0` prevent
-  background-tab catch-up bursts from flooding the input queue.
+- **Web loop:** `Engine.max_physics_steps_per_frame = 4` and `physics_jitter_fix = 0` prevent
+  background-tab catch-up bursts while still feeding 30 Hz down to ~7.5 FPS.
+- **Starvation:** an empty input queue allows at most 2 extrapolated ticks, then freezes the actor.
+  The ack stays pinned to the last received input; inventing an ack would have no client-side state
+  to reconcile against.
 - **Prediction & reconciliation (CP4b):** the client stores every locally simulated frame with its
   resulting state. A snapshot for the local id rewinds the body to the acked pose+velocity and
   replays all unacked inputs through `LocomotionComponent`. The collision body takes authority

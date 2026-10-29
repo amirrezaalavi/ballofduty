@@ -85,6 +85,7 @@ res://
 - [`assets/CREDITS.md`](assets/CREDITS.md) — third-party asset licenses
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — authority model, layers, events, directories
 - [`docs/TESTING.md`](docs/TESTING.md) — gdUnit4 suites, reports, dev tooling
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — planned single-origin Caddy/WSS deployment
 
 ## License
 

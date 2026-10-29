@@ -195,11 +195,11 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 **Owner:** me (build), **you** (gameplay test). **Gate:** CP4b acceptance.
 
 ### Tasks
-1. Fire intent `{seq, client_tick, aim_yaw, aim_pitch, buttons}` → server derives origin/direction from its own player state, validates fire rate/ammo/ownership, spawns authoritative projectile.
-2. Client cosmetic tracer prediction; hitmarker/kill confirmed by server events.
+1. Fire intent `{seq, client_tick, aim_yaw, aim_pitch, buttons}` → server derives a **canonical muzzle origin** (root + eye height + shoulder offset; never a skeleton bone) and direction from its own state, validates fire rate/ammo/ownership, spawns authoritative projectile.
+2. Client cosmetic tracer prediction; **no hitmarker before a server hit-confirmation event** (cosmetic tracer and authoritative hit are separate events). No rewind: at 90 m/s the ballistic lead dominates network latency, so players lead the projectile, not the client's past.
 3. Server hurtbox resolution + damage + death + kill attribution (`source_id` on projectile).
 4. Server-authoritative respawn selection (farthest spawn with LOS check), 1.5 s spawn protection.
-5. Server-side bots (simple chase/strafe/shoot AI) usable to fill a match and to test solo.
+5. Server-side bots (simple chase/strafe/shoot AI) usable to fill a match and to test solo. Use a **pre-baked navmesh** shipped with the map (no runtime bake), `NavigationAgent3D` with `avoidance_enabled = false`, and wait one physics frame before the first path query.
 6. Authored events: `shot_fired`, `damage_dealt`, `player_died`, `kill_credited`.
 
 ### Acceptance criteria

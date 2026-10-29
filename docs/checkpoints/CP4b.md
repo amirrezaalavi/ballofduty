@@ -40,6 +40,22 @@ Browser feedback from the first CP4b test, and what changed:
 | Trees could be walked through | Border ring now gets trunk colliders too (diagonals fall inside the square cliff) | `test_world_geometry`; colliders 117 → 145 |
 | `ERR_CONNECTION_REFUSED` once | A tab opened while the server was being restarted; clients do not retry until CP4d. Refresh fixes it | no code change |
 
+### Low-FPS input policy
+
+- `Engine.max_physics_steps_per_frame = 4`: a 30 Hz client keeps feeding the server down to ~7.5 FPS
+  without an uncapped catch-up burst. `physics_jitter_fix = 0` stays.
+- When the server queue is empty it may **extrapolate at most 2 ticks**, then freezes the actor until
+  input arrives. The ack stays pinned to the last input actually received.
+- We deliberately do **not** advance the ack on a repeated frame: the ack is an input sequence number,
+  and reconciliation compares the client's stored state for that sequence with the server pose. An
+  invented ack has no client state (and `ack > last_seq` is ignored), so applying it would force a
+  snap. Bounded extrapolation keeps the invented motion to ≤2 ticks (~0.06 m at walk speed) and the
+  freeze caps it.
+- Regression: a client sending one input every 5 ticks froze for 16/40 ticks with `starved=4`,
+  `ack` pinned, and zero displacement rejections.
+- Visual correction smoothing already runs at ~100 ms (`Visual`/`CameraPivot` offset), independent of
+  the physics correction.
+
 Also: a 180° turn could resolve to opposite rotation directions on client and server after yaw quantization, producing ~0.4 m corrections. Fixed with a deterministic +PI tie-break and covered by a regression test. The overlay now reports the recent ack error and current visual offset instead of stale values.
 
 Screenshots: [`cp4b-gun-ready.png`](./cp4b-gun-ready.png), [`cp4b-turn.png`](./cp4b-turn.png).
@@ -59,9 +75,9 @@ Screenshots: [`cp4b-gun-ready.png`](./cp4b-gun-ready.png), [`cp4b-turn.png`](./c
 | Suite | Result |
 |---|---|
 | `tests/gdunit/test_prediction.gd` | **3 cases / 13 assertions** — deterministic replay, divergence correction + decay, stale ack ignored |
-| `tests/gdunit/test_net_loopback.gd` | **1 case / 37 assertions** — adds prediction p95, forced divergence recovery, ordered/duplicate/flooded input |
+| `tests/gdunit/test_net_loopback.gd` | **1 case / 39 assertions** — adds prediction p95, forced divergence recovery, ordered/duplicate/flooded input |
 | `tests/gdunit/test_net_protocol.gd` | **6 cases / 30 assertions** — 182 B budget, velocity + ground flag roundtrip |
-| Full suite | **38 test cases · ~488 assertions · 0 failures** |
+| Full suite | **38 test cases · ~490 assertions · 0 failures** |
 
 Measured on this machine:
 
@@ -121,6 +137,8 @@ The server/web are left running for the retest. Stop with `tools/dev.sh down`.
 
 ## Known gaps carried into CP4c
 
+- At <7.5 FPS the client cannot feed 30 Hz; the freeze keeps authority honest but movement will visibly
+  stutter. Hidden tabs are expected to pause rather than play.
 - Prediction covers movement only. Firing, ammo, hit registration and death are still local/CP3.
 - The input packet has no fire/reload intent yet; CP4c adds `{seq, tick, aim, buttons}` validation.
 - Reconnect/grace and repeated-abuse escalation are CP4d.

@@ -15,9 +15,9 @@ var _connect_button: Button
 
 func _ready() -> void:
 	# Background tabs deliver second-long frame gaps; uncapped catch-up runs many
-	# physics steps and bursts inputs at the server. Clamp to 2 and drop the
-	# jitter fix so the accumulator cannot drift across the gap.
-	Engine.max_physics_steps_per_frame = 2
+	# physics steps and bursts inputs at the server. Cap at 4: a 30 Hz client can
+	# still feed the server down to ~7.5 FPS, while a hidden tab cannot burst.
+	Engine.max_physics_steps_per_frame = 4
 	Engine.physics_jitter_fix = 0.0
 	var user_args := OS.get_cmdline_user_args()
 	if OS.has_feature("dedicated_server") or user_args.has("--server"):

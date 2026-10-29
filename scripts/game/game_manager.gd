@@ -12,6 +12,12 @@ const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
 ## queues instead of overwriting. Oldest frames are dropped past the cap.
 const MAX_INPUT_QUEUE := 16
 const INPUT_RATE_LIMIT := 90
+## If a client cannot feed 30 inputs/s, extrapolate at most this many server
+## ticks, then freeze the actor until input arrives. The ack stays pinned to the
+## last input actually received, so the client never replays against a state the
+## server invented. (Advancing the ack on a repeat would have no client-side
+## state to compare and would force a snap.)
+const MAX_EXTRAPOLATION_TICKS := 2
 
 var net_mode: NetMode = NetMode.OFFLINE
 ## Dev-server console stats (1 line/s/player); enabled with --net-stats.
@@ -148,7 +154,7 @@ func _on_peer_joined(peer_id: int, player_name: String) -> void:
 		"id": assigned, "name": player_name, "node": node,
 		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
 		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
-		"rate_count": 0, "displacements": 0,
+		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "frozen_ticks": 0,
 		}
 	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
 	net.server_send(peer_id, NetProtocol.encode_join_ok(assigned, _server_tick, spawn_pos, spawn_yaw))
@@ -227,22 +233,34 @@ func _physics_process(delta: float) -> void:
 		var actor := node as PlayerController
 		if actor == null:
 			continue
-		# Consume exactly one input per tick. If the queue is empty, repeat the
-		# last frame but keep the ack pinned, so the client knows what was applied.
+		# Consume exactly one input per tick. If the queue is empty, allow a
+		# couple of extrapolated ticks, then freeze. The ack stays pinned to the
+		# last received input so the client can still replay its real tail.
 		var frame: PlayerInputFrame = entry["last_frame"]
 		var queue: Array = entry["queue"]
+		var simulate := true
 		if not queue.is_empty():
 			frame = queue.pop_front()
 			entry["last_frame"] = frame
 			entry["ack"] = frame.seq
 			entry["has_input"] = true
-		var before := actor.global_position
-		actor.server_step(frame, delta)
-		if _check_displacement(entry, before, actor.global_position, delta):
-			# Reject the step: impossible travel is rolled back, horizontal
-			# velocity zeroed, and the tick continues from the last good pose.
-			actor.global_position = before
-			actor.velocity = Vector3(0.0, actor.velocity.y, 0.0)
+			entry["starved_ticks"] = 0
+		elif bool(entry["has_input"]):
+			entry["starved_ticks"] = int(entry["starved_ticks"]) + 1
+			if int(entry["starved_ticks"]) > MAX_EXTRAPOLATION_TICKS:
+				entry["frozen_ticks"] = int(entry["frozen_ticks"]) + 1
+				simulate = false
+		else:
+			entry["starved_ticks"] = 0
+
+		if simulate:
+			var before := actor.global_position
+			actor.server_step(frame, delta)
+			if _check_displacement(entry, before, actor.global_position, delta):
+				# Reject the step: impossible travel is rolled back, horizontal
+				# velocity zeroed, and the tick continues from the last good pose.
+				actor.global_position = before
+				actor.velocity = Vector3(0.0, actor.velocity.y, 0.0)
 		entries.append({
 			"id": int(entry["id"]),
 			"pos": actor.global_position,
@@ -256,9 +274,10 @@ func _physics_process(delta: float) -> void:
 	if net_stats and _server_tick % 30 == 0:
 		for peer_id in _roster:
 			var e: Dictionary = _roster[peer_id]
-			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d" % [
+			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d frozen=%d" % [
 				int(e["id"]), int(e["ack"]), int(e["last_seq"]),
 				(e["queue"] as Array).size(), int(e["inputs_dropped"]),
+				int(e["starved_ticks"]), int(e["frozen_ticks"]),
 			])
 	var net := _net()
 	if net and not entries.is_empty():
@@ -293,6 +312,8 @@ func server_player_stats(player_id: int) -> Dictionary:
 				"last_seq": int(entry["last_seq"]),
 				"dropped": int(entry["inputs_dropped"]),
 				"displacements": int(entry["displacements"]),
+				"starved": int(entry["starved_ticks"]),
+				"frozen": int(entry["frozen_ticks"]),
 			}
 	return {}
 

@@ -252,6 +252,22 @@ func test_replication_pipeline() -> void:
 	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
 	expect(int(b_stats["dropped"]) == dropped_before + 1, "duplicate input seq is rejected")
 
+	# Starved client: one input every 5 ticks. The server may extrapolate two
+	# ticks, then must freeze instead of running ahead indefinitely.
+	var starve_seq := int(b_stats["last_seq"])
+	for _i in 8:
+		starve_seq += 1
+		_server_net._route(peer_b, NetProtocol.encode_input(
+			starve_seq, Vector2.ZERO, false, false, false, 0.0, 0.0))
+		for _k in 5:
+			await get_tree().physics_frame
+	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
+	print("  starvation: starved=%d frozen=%d ack=%d last_seq=%d" % [
+		int(b_stats["starved"]), int(b_stats["frozen"]),
+		int(b_stats["ack"]), int(b_stats["last_seq"])])
+	expect(int(b_stats["frozen"]) > 0, "starved client freezes after bounded extrapolation")
+	expect(int(b_stats["displacements"]) == 0, "starvation does not reject legitimate steps")
+
 	var flood_before := int(b_stats["dropped"])
 	for i in 120:
 		_server_net._route(peer_b, NetProtocol.encode_input(
