@@ -28,6 +28,25 @@ const RESPAWN_DELAY_MSEC := 3000
 const SPAWN_PROTECTION_MSEC := 1500
 const BOT_PEER_BASE := -1000
 
+## Phase 1 C bot feel. These are the only tuning knobs: reaction is a bounded
+## delay before a newly acquired target may be shot; aim error is a persistent
+## angular offset (not per-tick jitter) resampled a few times per second, wider
+## while moving or at range. Bots stay lethal but stop being aimbots.
+const BOT_REACTION_MIN_SEC := 0.24
+const BOT_REACTION_MAX_SEC := 0.55
+const BOT_REACQUIRE_SCALE := 0.7
+const BOT_AIM_TURN_RATE := 9.0
+const BOT_AIM_ERROR_BASE_DEG := 1.1
+const BOT_AIM_ERROR_MOVING_DEG := 1.2
+const BOT_AIM_ERROR_FAR_DEG := 1.4
+const BOT_AIM_ERROR_FAR_M := 12.0
+const BOT_AIM_ERROR_RESAMPLE_SEC := 0.32
+const BOT_AIM_ERROR_PITCH_SCALE := 0.65
+const BOT_FIRE_RANGE := 20.0
+const BOT_TARGET_STICKY_RANGE := 26.0
+const BOT_BURST_SHOTS := 6
+const BOT_BURST_PAUSE_SEC := 0.35
+
 var net_mode: NetMode = NetMode.OFFLINE
 ## Dev-server console stats (1 line/s/player); enabled with --net-stats.
 var net_stats := OS.get_cmdline_user_args().has("--net-stats")
@@ -498,29 +517,57 @@ func _spawn_bot(index: int) -> void:
 	print("BALL_OF_DUTY bot id=%d name=BOT %d" % [id, index + 1])
 
 
-func _bot_frame(entry: Dictionary, actor: PlayerController, _delta: float) -> PlayerInputFrame:
+func _bot_frame(entry: Dictionary, actor: PlayerController, delta: float) -> PlayerInputFrame:
 	entry["bot_seq"] = int(entry["bot_seq"]) + 1
 	var frame := PlayerInputFrame.new()
 	frame.seq = int(entry["bot_seq"])
 	var target := _nearest_enemy(entry)
 	if target.is_empty():
+		entry["bot_target_id"] = 0
 		frame.yaw = actor.rotation.y
 		return frame
 	var target_node: Node = target["node"]
 	if not is_instance_valid(target_node):
+		entry["bot_target_id"] = 0
 		frame.yaw = actor.rotation.y
 		return frame
 	var target_actor := target_node as PlayerController
+
+	# Acquire/reacquire a target: start the reaction timer and reset the burst.
+	var target_id := int(target["id"])
+	var fresh_target := target_id != int(entry.get("bot_target_id", 0))
+	if fresh_target:
+		entry["bot_target_id"] = target_id
+		entry["bot_reaction_left"] = randf_range(BOT_REACTION_MIN_SEC, BOT_REACTION_MAX_SEC)
+		entry["bot_aim_yaw"] = actor.rotation.y
+		entry["bot_aim_pitch"] = 0.0
+		entry["bot_spread_left"] = 0.0
+		entry["bot_burst_left"] = BOT_BURST_SHOTS
+		entry["bot_burst_pause_left"] = 0.0
+		entry["bot_was_seen"] = false
+
 	var aim_point := target_actor.global_position + Vector3(0.0, 0.45, 0.0)
 	var flat := aim_point - actor.global_position
 	flat.y = 0.0
 	var dist := flat.length()
-	# Use the same third-person camera framing the client aims from, otherwise
-	# the bots' close-range shots drift from the crosshair.
-	var aim := ServerCombat.aim_angles(actor.global_position, aim_point)
-	frame.yaw = aim.x
-	frame.pitch = aim.y
-	frame.fire = dist < 20.0 and _has_los(actor, target_actor)
+	var has_los := _has_los(actor, target_actor)
+
+	# Cover breaks the aim: reacquiring costs a shorter, still bounded reaction.
+	var was_seen := bool(entry.get("bot_was_seen", false))
+	if has_los:
+		if not was_seen and not fresh_target:
+			entry["bot_reaction_left"] = (
+				randf_range(BOT_REACTION_MIN_SEC, BOT_REACTION_MAX_SEC) * BOT_REACQUIRE_SCALE
+			)
+		entry["bot_was_seen"] = true
+	else:
+		entry["bot_was_seen"] = false
+	var reaction_left := maxf(0.0, float(entry.get("bot_reaction_left", 0.0)))
+	if reaction_left > 0.0:
+		reaction_left = maxf(0.0, reaction_left - delta)
+		entry["bot_reaction_left"] = reaction_left
+
+	# Movement first: the aim error grows while strafing/sprinting.
 	if dist > 7.0:
 		frame.move = Vector2(0.0, -1.0)
 		frame.sprint = dist > 14.0
@@ -530,6 +577,52 @@ func _bot_frame(entry: Dictionary, actor: PlayerController, _delta: float) -> Pl
 		entry["bot_strafe_ticks"] = int(entry["bot_strafe_ticks"]) + 1
 		if int(entry["bot_strafe_ticks"]) % 45 == 0:
 			entry["bot_strafe"] = -float(entry["bot_strafe"])
+	var moving := frame.move.length_squared() > 0.0001
+
+	# Persistent angular error, resampled on a slow clock. This is the spread
+	# that makes bots miss moving targets without jittering every tick.
+	var spread_left := float(entry.get("bot_spread_left", 0.0)) - delta
+	if spread_left <= 0.0:
+		var spread_deg := BOT_AIM_ERROR_BASE_DEG
+		if moving:
+			spread_deg += BOT_AIM_ERROR_MOVING_DEG
+		if dist > BOT_AIM_ERROR_FAR_M:
+			spread_deg += BOT_AIM_ERROR_FAR_DEG
+		var spread_yaw := randf_range(-spread_deg, spread_deg)
+		var spread_pitch := randf_range(-spread_deg, spread_deg) * BOT_AIM_ERROR_PITCH_SCALE
+		entry["bot_aim_err_yaw"] = deg_to_rad(spread_yaw)
+		entry["bot_aim_err_pitch"] = deg_to_rad(spread_pitch)
+		spread_left = BOT_AIM_ERROR_RESAMPLE_SEC
+	entry["bot_spread_left"] = spread_left
+
+	var aim := ServerCombat.aim_angles(actor.global_position, aim_point)
+	var desired_yaw := aim.x + float(entry.get("bot_aim_err_yaw", 0.0))
+	var desired_pitch := clampf(
+		aim.y + float(entry.get("bot_aim_err_pitch", 0.0)), -1.45, 1.45
+	)
+	# Bounded turn rate: the bot cannot snap its view 180 degrees in one tick.
+	var blend := 1.0 - exp(-BOT_AIM_TURN_RATE * delta)
+	var aim_yaw := lerp_angle(float(entry.get("bot_aim_yaw", actor.rotation.y)), desired_yaw, blend)
+	var aim_pitch := lerpf(float(entry.get("bot_aim_pitch", 0.0)), desired_pitch, blend)
+	entry["bot_aim_yaw"] = aim_yaw
+	entry["bot_aim_pitch"] = aim_pitch
+	frame.yaw = aim_yaw
+	frame.pitch = aim_pitch
+
+	# Fire only after the reaction delay, in short bursts with a small pause.
+	if has_los and dist < BOT_FIRE_RANGE and reaction_left <= 0.0:
+		var pause_left := float(entry.get("bot_burst_pause_left", 0.0))
+		if pause_left > 0.0:
+			entry["bot_burst_pause_left"] = maxf(0.0, pause_left - delta)
+		else:
+			frame.fire = true
+			if float(entry.get("cooldown", 0.0)) <= 0.0:
+				var burst_left := int(entry.get("bot_burst_left", BOT_BURST_SHOTS)) - 1
+				if burst_left <= 0:
+					entry["bot_burst_left"] = BOT_BURST_SHOTS
+					entry["bot_burst_pause_left"] = BOT_BURST_PAUSE_SEC
+				else:
+					entry["bot_burst_left"] = burst_left
 	# Feelers: sidestep instead of walking into a trunk or cliff.
 	var forward := -actor.global_transform.basis.z
 	var feeler := PhysicsRayQueryParameters3D.create(
@@ -544,6 +637,18 @@ func _bot_frame(entry: Dictionary, actor: PlayerController, _delta: float) -> Pl
 
 
 func _nearest_enemy(entry: Dictionary) -> Dictionary:
+	# Stick to the current target while it is alive and in the fight, so the
+	# reaction timer is not reset every tick by a slightly closer neighbour.
+	var actor_node := entry["node"] as Node3D
+	var sticky := _entry_by_id(int(entry.get("bot_target_id", 0)))
+	if not sticky.is_empty() and int(sticky["dead_until"]) == 0:
+		var sticky_node: Variant = sticky["node"]
+		if is_instance_valid(sticky_node):
+			var sticky_dist: float = (sticky_node as Node3D).global_position.distance_to(
+				actor_node.global_position
+			)
+			if sticky_dist <= BOT_TARGET_STICKY_RANGE:
+				return sticky
 	var best: Dictionary = {}
 	var best_dist := INF
 	for other_peer in _roster:
@@ -554,7 +659,7 @@ func _nearest_enemy(entry: Dictionary) -> Dictionary:
 		if not is_instance_valid(node_ref):
 			continue
 		var node := node_ref as Node3D
-		var dist: float = node.global_position.distance_to((entry["node"] as Node3D).global_position)
+		var dist: float = node.global_position.distance_to(actor_node.global_position)
 		if dist < best_dist:
 			best_dist = dist
 			best = other

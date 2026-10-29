@@ -5,6 +5,10 @@ extends RefCounted
 ## (canonical muzzle, never a skeleton bone). Damage flows through the existing
 ## Projectile -> CombatResolver -> EventBus path, and GameManager broadcasts the
 ## resulting hit/death events.
+##
+## Phase 1 C telemetry stays integer-only: no per-shot strings or arrays are
+## built. Rejections are bucketed by weapon id so a future loadout can be read
+## without a new log format.
 
 const EYE_HEIGHT := 0.62
 const SHOULDER := Vector3(0.14, 0.0, -0.30)
@@ -17,11 +21,26 @@ const CAMERA_BACK := 2.3
 
 var stats: WeaponStats
 var world: Node
-var projectiles_fired: int = 0
+
+# Accepted fire / projectile accounting.
 var shots_fired: int = 0
+var projectiles_fired: int = 0
+var projectile_hits: int = 0
+var projectile_world_impacts: int = 0
+var projectile_expired: int = 0
+## Damage events (a hurtbox contact while spawn protection is off).
+var damage_hits: int = 0
+
+# Rejection reasons. The legacy counters stay for GameManager's existing
+# --net-stats line; the dictionary is the readable per-weapon breakdown.
 var blocked_cooldown: int = 0
 var blocked_reload: int = 0
 var blocked_ammo: int = 0
+var rejections_total: int = 0
+## weapon_id (String) -> {reason: count}
+var rejections_by_weapon: Dictionary = {}
+## weapon_id (String) -> accepted shots
+var shots_by_weapon: Dictionary = {}
 
 
 func _init(target_world: Node, weapon_stats: WeaponStats) -> void:
@@ -57,7 +76,7 @@ func process(entry: Dictionary, actor: PlayerController, frame: PlayerInputFrame
 		return {}
 	if float(entry.get("reload_left", 0.0)) > 0.0:
 		if frame.fire:
-			blocked_reload += 1
+			_reject("reload")
 		return {}
 	if frame.reload and int(entry.get("ammo", 0)) < stats.magazine_size:
 		entry["reload_left"] = stats.reload_time
@@ -66,16 +85,18 @@ func process(entry: Dictionary, actor: PlayerController, frame: PlayerInputFrame
 	if int(entry.get("ammo", 0)) <= 0:
 		entry["reload_left"] = stats.reload_time
 		if frame.fire:
-			blocked_ammo += 1
+			_reject("ammo")
 		return {}
 	if not frame.fire:
 		return {}
 	if float(entry.get("cooldown", 0.0)) > 0.0:
-		blocked_cooldown += 1
+		_reject("cooldown")
 		return {}
 
 	entry["ammo"] = int(entry["ammo"]) - 1
 	shots_fired += 1
+	var weapon_key := _weapon_key()
+	shots_by_weapon[weapon_key] = int(shots_by_weapon.get(weapon_key, 0)) + 1
 	entry["cooldown"] = 1.0 / maxf(stats.fire_rate, 0.1)
 	var yaw := frame.yaw
 	var pitch := frame.pitch
@@ -87,6 +108,84 @@ func process(entry: Dictionary, actor: PlayerController, frame: PlayerInputFrame
 		"origin": origin,
 		"direction": direction,
 	}
+
+
+## Called by Projectile when a round resolves. Kept allocation-free: a single
+## StringName match, integer increment.
+func note_projectile_resolved(kind: StringName) -> void:
+	match kind:
+		&"hit":
+			projectile_hits += 1
+		&"world":
+			projectile_world_impacts += 1
+		&"expired":
+			projectile_expired += 1
+
+
+## Called by GameManager's damage event (one per damaging hurtbox contact).
+func note_damage_hit() -> void:
+	damage_hits += 1
+
+
+## Rounds still in flight. Suppressed shots (lifetime/no collision) are the
+## remainder; a clean shutdown should leave only a handful.
+func projectiles_active() -> int:
+	return projectiles_fired - (projectile_hits + projectile_world_impacts + projectile_expired)
+
+
+## Compact one-line telemetry for the debug HUD/log parser.
+## Example: shots=1200 proj=1180 hit=214 world=712 exp=251 active=3 dmg=208
+##          hit%=18.1 reject cd/rl/ammo=41/3/0
+func telemetry_line() -> String:
+	var resolved := projectile_hits + projectile_world_impacts + projectile_expired
+	var ratio := 0.0
+	if resolved > 0:
+		ratio = 100.0 * float(projectile_hits) / float(resolved)
+	var reject_text := _rejection_text()
+	return (
+		"shots=%d proj=%d hit=%d world=%d exp=%d active=%d dmg=%d hit%%=%.1f reject %s"
+		% [
+			shots_fired, projectiles_fired, projectile_hits, projectile_world_impacts,
+			projectile_expired, projectiles_active(), damage_hits, ratio, reject_text,
+		]
+	)
+
+
+func rejection_line() -> String:
+	return _rejection_text()
+
+
+func _rejection_text() -> String:
+	var total := "cd/rl/ammo=%d/%d/%d" % [blocked_cooldown, blocked_reload, blocked_ammo]
+	if rejections_by_weapon.is_empty():
+		return total
+	var parts: PackedStringArray = []
+	for weapon_key in rejections_by_weapon:
+		var bucket: Dictionary = rejections_by_weapon[weapon_key]
+		parts.append("%s:%d/%d/%d" % [
+			String(weapon_key), int(bucket.get("cooldown", 0)),
+			int(bucket.get("reload", 0)), int(bucket.get("ammo", 0)),
+		])
+	return total + " by_weapon[" + ",".join(parts) + "]"
+
+
+func _reject(reason: String) -> void:
+	rejections_total += 1
+	match reason:
+		"cooldown":
+			blocked_cooldown += 1
+		"reload":
+			blocked_reload += 1
+		"ammo":
+			blocked_ammo += 1
+	var weapon_key := _weapon_key()
+	var bucket: Dictionary = rejections_by_weapon.get(weapon_key, {})
+	bucket[reason] = int(bucket.get(reason, 0)) + 1
+	rejections_by_weapon[weapon_key] = bucket
+
+
+func _weapon_key() -> String:
+	return String(stats.weapon_id) if stats else "unknown"
 
 
 static func canonical_muzzle(actor_position: Vector3, yaw: float, pitch: float) -> Vector3:
@@ -144,6 +243,7 @@ func _spawn_projectile(actor: PlayerController, origin: Vector3, direction: Vect
 		return
 	world.add_child(projectile)
 	projectile.global_position = origin
+	projectile.telemetry = self
 	projectile.setup(direction, stats, actor.net_id, _exclusion_rids(actor))
 	projectiles_fired += 1
 

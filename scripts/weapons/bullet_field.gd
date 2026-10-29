@@ -3,12 +3,19 @@ extends Node3D
 ## Cosmetic bullet/impact pool. One field per world, created on first shot.
 ## All meshes and materials are built once, so firing never allocates or
 ## compiles a shader mid-match (the old per-shot tracer did both).
+##
+## Phase 1 C: fixed 64-node pool, integer counters, and an impact path that is
+## also pooled. Launching past 64 simultaneous visible rounds reuses the oldest
+## slot instead of growing the tree; the counter makes that visible.
 
 const POOL_SIZE := 64
 const IMPACT_POOL := 24
 const IMPACT_LIFE := 0.10
-## Visual bulk is tuned independently of feel: 5% of the previous mesh size.
-const SIZE_SCALE := 0.05
+## Bullet spec (Phase 1 C): long streak, thin radial profile. The visual grows
+## out of the muzzle in BulletVisual, so length is safe even at spawn.
+const CORE_SIZE := Vector3(0.018, 0.018, 0.36)
+const TRAIL_SIZE := Vector3(0.006, 0.006, 2.2)
+const RIM_SIZE := Vector3(0.026, 0.026, 2.4)
 
 const LOCAL_COLOR := Color(1.0, 0.9, 0.45)
 const REMOTE_COLOR := Color(1.0, 0.6, 0.32)
@@ -26,6 +33,14 @@ var _trail_mesh: BoxMesh
 var _rim_mesh: BoxMesh
 var _impact_mesh: SphereMesh
 var _impact_material: StandardMaterial3D
+var _steal_index: int = 0
+
+# Cheap telemetry (integers only, no per-frame work).
+var pool_builds: int = 0
+var launches: int = 0
+var pool_exhausted: int = 0
+var impacts_shown: int = 0
+var peak_active: int = 0
 
 
 static func spawn(
@@ -42,6 +57,32 @@ static func spawn(
 		return
 	var field := _ensure(parent)
 	field._launch(origin, direction, speed, local_shot, exclude)
+
+
+## Pooled impact flash. Used by offline Projectile hits so a match never builds
+## a mesh + material per impact.
+static func impact_at(parent: Node, position: Vector3, normal: Vector3) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	if DisplayServer.get_name() == "headless":
+		return
+	var field := _ensure(parent)
+	field.spawn_impact(position, normal)
+
+
+## Read-only counters for the debug HUD. Returns {} before the first shot.
+static func pool_stats() -> Dictionary:
+	if not is_instance_valid(_instance):
+		return {}
+	return {
+		"launches": _instance.launches,
+		"active": _instance.active_count(),
+		"size": POOL_SIZE,
+		"exhausted": _instance.pool_exhausted,
+		"impacts": _instance.impacts_shown,
+		"peak": _instance.peak_active,
+		"builds": _instance.pool_builds,
+	}
 
 
 static func _ensure(parent: Node) -> BulletField:
@@ -63,19 +104,18 @@ func _ready() -> void:
 func _ensure_pool() -> void:
 	if not _bullets.is_empty():
 		return
+	pool_builds += 1
 	_body_mesh = BoxMesh.new()
-	_body_mesh = BoxMesh.new()
-	_body_mesh.size = Vector3(0.055, 0.055, 0.36) * SIZE_SCALE
-	# Keep the streak proportional to the requested 5% visual size. The bullet
-	# still leaves the gun, not the camera, because it is spawned at the muzzle;
-	# the old long trail behind it was what read as a camera-origin beam.
+	_body_mesh.size = CORE_SIZE
+	# The streak is long but thin; BulletVisual grows its visible length from the
+	# muzzle so it never extends behind the gun at spawn.
 	_trail_mesh = BoxMesh.new()
-	_trail_mesh.size = Vector3(0.026, 0.026, 2.5) * SIZE_SCALE
+	_trail_mesh.size = TRAIL_SIZE
 	_rim_mesh = BoxMesh.new()
-	_rim_mesh.size = Vector3(0.075, 0.075, 2.8) * SIZE_SCALE
+	_rim_mesh.size = RIM_SIZE
 	_impact_mesh = SphereMesh.new()
-	_impact_mesh.radius = 0.055 * SIZE_SCALE
-	_impact_mesh.height = 0.11 * SIZE_SCALE
+	_impact_mesh.radius = 0.015
+	_impact_mesh.height = 0.03
 
 	for color: Color in [LOCAL_COLOR, REMOTE_COLOR]:
 		var body := StandardMaterial3D.new()
@@ -118,10 +158,10 @@ func _ensure_pool() -> void:
 		add_child(bullet)
 		bullet.build(
 			_body_mesh, _trail_mesh, _rim_mesh,
-			_body_materials[0], _trail_materials[0], _rim_materials[0],
-			SIZE_SCALE
+			_body_materials[0], _trail_materials[0], _rim_materials[0]
 		)
 		bullet.visible = false
+		bullet.set_process(false)
 		bullet.set_physics_process(false)
 		_bullets.append(bullet)
 
@@ -146,16 +186,36 @@ func _launch(
 ) -> void:
 	_ensure_pool()
 	var index := 0 if local_shot else 1
+	launches += 1
 	for bullet in _bullets:
 		if not bullet.visible:
 			bullet.launch(
 				origin, direction, speed, 1.2, exclude,
 				_body_materials[index], _trail_materials[index], _rim_materials[index]
 			)
+			peak_active = maxi(peak_active, active_count())
 			return
+	# A sustained 12-shooter burst can exceed 64 visible rounds. Reuse a slot
+	# round-robin rather than allocating: the pool stays exactly 64 nodes.
+	pool_exhausted += 1
+	var reuse := _bullets[_steal_index % _bullets.size()]
+	_steal_index += 1
+	reuse.launch(
+		origin, direction, speed, 1.2, exclude,
+		_body_materials[index], _trail_materials[index], _rim_materials[index]
+	)
+
+
+func active_count() -> int:
+	var count := 0
+	for bullet in _bullets:
+		if bullet.visible:
+			count += 1
+	return count
 
 
 func spawn_impact(position: Vector3, normal: Vector3) -> void:
+	impacts_shown += 1
 	for i in _impacts.size():
 		if not _impacts[i].visible:
 			_impacts[i].global_position = position + normal * 0.02
@@ -163,6 +223,11 @@ func spawn_impact(position: Vector3, normal: Vector3) -> void:
 			_impacts[i].visible = true
 			_impact_left[i] = IMPACT_LIFE
 			return
+	# Impact pool exhausted: reuse slot 0 rather than allocating a node.
+	_impacts[0].global_position = position + normal * 0.02
+	_impacts[0].scale = Vector3.ONE
+	_impacts[0].visible = true
+	_impact_left[0] = IMPACT_LIFE
 
 
 func _process(delta: float) -> void:
