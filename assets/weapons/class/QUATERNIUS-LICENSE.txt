@@ -1,0 +1,13 @@
+Quaternius spear and wooden bow
+================================
+
+Author: Quaternius (https://quaternius.com)
+Sources:
+- https://poly.pizza/m/fH1zmvjPNx (Spear)
+- https://poly.pizza/m/QnpqjLSKFU (Wooden Bow)
+Pack: Ultimate RPG Items Bundle / LowPoly Medieval Weapons
+
+License: Creative Commons Zero (CC0 1.0 Universal)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+No attribution is required, but credit is included in assets/CREDITS.md.

@@ -7,10 +7,9 @@ extends SceneTree
 ## the hand grip and points the business end down -Z so it slots straight into
 ## the existing `Visual/GunMount` / `Muzzle` contract.
 ##
-## KayKit Adventurers free tier ships staff, crossbow and axe (plus an arrow),
-## but no spear and no bow. Knight spear and Rogue bow are therefore marked
-## low-poly proxies (`proxy=true`, `provenance=...`) built from primitives. All
-## meshes are shadowless like the characters.
+## KayKit Adventurers supplies staff, crossbow, axe and arrow. The spear and
+## bow are Quaternius CC0 models (Poly Pizza), scaled to the same hand-grip
+## contract. All meshes are shadowless like the characters.
 
 const OUT_DIR := "res://assets/weapons/class"
 const SRC_DIR := "res://assets/weapons/class/source"
@@ -35,50 +34,22 @@ func _run() -> void:
 	quit(0)
 
 
-# --- Knight: spear proxy --------------------------------------------------
+# --- Knight: Quaternius spear ---------------------------------------------
 
 func _build_knight_spear() -> void:
-	var root := _root("KnightSpear_Proxy")
-	root.set_meta("proxy", true)
-	root.set_meta("provenance", "proxy: KayKit Adventurers free tier has no spear model")
-	root.set_meta("weapon_length_m", 0.795)
-
-	var shaft := CylinderMesh.new()
-	shaft.top_radius = 0.011
-	shaft.bottom_radius = 0.011
-	shaft.height = 0.70
-	shaft.radial_segments = 6
-	shaft.rings = 2
-	_add_mesh(root, "Shaft", shaft, _at(Vector3(-PI * 0.5, 0.0, 0.0), Vector3(0.0, 0.0, -0.02)), _wood())
-
-	var tip := CylinderMesh.new()
-	tip.top_radius = 0.0
-	tip.bottom_radius = 0.028
-	tip.height = 0.13
-	tip.radial_segments = 6
-	_add_mesh(root, "Spearhead", tip, _at(Vector3(-PI * 0.5, 0.0, 0.0), Vector3(0.0, 0.0, -0.40)), _steel())
-
-	for spec: Array in [[-0.27, 0.020], [0.20, 0.018]]:
-		var ring := CylinderMesh.new()
-		ring.top_radius = float(spec[1])
-		ring.bottom_radius = float(spec[1])
-		ring.height = 0.024
-		ring.radial_segments = 6
-		_add_mesh(
-			root, "Binding", ring,
-			_at(Vector3(-PI * 0.5, 0.0, 0.0), Vector3(0.0, 0.0, float(spec[0]))),
-			_gold()
-		)
-
-	var butt := CylinderMesh.new()
-	butt.top_radius = 0.016
-	butt.bottom_radius = 0.012
-	butt.height = 0.035
-	butt.radial_segments = 6
-	_add_mesh(
-		root, "ButtCap", butt,
-		_at(Vector3(-PI * 0.5, 0.0, 0.0), Vector3(0.0, 0.0, 0.315)), _gold()
+	var root := _root("KnightSpear")
+	root.set_meta("proxy", false)
+	root.set_meta("provenance", "https://poly.pizza/m/fH1zmvjPNx (Quaternius, CC0)")
+	root.set_meta("weapon_length_m", 1.465)
+	# Quaternius spear is authored along +Y. Lay it down -Z, scale the 9.72 m
+	# source to a 1.46 m javelin, and slide it so the hand grips the balance
+	# point (the shaft also projects behind the hand, so it reads from the
+	# third-person camera instead of pointing straight away).
+	var xf := Transform3D(
+		Basis(Vector3.RIGHT, -PI * 0.5) * Basis.from_scale(Vector3.ONE * 0.15),
+		Vector3(0.0, 0.04, 0.35)
 	)
+	_add_source(root, "spear.glb", "SpearModel", xf)
 	_save(root, "knight_spear.scn", "knight")
 
 
@@ -98,39 +69,22 @@ func _build_mage_staff() -> void:
 	_save(root, "mage_staff.scn", "mage")
 
 
-# --- Rogue: bow proxy + KayKit arrow --------------------------------------
+# --- Rogue: Quaternius bow + KayKit arrow --------------------------------
 
 func _build_rogue_bow() -> void:
-	var root := _root("RogueBow_Proxy")
-	root.set_meta("proxy", true)
-	root.set_meta("provenance", "proxy: KayKit Adventurers free tier has no bow model; arrow is KayKit arrow.gltf")
-	root.set_meta("weapon_length_m", 0.71)
-
-	var grip := BoxMesh.new()
-	grip.size = Vector3(0.038, 0.16, 0.05)
-	_add_mesh(root, "Grip", grip, _at(Vector3.ZERO, Vector3.ZERO), _dark_wood())
-
-	var upper := BoxMesh.new()
-	upper.size = Vector3(0.030, 0.30, 0.038)
-	_add_mesh(
-		root, "UpperLimb", upper,
-		_at(Vector3(0.15, 0.0, 0.0), Vector3(0.0, 0.205, 0.0)), _wood()
+	var root := _root("RogueBow")
+	root.set_meta("proxy", false)
+	root.set_meta("provenance", "https://poly.pizza/m/QnpqjLSKFU (Quaternius, CC0); arrow KayKit arrow.gltf")
+	root.set_meta("weapon_length_m", 0.72)
+	# Quaternius bow is authored along +Y (1.97 m). Scale to a 0.71 m recurve and
+	# keep its X-Y plane facing the third-person camera; yawing it 90 degrees
+	# made the bow edge-on and effectively invisible. The KayKit arrow stays
+	# nocked along -Z for the release path.
+	var xf := Transform3D(
+		Basis.from_scale(Vector3.ONE * 0.36),
+		Vector3(0.02, 0.01, -0.05)
 	)
-	var lower := BoxMesh.new()
-	lower.size = Vector3(0.030, 0.30, 0.038)
-	_add_mesh(
-		root, "LowerLimb", lower,
-		_at(Vector3(-0.15, 0.0, 0.0), Vector3(0.0, -0.205, 0.0)), _wood()
-	)
-
-	var string := CylinderMesh.new()
-	string.top_radius = 0.0032
-	string.bottom_radius = 0.0032
-	string.height = 0.70
-	string.radial_segments = 4
-	_add_mesh(root, "String", string, _at(Vector3.ZERO, Vector3(0.0, 0.0, 0.055)), _string())
-
-	# Nocked arrow borrowed from the KayKit pack; points down -Z with the bow.
+	_add_source(root, "bow.glb", "BowModel", xf)
 	var arrow_xf := Transform3D(
 		Basis(Vector3.RIGHT, -PI * 0.5) * Basis.from_scale(Vector3.ONE * 0.62),
 		Vector3(0.0, 0.0, -0.15)

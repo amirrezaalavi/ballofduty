@@ -12,7 +12,7 @@ const EXPECTED_ANIM := [
 	["Ranged_1H_Aiming", "Ranged_1H_Shoot"],
 	["Ranged_1H_Aiming", "Throw"],
 ]
-const EXPECTED_MUZZLE_Z := [-0.47, -0.51, -0.39, -0.47, -0.54]
+const EXPECTED_MUZZLE_Z := [-0.78, -0.51, -0.39, -0.47, -0.54]
 
 var _players: Array[PlayerController] = []
 var _huds: Array[Node] = []
@@ -76,8 +76,9 @@ func test_five_weapons_keep_hand_mount_and_muzzle_contract() -> void:
 		print("  class %d weapon length=%.3f m forward=%.3f m" % [
 			class_id, bounds.size.z, bounds.position.z,
 		])
-		expect(bounds.size.z > 0.30 and bounds.size.z < 0.85,
-			"class %d weapon is 0.30-0.85 m long (%.3f)" % [class_id, bounds.size.z])
+		var max_length := 1.60 if class_id == 0 else 0.85
+		expect(bounds.size.z > 0.30 and bounds.size.z < max_length,
+			"class %d weapon is under the class length budget (%.3f)" % [class_id, bounds.size.z])
 		expect(bounds.position.z < -0.20, "class %d weapon points forward" % class_id)
 
 		var hand := player.get_node_or_null("GunHand") as BoneAttachment3D

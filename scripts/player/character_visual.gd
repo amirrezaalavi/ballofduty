@@ -45,7 +45,7 @@ const WEAPON_SCENES := [
 ]
 ## Muzzle marker offset from the grip, per class weapon (local to GunMount).
 const MUZZLE_LOCAL := [
-	Vector3(0.0, 0.0, -0.47),
+	Vector3(0.0, 0.0, -0.78),
 	Vector3(0.0, 0.0, -0.51),
 	Vector3(0.0, 0.0, -0.39),
 	Vector3(0.0, 0.02, -0.47),

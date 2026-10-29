@@ -67,11 +67,19 @@ license (with a local copy of the license text), and what was modified.
   `weapons/class/source/`.
 - **Generated:** `weapons/class/mage_staff.scn` (staff ×0.36, laid forward, grip at y=−0.15,
   0.776 m), `hooded_crossbow.scn` (×0.55, yawed 180°, 0.672 m), `barbarian_axe.scn`
-  (×0.50, laid forward, 0.622 m), `rogue_bow.scn` (proxy bow + KayKit arrow ×0.62).
-  All weapons use the hand-grip origin and point down −Z; shadows disabled at runtime.
-  Rebuild with `assets/weapons/class/build_weapons.gd`.
-- **Proxies (missing from the free tier, clearly marked `proxy=true`):**
-  - Knight `knight_spear.scn` — low-poly shaft + cone spearhead, 0.798 m.
-  - Rogue `rogue_bow.scn` — low-poly limbs/grip/string; the nocked arrow is the KayKit
-    `arrow.gltf`. Reported in the Phase 2A hand-off as missing source art.
+  (×0.50, laid forward, 0.622 m). All weapons use the hand-grip origin and point down −Z;
+  shadows disabled at runtime. Rebuild with `assets/weapons/class/build_weapons.gd`.
+
+## Quaternius — Phase 2A spear and bow
+
+- **Author:** Quaternius (https://quaternius.com)
+- **Sources:** [Spear](https://poly.pizza/m/fH1zmvjPNx) and
+  [Wooden Bow](https://poly.pizza/m/QnpqjLSKFU) on Poly Pizza; part of the CC0
+  Ultimate RPG Items Bundle / LowPoly Medieval Weapons pack.
+- **License:** Creative Commons Zero (CC0 1.0) — see
+  [`weapons/class/QUATERNIUS-LICENSE.txt`](./weapons/class/QUATERNIUS-LICENSE.txt).
+- **Used:** `spear.glb` (3.6k verts, 4 materials) and `bow.glb` (2k verts).
+- **Modifications:** spear scaled ×0.15 to a 1.46 m javelin, laid forward (−Z), grip at the
+  balance point; bow scaled ×0.36 to a 0.71 m recurve, yawed 90°, with the KayKit arrow nocked.
+  Shadows disabled. Generated scenes: `knight_spear.scn`, `rogue_bow.scn`.
 
