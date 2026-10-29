@@ -55,6 +55,9 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 - **Yaw ownership:** the client owns aim yaw *after* its first input frame. Before that, the server keeps
   the spawn yaw so a missing packet can never spin a player to a default angle.
 - Broadcasts go to joined roster peers only, never to half-open connections.
+- **Hurtbox authority:** remote ghosts keep their hurtboxes so shots stop on the body, but
+  `HurtboxComponent.damage_enabled = false` means clients can never apply damage to another player.
+  Only the server applies damage, and the same flag carries CP4c spawn protection.
 
 ## Collision layers
 

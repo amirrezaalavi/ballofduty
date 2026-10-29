@@ -10,6 +10,8 @@ static func apply_hit(
 	source_id: int,
 	position: Vector3
 ) -> bool:
+	if not hurtbox.damage_enabled:
+		return false
 	var health := hurtbox.get_health()
 	if health == null:
 		return false

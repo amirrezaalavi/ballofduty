@@ -6,7 +6,8 @@ extends Node
 
 enum NetMode { OFFLINE, SERVER, CLIENT }
 
-const PLAYER_SCENE := "res://scenes/characters/player.tscn"
+# Preloaded so joining never hits the resource loader mid-match.
+const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
 
 var net_mode: NetMode = NetMode.OFFLINE
 
@@ -209,8 +210,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _spawn_server_actor(assigned_id: int, slot: int) -> PlayerController:
-	var packed := load(PLAYER_SCENE) as PackedScene
-	var actor := packed.instantiate() as PlayerController
+	var actor := PLAYER_SCENE.instantiate() as PlayerController
 	actor.name = "ServerPlayer_%d" % assigned_id
 	_world.add_child(actor)
 	actor.make_server(assigned_id)
@@ -378,8 +378,7 @@ func _on_snapshot_received(_tick: int, entries: Array) -> void:
 func _spawn_remote(rid: int, display_name: String) -> void:
 	if _world == null or rid == local_id:
 		return
-	var packed := load(PLAYER_SCENE) as PackedScene
-	var remote := packed.instantiate() as PlayerController
+	var remote := PLAYER_SCENE.instantiate() as PlayerController
 	remote.name = "Remote_%d" % rid
 	_world.add_child(remote)
 	remote.make_remote(rid)

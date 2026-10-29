@@ -38,13 +38,15 @@
 | Join timeout too early | Timer started at `create_client`, so a throttled/background tab was killed before its socket opened | Timer starts when `JOIN_REQ` is actually sent |
 | WebSocket close noise | `close()` on an already-dropped socket logged `ready_state != STATE_OPEN` | Only close when status ≠ DISCONNECTED |
 | Remote T-pose | Ghosts shared `_state` with the local state machine, so the forced clip was skipped while the player was stopped | Compare against `current_animation`; ghosts start in forced mode |
+| Ghosts took local damage | Shooting another player's ghost applied damage on *your* client: hitmarker shown, ghost HP drained 100→75 with no server involvement, then hits silently stopped at 0 | `HurtboxComponent.damage_enabled` defaults true; `make_remote()` clears it so shots stop on the body but never damage. Reused by CP4c spawn protection |
+| Runtime scene load on join | `load(PLAYER_SCENE)` ran twice per join/remote spawn, risking a load hitch mid-match | `const PLAYER_SCENE: PackedScene = preload(...)` |
 
 ## Automated evidence
 
 | Suite | Result |
 |---|---|
 | `net_protocol_test.gd` | **27 checks, 0 failures** — roundtrips, quantization, malformed/oversized/truncated rejection |
-| `net_loopback_test.gd` | **23 checks, 0 failures** — real sockets, 2 clients, spawn parity, yaw persistence, ghost convergence, no teleports, leave cleanup, malformed traffic |
+| `net_loopback_test.gd` | **25 checks, 0 failures** — real sockets, 2 clients, spawn parity, yaw persistence, ghost convergence, no teleports, leave cleanup, malformed traffic, ghosts immune to local damage |
 | `net_client_probe.gd` | **5 checks, 0 failures** — separate OS process against a live server, 900–1200 snapshots, `remotes=1` |
 | `smoke_test.gd` | 100 checks, 0 failures |
 | `movement_test.gd` / `combat_test.gd` | 14 / 204 checks, 0 failures |

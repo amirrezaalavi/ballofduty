@@ -45,6 +45,13 @@ func make_remote(remote_id: int) -> void:
 	var character_visual := visual as CharacterVisual
 	if character_visual:
 		character_visual.force_anim = NetProtocol.AnimState.STILL
+	# A ghost is a picture, not an authority. Keep hurtboxes so shots stop on the
+	# body, but never let a client apply damage to another player locally: that
+	# produced hitmarkers and drained ghost HP with no server involvement.
+	for hurtbox_path in ["BodyHurtbox", "HeadHurtbox"]:
+		var hurtbox := get_node_or_null(hurtbox_path) as HurtboxComponent
+		if hurtbox:
+			hurtbox.damage_enabled = false
 	if not has_node("NetworkInterpolator"):
 		var interp := NetworkInterpolator.new()
 		interp.name = "NetworkInterpolator"

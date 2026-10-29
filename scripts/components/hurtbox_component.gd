@@ -6,6 +6,9 @@ extends Area3D
 @export var entity_id: int = 0
 @export var hitbox_name: StringName = &"body"
 @export var health_path: NodePath
+## False for non-authoritative bodies (remote ghosts, spectators) and for
+## spawn protection. The ray still stops here, but damage is never applied.
+@export var damage_enabled: bool = true
 
 
 func get_health() -> HealthComponent:

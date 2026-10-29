@@ -109,6 +109,20 @@ func _run() -> void:
 	_check(ghost_ap != null and ghost_ap.is_playing() and ghost_ap.current_animation != &"",
 		"remote ghost plays an animation clip (%s)" % (ghost_ap.current_animation if ghost_ap else "none"))
 
+	# Regression: a client must not damage another player's ghost locally. That
+	# path produced hitmarkers and drained ghost HP with no server involvement.
+	if remote_on_b:
+		var ghost_hurtbox := remote_on_b.get_node_or_null("BodyHurtbox") as HurtboxComponent
+		var ghost_health := ghost_hurtbox.get_health() if ghost_hurtbox else null
+		if ghost_hurtbox and ghost_health:
+			var hp_before: int = ghost_health.current
+			var damaged := CombatResolver.apply_hit(
+				ghost_hurtbox, 25, 2.0, client_b_gm.local_id, Vector3.ZERO
+			)
+			_check(not ghost_hurtbox.damage_enabled, "ghost hurtbox is non-authoritative")
+			_check(not damaged and ghost_health.current == hp_before,
+				"remote ghost ignores local damage (hp %d)" % ghost_health.current)
+
 	# Smoothness: successive ghost poses must not jump (no snap-back/teleport).
 	var smooth := true
 	var prev := remote_on_b.global_position
