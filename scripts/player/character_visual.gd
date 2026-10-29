@@ -33,12 +33,19 @@ var _hold_player: AnimationPlayer
 var _hand_skeleton: Skeleton3D
 var _hand_bone: int = -1
 var _gun_socket: Node3D
+var _spine_bone: int = -1
+var _grip_offset := Transform3D()
+var _grip_calibrated: bool = false
+var _aim_weight: float = 0.0
+var _aim_was_active: bool = false
 ## Remote ghosts set this from the snapshot state byte; >= 0 skips local
 ## derivation and plays the mapped clip (0 still, 1 walk, 2 sprint, 3 air).
 var force_anim: int = -1
 
 
 func _ready() -> void:
+	# AnimationPlayer runs at default priority; apply the additive aim afterwards.
+	process_priority = 100
 	_camera_rig = get_parent().get_node_or_null("CameraPivot") as CameraRig
 	if gun_mount:
 		gun_mount.rotation.y = 0.12
@@ -68,7 +75,6 @@ func _setup_overlays() -> void:
 	if hold_clip:
 		hold_clip.loop_mode = Animation.LOOP_LINEAR
 		_hold_player = _add_overlay("UpperBodyHold", &"Pistol_Aim_Neutral", hold_clip)
-		_hold_player.play(&"Pistol_Aim_Neutral", 0.2)
 
 	var shot_clip := _filtered_clip(&"Pistol_Shoot")
 	if shot_clip:
@@ -131,6 +137,12 @@ func _setup_hand_attachment() -> void:
 		push_warning("CharacterVisual: %s bone not found" % HAND_BONE)
 		return
 
+	# Upper-body aim is applied after animation and leaves the legs alone.
+	for candidate: String in ["DEF-spine.002", "DEF-spine.001", "DEF-spine"]:
+		_spine_bone = skeleton.find_bone(candidate)
+		if _spine_bone >= 0:
+			break
+
 	var attachment := BoneAttachment3D.new()
 	attachment.name = "GunHand"
 	attachment.use_external_skeleton = true
@@ -147,27 +159,31 @@ func _setup_hand_attachment() -> void:
 	socket.name = "GripSocket"
 	attachment.add_child(socket)
 
-	# The bone pose is available after one process frame; place the grip at the
-	# wrist and keep the barrel along the character's forward axis.
-	await get_tree().process_frame
-	if not is_instance_valid(gun_mount) or not is_instance_valid(skeleton):
-		return
+	# Attach immediately so the gun exists on the first frame; refine the
+	# hand-space offset once the body has settled on the floor (doing it during
+	# the fall clip would point the barrel at the sky).
 	var hand_xf := skeleton.global_transform * skeleton.get_bone_global_pose(hand)
-	socket.global_transform = Transform3D(
+	var desired := Transform3D(
 		Basis(Vector3.UP, body.rotation.y + 0.12),
 		hand_xf.origin + Vector3(0.0, 0.02, 0.0)
 	)
+	_grip_offset = hand_xf.affine_inverse() * desired
 	gun_mount.reparent(socket, true)
 	gun_mount.transform = Transform3D()
 	_gun_socket = socket
 	_hand_skeleton = skeleton
 	_hand_bone = hand
+	_grip_calibrated = false
 	_gun_attached = true
 
 
 func _process(_delta: float) -> void:
 	if animation_player == null or body == null:
 		return
+	# Apply the upper-body aim first so the hand pose (and the gun socket)
+	# includes it in this same frame.
+	_update_aim()
+	_maybe_calibrate_grip()
 	_update_gun_attachment()
 
 	if force_anim >= 0:
@@ -240,12 +256,12 @@ func _process(_delta: float) -> void:
 func _update_speed_scale(state: StringName, speed: float) -> void:
 	match state:
 		&"Walk":
-			animation_player.speed_scale = clampf(speed / 1.0, 0.6, 1.6)
+			animation_player.speed_scale = clampf(speed / 1.05, 0.6, 1.6)
 		&"WalkBack":
 			# Reverse the cycle so backwards steps read as backwards. No fast mode.
-			animation_player.speed_scale = -clampf(speed / 1.0, 0.6, 1.0)
+			animation_player.speed_scale = -clampf(speed / 1.05, 0.6, 1.0)
 		&"Sprint":
-			animation_player.speed_scale = clampf(speed / 2.5, 0.8, 1.3)
+			animation_player.speed_scale = clampf(speed / 2.75, 0.8, 1.3)
 		&"Jump":
 			animation_player.speed_scale = 1.0
 		&"Pistol_Idle", &"Pistol_Aim", &"Jump_Land", &"Idle":
@@ -276,16 +292,64 @@ func _update_gun_attachment() -> void:
 	if not _gun_attached or _gun_socket == null or _hand_skeleton == null or _hand_bone < 0:
 		return
 	var hand_xf := _hand_skeleton.global_transform * _hand_skeleton.get_bone_global_pose(_hand_bone)
-	var yaw := body.rotation.y
-	var pitch := 0.0
-	if body is PlayerController:
-		var pc := body as PlayerController
-		if pc.net_role == PlayerController.NetRole.LOCAL:
-			yaw = pc.view_yaw
+	_gun_socket.global_transform = hand_xf * _grip_offset
+
+
+## Upper-body additive aim + hold overlay. Active while ADS or for a short
+## window after firing; otherwise the normal locomotion upper body plays and
+## the gun simply follows the hand.
+func _update_aim() -> void:
+	var pc := body as PlayerController
+	var active := false
+	var target_yaw := 0.0
+	var target_pitch := 0.0
+	if pc != null and pc.net_role == PlayerController.NetRole.LOCAL:
+		active = pc.aiming or Time.get_ticks_msec() < pc.aim_hold_until_msec
+		if active:
+			target_yaw = clampf(
+				wrapf(pc.view_yaw - body.rotation.y, -PI, PI),
+				-deg_to_rad(70.0), deg_to_rad(70.0)
+			)
 			if _camera_rig:
-				pitch = _camera_rig.rotation.x
-	var basis := Basis(Vector3.UP, yaw + 0.12) * Basis(Vector3.RIGHT, pitch)
-	_gun_socket.global_transform = Transform3D(basis, hand_xf.origin + Vector3(0.0, 0.02, 0.0))
+				target_pitch = clampf(_camera_rig.pitch, deg_to_rad(-55.0), deg_to_rad(30.0))
+	_aim_weight = move_toward(_aim_weight, 1.0 if active else 0.0, 0.12)
+	if _aim_weight > 0.001 and _spine_bone >= 0 and _hand_skeleton != null:
+		var posed := _hand_skeleton.get_bone_pose_rotation(_spine_bone)
+		var delta := (
+			Quaternion(Vector3.UP, target_yaw * _aim_weight)
+			* Quaternion(Vector3.RIGHT, target_pitch * _aim_weight)
+		)
+		_hand_skeleton.set_bone_pose_rotation(_spine_bone, posed * delta)
+		_aim_was_active = true
+	elif _aim_was_active and _spine_bone >= 0 and _hand_skeleton != null:
+		# Some clips do not animate the spine, so the additive pose would
+		# otherwise stick after the aim window closes.
+		_hand_skeleton.set_bone_pose_rotation(_spine_bone, Quaternion.IDENTITY)
+		_aim_was_active = false
+	if _hold_player:
+		if _aim_weight > 0.5 and not _hold_player.is_playing():
+			_hold_player.play(&"Pistol_Aim_Neutral", 0.12)
+		elif _aim_weight <= 0.01 and _hold_player.is_playing():
+			_hold_player.stop()
+
+
+## Recompute the hand-space offset once, using the settled idle pose. The
+## calibration pose is what makes the fixed grip point the barrel forward in
+## the pose the player actually shoots from.
+func _maybe_calibrate_grip() -> void:
+	if _grip_calibrated or not _gun_attached or _hand_skeleton == null or _hand_bone < 0:
+		return
+	if not body.is_on_floor():
+		return
+	if animation_player and animation_player.current_animation in [&"Jump_Start", &"Jump", &"Jump_Land"]:
+		return
+	var hand_xf := _hand_skeleton.global_transform * _hand_skeleton.get_bone_global_pose(_hand_bone)
+	var desired := Transform3D(
+		Basis(Vector3.UP, body.rotation.y + 0.12),
+		hand_xf.origin + Vector3(0.0, 0.02, 0.0)
+	)
+	_grip_offset = hand_xf.affine_inverse() * desired
+	_grip_calibrated = true
 
 
 func _update_gun_position(state: StringName, delta: float) -> void:

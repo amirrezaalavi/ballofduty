@@ -20,6 +20,7 @@ signal remote_input(peer_id: int, frame: Dictionary)
 signal peer_joined(peer_id: int, player_name: String)
 signal peer_left(peer_id: int)
 signal ping_updated(rtt_ms: int)
+signal connection_failed
 
 enum Mode { OFFLINE, SERVER, CLIENT }
 
@@ -37,6 +38,9 @@ var packets_rejected: int = 0
 var last_snapshot_bytes: int = 0
 var rtt_ms: int = -1
 var server_tick_estimate: int = -1
+## Last client-side failure reason. Kept after stop() so the UI can explain why
+## the socket died; cleared by the next start_client().
+var last_error: String = ""
 
 var _peer: WebSocketMultiplayerPeer
 var _delayed: Array = [] # {deliver_msec: int, target: int, bytes: PackedByteArray}
@@ -45,6 +49,8 @@ var _known_peers: Dictionary = {} # server-side peer_id -> true
 var _ping_tick: int = 0
 var _last_ping_sent_msec: int = 0
 var _join_requested_msec: int = 0
+var _client_started_msec: int = 0
+var _intentional_stop: bool = false
 
 
 func _ready() -> void:
@@ -130,15 +136,18 @@ func server_disconnect(peer_id: int) -> void:
 
 func start_client(host: String, port: int) -> int:
 	stop()
+	last_error = ""
 	_peer = WebSocketMultiplayerPeer.new()
 	var url := "ws://%s:%d" % [host, port]
 	var err := _peer.create_client(url)
 	if err != OK:
 		push_error("NetworkManager: WebSocket client failed for %s: %s" % [url, err])
 		_peer = null
+		last_error = "invalid host or port"
 		return err
 	mode = Mode.CLIENT
 	_join_requested_msec = 0
+	_client_started_msec = Time.get_ticks_msec()
 	return OK
 
 
@@ -151,6 +160,7 @@ func client_send(pkt: PackedByteArray) -> void:
 func stop() -> void:
 	if _peer == null and mode == Mode.OFFLINE:
 		return
+	_intentional_stop = true
 	if _peer != null:
 		# close() logs "ready_state != STATE_OPEN" if the socket already dropped,
 		# which happens on the peer that did not initiate the disconnect.
@@ -164,6 +174,7 @@ func stop() -> void:
 	mode = Mode.OFFLINE
 	server_stopped.emit()
 	disconnected_from_server.emit()
+	_intentional_stop = false
 
 
 func send_join_request(display_name: String) -> void:
@@ -189,6 +200,8 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if mode == Mode.SERVER:
 		peer_left.emit(peer_id)
 	elif mode == Mode.CLIENT:
+		if not _intentional_stop:
+			last_error = "connection lost"
 		stop()
 
 
@@ -199,7 +212,26 @@ func _process(_delta: float) -> void:
 	_flush_delayed()
 	_drain()
 	_expire_pending_joins()
+	_check_client_connection()
 	_tick_ping()
+
+
+## A WebSocket that never opens has no JOIN_REQ pending, so the existing join
+## timeout cannot see it. Detect the dead socket here instead of sitting in a
+## cosmetic-only CLIENT state forever.
+func _check_client_connection() -> void:
+	if mode != Mode.CLIENT or _peer == null:
+		return
+	var elapsed := Time.get_ticks_msec() - _client_started_msec
+	var status := _peer.get_connection_status()
+	if status == MultiplayerPeer.CONNECTION_CONNECTING and elapsed > 6000:
+		last_error = "connection timed out"
+		connection_failed.emit()
+		stop()
+	elif status == MultiplayerPeer.CONNECTION_DISCONNECTED and elapsed > 500:
+		last_error = "connection refused — check host and port"
+		connection_failed.emit()
+		stop()
 
 
 func _send_to(target: int, pkt: PackedByteArray) -> void:
@@ -347,6 +379,7 @@ func _expire_pending_joins() -> void:
 		if mode == Mode.SERVER:
 			server_disconnect(pid)
 		elif mode == Mode.CLIENT:
+			last_error = "join timed out"
 			stop()
 
 

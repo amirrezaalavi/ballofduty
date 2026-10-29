@@ -41,8 +41,15 @@ func test_shoot_overlay_is_upper_body_only() -> void:
 	await _setup()
 	var hold := _player.get_node_or_null("UpperBodyHold") as AnimationPlayer
 	expect(hold != null, "upper-body hold overlay exists")
-	expect(hold != null and hold.is_playing(), "hold overlay is looping")
+	expect(hold != null and not hold.is_playing(), "idle does not force the aim pose")
+	_player.aiming = true
+	_player.aim_hold_until_msec = Time.get_ticks_msec() + 500
+	for _i in 12:
+		await get_tree().process_frame
+	expect(hold != null and hold.is_playing(), "hold overlay runs while aiming")
 	expect(hold != null and hold.current_animation == &"Pistol_Aim_Neutral", "hold uses the aim pose")
+	_player.aiming = false
+	_player.aim_hold_until_msec = 0
 
 	var overlay := _player.get_node_or_null("ShotOverlay") as AnimationPlayer
 	expect(overlay != null, "shot overlay player exists")

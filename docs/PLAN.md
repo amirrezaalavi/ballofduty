@@ -26,13 +26,27 @@
 | Walk speed | 1.00 m/s | **1.05 m/s** | +5 % |
 | Sprint speed | 2.50 m/s | **2.75 m/s** | +10 %; implement as `move_speed 1.05 × sprint_multiplier 2.62` (2.751 m/s) |
 | Projectile speed | 90 m/s | **81 m/s** | −10 %; 2.5 s lifetime still gives 202 m range |
-| Tracer | 0.08 s, 0.9 m box | **visible bullet** | see §3 |
+| Bullet visual | 0.08 s, 0.9 m box | **visible 2.5 m streak** | 2.8 m dark rim; see §3 |
 | Camera | accepted | unchanged | |
 | Jump/gravity | unchanged | unchanged | separate item (S26) |
 
 Travel time at 20 m becomes **247 ms** (was 222 ms). If your perceived lag is around ⅓ s, a 10 %
 slowdown alone will not cover it; report the `rtt=` value in the bottom-right panel so we can
 separate network RTT from render lag.
+
+## 3. Phase 0 status — implemented 2026-10-29
+
+| Task | Status | Evidence |
+|---|---|---|
+| Visible pooled bullets | **Done** | 64-node pool, 2.5 m trail + 2.8 m dark rim, 100 ms impact, prewarmed materials |
+| Speed tuning | **Done** | walk 1.05, sprint 2.751 (1.05 × 2.62), projectile 81 |
+| Gun / turn-to-fire / legs | **Done** | gun welded to hand, additive spine aim ±70°, 8°/150 ms fire gate, ADS turns body |
+| Connection truth | **Done** | 6 s connect timeout, 500 ms refused detection, HUD banner, offline fallback, ghost cleanup |
+| Combat telemetry | **Done** | shots/projectiles/hits/deaths/blocked counters every 150 ticks |
+| Remote smoothing | **Done** | 83 ms virtual-clock buffer, 1-tick damped extrapolation, render-offset decay, physics interpolation off on puppets |
+| Regression | **Done** | full pipeline green; live 1v4 join, death/respawn, client fire confirmed (`ammo 30 → 26`, server `shots=4`) |
+
+The Phase 0 gate is ready for your retest.
 
 ## 3. Visible-bullet design (P0)
 

@@ -12,6 +12,9 @@ const MAX_PREDICTION_FRAMES := 64
 const CORRECTION_EPSILON_M := 0.01
 const VISUAL_OFFSET_DECAY := 14.0
 const VISUAL_OFFSET_MAX := 2.0
+const AIM_ALIGN_DEG := 8.0
+const AIM_ALIGN_CAP_MSEC := 150
+const AIM_HOLD_MSEC := 1500
 
 @onready var camera_rig: CameraRig = $CameraPivot
 @onready var locomotion: LocomotionComponent = $LocomotionComponent
@@ -42,11 +45,18 @@ var _pending_correction: Dictionary = {}
 var _correction_events: Array[int] = []
 var _ack_error_events: Array[Dictionary] = []
 var _visual_offset := Vector3.ZERO
+var _remote_offset := Vector3.ZERO
 var _visual_base := Vector3.ZERO
 var _camera_base := Vector3.ZERO
 var _offset_active := false
 
 var _ignore_look_until_msec: int = 0
+
+## Combat intent shaping: body turns to the camera before a shot, and it stays
+## aimed for a short window after firing. CharacterVisual reads these.
+var aiming: bool = false
+var aim_hold_until_msec: int = 0
+var _fire_buffer_until_msec: int = 0
 
 
 func _ready() -> void:
@@ -67,6 +77,11 @@ func _ready() -> void:
 func make_remote(remote_id: int) -> void:
 	disable_prediction()
 	net_role = NetRole.REMOTE
+	# Remote puppets are driven from _process; engine physics interpolation
+	# would add a second, conflicting 30 Hz interpolation pass.
+	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
+	if is_instance_valid(visual):
+		visual.physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
 	if weapon:
 		weapon.spawn_projectiles = false
 	net_id = remote_id
@@ -138,6 +153,9 @@ func _notification(what: int) -> void:
 
 
 func _process(delta: float) -> void:
+	if net_role == NetRole.REMOTE:
+		_apply_remote(delta)
+		return
 	if net_role != NetRole.LOCAL:
 		return
 	# Counter-rotate the pivot so the camera keeps the view yaw while the body
@@ -157,11 +175,12 @@ func _physics_process(delta: float) -> void:
 			if dead:
 				return
 			var frame := input_handler.sample(view_yaw, camera_rig.pitch)
+			_shape_combat_intent(frame)
 			simulate_tick(frame, delta)
 			weapon.tick(delta, frame)
 			_forward_input(frame)
 		NetRole.REMOTE:
-			_apply_remote(delta)
+			pass # posed from _process at render rate
 		NetRole.SERVER:
 			pass # GameManager drives server_step once per tick for all actors.
 
@@ -208,6 +227,9 @@ func enable_prediction() -> void:
 
 func set_dead(value: bool) -> void:
 	dead = value
+	aiming = false
+	aim_hold_until_msec = 0
+	_fire_buffer_until_msec = 0
 	if dead:
 		velocity = Vector3.ZERO
 		if weapon:
@@ -216,6 +238,9 @@ func set_dead(value: bool) -> void:
 
 func respawn_at(position: Vector3, yaw: float) -> void:
 	dead = false
+	aiming = false
+	aim_hold_until_msec = 0
+	_fire_buffer_until_msec = 0
 	global_position = position
 	rotation.y = yaw
 	view_yaw = yaw
@@ -227,6 +252,34 @@ func respawn_at(position: Vector3, yaw: float) -> void:
 	if weapon:
 		weapon.reset_ammo()
 	enable_prediction()
+
+
+## Turn-then-shoot: hold the fire bit until the body is aligned with the view,
+## capped at 150 ms so a very fast flick still fires. ADS locks facing without
+## delaying the shot (the aim bit already makes locomotion turn).
+func _shape_combat_intent(frame: PlayerInputFrame) -> void:
+	var wants_fire := frame.fire
+	frame.aim = frame.aim or wants_fire
+	aiming = frame.aim
+	var now := Time.get_ticks_msec()
+	if not wants_fire:
+		_fire_buffer_until_msec = 0
+		return
+	if _aim_aligned():
+		aim_hold_until_msec = now + AIM_HOLD_MSEC
+		_fire_buffer_until_msec = 0
+		return
+	if _fire_buffer_until_msec == 0:
+		_fire_buffer_until_msec = now + AIM_ALIGN_CAP_MSEC
+	if now < _fire_buffer_until_msec:
+		frame.fire = false
+	else:
+		aim_hold_until_msec = now + AIM_HOLD_MSEC
+		_fire_buffer_until_msec = 0
+
+
+func _aim_aligned() -> bool:
+	return absf(wrapf(view_yaw - rotation.y, -PI, PI)) <= deg_to_rad(AIM_ALIGN_DEG)
 
 
 func set_view_yaw(yaw: float) -> void:
@@ -397,20 +450,41 @@ func _forward_input(frame: PlayerInputFrame) -> void:
 		gm.client_send_input(frame)
 
 
-func _apply_remote(_delta: float) -> void:
+func _apply_remote(delta: float) -> void:
 	if net_dead:
 		visible = false
+		_remote_offset = Vector3.ZERO
+		visual.position = _visual_base
 		return
 	var interp := get_node_or_null("NetworkInterpolator") as NetworkInterpolator
 	if interp == null or not interp.has_data():
 		return
-	var gm := get_node_or_null("/root/GameManager")
-	var jitter: int = gm.remote_jitter_ticks() if gm != null else 0
-	var sample: Dictionary = interp.sample(self, jitter)
+	var sample: Dictionary = interp.sample(delta)
+	if sample.is_empty():
+		return
 	visible = true
-	global_position = sample["pos"]
-	rotation.y = sample["yaw"]
+	var target_pos: Vector3 = sample["pos"]
+	var target_yaw: float = sample["yaw"]
+	var teleported := interp.consume_teleport()
+	var error := target_pos - global_position
+	global_position = target_pos
+	rotation.y = target_yaw
+	if teleported or error.length() > 4.0:
+		_remote_offset = Vector3.ZERO
+	else:
+		# Show the old pose for a few frames instead of snapping the mesh when
+		# interpolation is corrected. The collision body is already at target.
+		_remote_offset = (_remote_offset + error).limit_length(1.5)
+	_remote_offset *= exp(-18.0 * delta)
+	if _remote_offset.length_squared() < 0.000001:
+		_remote_offset = Vector3.ZERO
+	visual.position = _visual_base + global_transform.basis.inverse() * _remote_offset
 	visual.rotation.y = 0.0
 	var character_visual := visual as CharacterVisual
 	if character_visual:
-		character_visual.force_anim = interp.latest_state()
+		character_visual.force_anim = int(sample["state"])
+
+
+func reset_remote_smoothing() -> void:
+	_remote_offset = Vector3.ZERO
+	visual.position = _visual_base

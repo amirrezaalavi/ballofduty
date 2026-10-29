@@ -13,6 +13,7 @@ signal server_shot(shooter_id: int, origin: Vector3, direction: Vector3)
 
 # Preloaded so joining never hits the resource loader mid-match.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
+const RIFLE_STATS: WeaponStats = preload("res://resources/weapons/rifle_stats.tres")
 ## CP4b input intake: one frame is consumed per server tick, so a jitter burst
 ## queues instead of overwriting. Oldest frames are dropped past the cap.
 const MAX_INPUT_QUEUE := 16
@@ -40,6 +41,9 @@ var _world: Node
 var _spawns: Array = [] # Array[Vector3]
 var _used_slots: Dictionary = {} # slot -> peer_id
 var _combat: ServerCombat
+var _client_error: String = ""
+var _hits_total: int = 0
+var _deaths_total: int = 0
 
 # Client state.
 var local_id: int = 0
@@ -91,11 +95,22 @@ func _connect_bus(bus: Node) -> void:
 
 func _on_transport_down() -> void:
 	if net_mode == NetMode.CLIENT:
+		var net := _net()
+		var reason: String = net.last_error if net else ""
 		stop_all()
+		_client_error = reason if reason != "" else "connection lost"
 
 
 func is_net_client() -> bool:
 	return net_mode == NetMode.CLIENT
+
+
+func client_error_text() -> String:
+	return _client_error
+
+
+func clear_client_error() -> void:
+	_client_error = ""
 
 
 func is_net_server() -> bool:
@@ -124,6 +139,8 @@ func server_start(world: Node, port: int, bots: int = 0) -> int:
 	_next_id = 1
 	var stats := load("res://resources/weapons/rifle_stats.tres") as WeaponStats
 	_combat = ServerCombat.new(world, stats)
+	_hits_total = 0
+	_deaths_total = 0
 	var bus := get_node_or_null("/root/EventBus")
 	if bus:
 		if not bus.damage_dealt.is_connected(_on_server_damage):
@@ -315,6 +332,11 @@ func _physics_process(delta: float) -> void:
 				_health(e["node"]).current if _health(e["node"]) else 0,
 				int(e["ammo"]),
 			])
+	if net_stats and _combat and _server_tick % 150 == 0:
+		print("BALL_OF_DUTY combat shots=%d projectiles=%d hits=%d deaths=%d blocked_cd=%d blocked_reload=%d blocked_ammo=%d" % [
+			_combat.shots_fired, _combat.projectiles_fired, _hits_total, _deaths_total,
+			_combat.blocked_cooldown, _combat.blocked_reload, _combat.blocked_ammo,
+		])
 	var net := _net()
 	if net and not entries.is_empty():
 		var snapshot := NetProtocol.encode_snapshot(_server_tick, entries)
@@ -373,6 +395,7 @@ func _on_server_damage(target_id: int, source_id: int, damage: int, hitbox: Stri
 	if target.is_empty():
 		return
 	var health := _health(target["node"])
+	_hits_total += 1
 	var killed := health != null and health.current <= 0
 	_broadcast_event(NetProtocol.encode_event_hit(
 		target_id, source_id, damage, String(hitbox) == "head", killed, position
@@ -387,6 +410,7 @@ func _on_server_death(victim_id: int, killer_id: int, position: Vector3) -> void
 		return
 	victim["dead_until"] = Time.get_ticks_msec() + RESPAWN_DELAY_MSEC
 	victim["deaths"] = int(victim["deaths"]) + 1
+	_deaths_total += 1
 	var node: Node = victim["node"]
 	if is_instance_valid(node):
 		(node as PlayerController).velocity = Vector3.ZERO
@@ -487,13 +511,15 @@ func _bot_frame(entry: Dictionary, actor: PlayerController, _delta: float) -> Pl
 		frame.yaw = actor.rotation.y
 		return frame
 	var target_actor := target_node as PlayerController
-	var origin := actor.global_position + Vector3(0.0, 0.62, 0.0)
 	var aim_point := target_actor.global_position + Vector3(0.0, 0.45, 0.0)
-	var to_target := aim_point - origin
-	var flat := Vector3(to_target.x, 0.0, to_target.z)
+	var flat := aim_point - actor.global_position
+	flat.y = 0.0
 	var dist := flat.length()
-	frame.yaw = atan2(-to_target.x, -to_target.z)
-	frame.pitch = atan2(to_target.y, maxf(dist, 0.001))
+	# Use the same third-person camera framing the client aims from, otherwise
+	# the bots' close-range shots drift from the crosshair.
+	var aim := ServerCombat.aim_angles(actor.global_position, aim_point)
+	frame.yaw = aim.x
+	frame.pitch = aim.y
 	frame.fire = dist < 20.0 and _has_los(actor, target_actor)
 	if dist > 7.0:
 		frame.move = Vector2(0.0, -1.0)
@@ -651,6 +677,7 @@ static func collect_spawn_points(world: Node) -> Array:
 
 func client_start(world: Node, host: String, port: int, display_name: String) -> int:
 	_reset()
+	_client_error = ""
 	var net := _net()
 	if net == null:
 		return ERR_UNAVAILABLE
@@ -703,6 +730,7 @@ func _poll_client_connection() -> void:
 func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 	if net_mode != NetMode.CLIENT:
 		return
+	_client_error = ""
 	local_id = player_id
 	var local_player := _world.get_node_or_null("Player") as PlayerController if _world else null
 	if local_player:
@@ -728,6 +756,7 @@ func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 
 
 func _on_join_denied(_reason: int) -> void:
+	_client_error = "server is full"
 	stop_all()
 
 
@@ -760,7 +789,10 @@ func _on_server_event(event: Dictionary) -> void:
 			var shooter := int(event["shooter_id"])
 			server_shot.emit(shooter, event["origin"], event["direction"])
 			if shooter != local_id:
-				Tracer.spawn(_world, event["origin"], event["direction"], Color(1.0, 0.55, 0.3))
+				BulletField.spawn(
+					_world, event["origin"], event["direction"],
+					RIFLE_STATS.projectile_speed, false
+				)
 		NetProtocol.EventType.HIT:
 			if int(event["shooter_id"]) == local_id:
 				server_hit.emit(bool(event["headshot"]), bool(event["killed"]))
@@ -790,6 +822,7 @@ func _on_server_event(event: Dictionary) -> void:
 					var interp := remote.get_node_or_null("NetworkInterpolator") as NetworkInterpolator
 					if interp:
 						interp.reset()
+					remote.reset_remote_smoothing()
 
 
 func _on_snapshot_received(_tick: int, entries: Array) -> void:
@@ -812,7 +845,10 @@ func _on_snapshot_received(_tick: int, entries: Array) -> void:
 		var interp := remote.get_node_or_null("NetworkInterpolator") as NetworkInterpolator
 		if interp:
 			var pos: Vector3 = entry["pos"]
-			interp.push_sample(_tick, pos, float(entry["yaw"]), int(entry["state"]))
+			interp.push_sample(
+				_tick, pos, float(entry["yaw"]), int(entry["state"]),
+				entry.get("vel", Vector3.ZERO)
+			)
 
 
 func _spawn_remote(rid: int, display_name: String) -> void:

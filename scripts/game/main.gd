@@ -11,6 +11,8 @@ var _port_field: LineEdit
 var _name_field: LineEdit
 var _status_label: Label
 var _connect_button: Button
+var _net_banner: Label
+var _panel_pinned: bool = false
 
 
 func _ready() -> void:
@@ -31,7 +33,9 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F6 and _panel:
-			_panel.visible = not _panel.visible
+			_panel_pinned = not _panel_pinned
+			var gm := get_node_or_null("/root/GameManager")
+			_panel.visible = _panel_pinned or gm == null or not gm.is_net_client()
 
 
 func _process(_delta: float) -> void:
@@ -49,6 +53,19 @@ func _process(_delta: float) -> void:
 	elif not gm.is_net_client() and not gm.is_net_server():
 		_status_label.text = "offline (solo)"
 	_connect_button.text = "Disconnect" if gm.is_net_client() else "Connect"
+
+	if _panel and not _panel_pinned:
+		_panel.visible = not gm.is_net_client() or gm.client_error_text() != ""
+	if _net_banner:
+		var error_text: String = gm.client_error_text()
+		if error_text != "":
+			_net_banner.text = "CONNECTION FAILED — %s\nPress Connect to retry" % error_text
+			_net_banner.visible = true
+		elif gm.is_net_client() and gm.local_id <= 0:
+			_net_banner.text = "CONNECTING…"
+			_net_banner.visible = true
+		else:
+			_net_banner.visible = false
 
 
 # --- server ---------------------------------------------------------------
@@ -130,6 +147,7 @@ func _connect_to(host: String, port: int, display_name: String) -> void:
 		return
 	if gm.is_net_client():
 		gm.stop_all()
+		gm.clear_client_error()
 		_status_label.text = "disconnected"
 		return
 	var err: int = gm.client_start(self, host, port, display_name)
@@ -208,6 +226,20 @@ func _build_connect_panel() -> void:
 	_status_label.text = "offline (solo)"
 	_status_label.add_theme_font_size_override("font_size", 11)
 	box.add_child(_status_label)
+
+	_net_banner = Label.new()
+	_net_banner.name = "NetBanner"
+	_net_banner.anchor_left = 0.0
+	_net_banner.anchor_right = 1.0
+	_net_banner.anchor_top = 0.0
+	_net_banner.offset_top = 56.0
+	_net_banner.offset_bottom = 104.0
+	_net_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_net_banner.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_net_banner.add_theme_font_size_override("font_size", 16)
+	_net_banner.add_theme_color_override("font_color", Color(1.0, 0.55, 0.35))
+	_net_banner.visible = false
+	layer.add_child(_net_banner)
 
 
 func _on_connect_pressed() -> void:

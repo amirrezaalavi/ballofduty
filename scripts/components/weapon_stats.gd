@@ -8,7 +8,7 @@ extends Resource
 @export_group("Damage")
 @export_range(1, 200, 1) var damage: int = 25
 @export_range(1.0, 4.0, 0.1) var headshot_multiplier: float = 2.0
-@export_range(20.0, 300.0, 1.0) var projectile_speed: float = 90.0
+@export_range(20.0, 300.0, 1.0) var projectile_speed: float = 81.0
 @export_range(0.5, 10.0, 0.1) var projectile_lifetime: float = 2.5
 
 @export_group("Fire control")

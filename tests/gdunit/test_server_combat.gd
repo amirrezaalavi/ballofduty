@@ -2,14 +2,13 @@ extends BodTestSuite
 ## CP4c authoritative combat: canonical muzzle, fire rate/ammo, server hit
 ## resolution, headshots, spawn protection, and death events.
 
-const BODY_PITCH := -0.19
-const HEAD_PITCH := 0.05
-
 var _world: Node3D
 var _a: PlayerController
 var _b: PlayerController
 var _combat: ServerCombat
 var _entry: Dictionary
+var _body_target: Vector3
+var _head_target: Vector3
 
 
 func after_test() -> void:
@@ -34,6 +33,8 @@ func _setup() -> void:
 	_combat = ServerCombat.new(_world, stats)
 	_entry = {"id": 1, "ammo": 30, "cooldown": 0.0, "reload_left": 0.0}
 	_combat.reset_player(_entry)
+	_body_target = (_b.get_node("BodyHurtbox/CollisionShape3D") as Node3D).global_position
+	_head_target = (_b.get_node("HeadHurtbox/CollisionShape3D") as Node3D).global_position
 	_set_target_damage(true)
 
 
@@ -58,34 +59,46 @@ func _fire(pitch: float, wait_frames: int = 5) -> Dictionary:
 	return shot
 
 
+func _fire_at(target: Vector3, wait_frames: int = 5) -> Dictionary:
+	var angles := ServerCombat.aim_angles(_a.global_position, target)
+	var frame := PlayerInputFrame.new()
+	frame.yaw = angles.x
+	frame.pitch = angles.y
+	frame.fire = true
+	var shot := _combat.process(_entry, _a, frame, 1.0 / 30.0)
+	for _i in wait_frames:
+		await get_tree().physics_frame
+	return shot
+
+
 func test_body_hit_and_fire_rate() -> void:
 	await _setup()
-	var shot := await _fire(BODY_PITCH)
+	var shot := await _fire_at(_body_target)
 	expect(not shot.is_empty(), "accepted fire produces a shot event")
 	expect(int(_entry["ammo"]) == 29, "one round consumed")
 	expect(_body().current == 75, "body shot deals 25 (hp %d)" % _body().current)
 
 	# Holding fire inside the cooldown cannot produce a second round.
-	var again := await _fire(BODY_PITCH)
+	var again := await _fire_at(_body_target)
 	expect(again.is_empty(), "fire rate blocks an immediate second shot")
 	expect(int(_entry["ammo"]) == 29, "blocked shot consumes no ammo")
 	expect(_body().current == 75, "blocked shot deals no damage")
 
 	_entry["cooldown"] = 0.0
-	await _fire(BODY_PITCH)
+	await _fire_at(_body_target)
 	expect(_body().current == 50, "next allowed shot deals 25 (hp %d)" % _body().current)
 
 
 func test_headshot_is_double() -> void:
 	await _setup()
-	await _fire(HEAD_PITCH)
+	await _fire_at(_head_target)
 	expect(_body().current == 50, "headshot deals 50 (hp %d)" % _body().current)
 
 
 func test_ammo_and_reload() -> void:
 	await _setup()
 	_entry["ammo"] = 1
-	await _fire(BODY_PITCH)
+	await _fire_at(_body_target)
 	expect(int(_entry["ammo"]) == 0, "magazine empties")
 	# Auto reload starts on the next tick, then completes.
 	var reload := PlayerInputFrame.new()
@@ -100,11 +113,11 @@ func test_ammo_and_reload() -> void:
 func test_spawn_protection_blocks_damage() -> void:
 	await _setup()
 	_set_target_damage(false)
-	await _fire(BODY_PITCH)
+	await _fire_at(_body_target)
 	expect(_body().current == 100, "spawn-protected target takes no damage")
 	_set_target_damage(true)
 	_entry["cooldown"] = 0.0
-	await _fire(BODY_PITCH)
+	await _fire_at(_body_target)
 	expect(_body().current == 75, "damage resumes when protection ends")
 
 
@@ -116,7 +129,7 @@ func test_kill_emits_death_event() -> void:
 		died.append([victim, killer]))
 	for _i in 4:
 		_entry["cooldown"] = 0.0
-		await _fire(BODY_PITCH)
+		await _fire_at(_body_target)
 	expect(_body().current == 0, "four body shots kill (hp %d)" % _body().current)
 	expect(died.size() == 1 and int(died[0][0]) == 2, "death event names the victim")
 	expect(int(died[0][1]) == 1, "death event names the shooter")

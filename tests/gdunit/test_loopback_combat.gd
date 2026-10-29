@@ -84,13 +84,15 @@ func test_authoritative_combat_roundtrip() -> void:
 	var hits: Array = []
 	client_a_gm.server_hit.connect(func(headshot: bool, killed: bool) -> void:
 		hits.append([headshot, killed]))
+	var target_shape := server_b.get_node("BodyHurtbox/CollisionShape3D") as Node3D
+	var aim := ServerCombat.aim_angles(server_a.global_position, target_shape.global_position)
 	var seq: int = int(client_a_gm.local_id) * 1000
 	for i in 4:
 		seq += 1
 		var frame := PlayerInputFrame.new()
 		frame.seq = seq
-		frame.yaw = -PI * 0.5
-		frame.pitch = -0.06
+		frame.yaw = aim.x
+		frame.pitch = aim.y
 		frame.fire = true
 		local_a.simulate_tick(frame, DT)
 		client_a_gm.client_send_input(frame)

@@ -23,7 +23,8 @@ func test_ground_travel_and_speed() -> void:
 		distance += velocity.length() * DT
 	print("  travel_3s=%.2f m  speed=%.2f m/s" % [distance, velocity.length()])
 	expect(is_equal_approx(velocity.length(), _stats.move_speed), "ground speed settles at move_speed")
-	expect(distance > 2.8 and distance < 3.1, "3 s travel distance is ~3.0 m at 1 m/s (got %.2f)" % distance)
+	expect(distance > 2.95 and distance < 3.2,
+		"3 s travel distance is ~3.15 m at 1.05 m/s (got %.2f)" % distance)
 
 
 func test_diagonal_is_not_faster() -> void:

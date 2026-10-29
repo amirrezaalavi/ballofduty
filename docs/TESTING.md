@@ -37,6 +37,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
+| `tests/gdunit/test_phase0.gd` | 4 | 13 | speed/projectile tuning, turn-then-shoot gate, virtual-clock interpolation, connection timeout |
 | `tests/gdunit/test_world_geometry.gd` | 2 | 59 | every tree has a collider; camera never enters the cliff |
 | `tests/gdunit/test_rig.gd` | 2 | 16 | gun follows the hand; filtered Pistol_Shoot overlay |
 | `tests/gdunit/test_server_combat.gd` | 5 | 25 | canonical muzzle, body/head damage, rate/ammo/reload, protection, kill attribution |
@@ -44,7 +45,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_bots.gd` | 1 | 7 | four bots move, fire, damage each other, stay in the roster |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**47 test cases · ~550 assertions.** `test_net_loopback` stays one integration test: the value is the
+**51 test cases · ~565 assertions.** `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.

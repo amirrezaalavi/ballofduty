@@ -4,9 +4,9 @@ extends Resource
 ## prediction and authority use exactly the same numbers.
 
 @export_group("Movement")
-## Tuned for the 0.82 m avatar: ~1 body length/s walking, ~2.5 sprinting.
-@export_range(0.5, 12.0, 0.05) var move_speed: float = 1.0
-@export_range(1.0, 4.0, 0.01) var sprint_multiplier: float = 2.5
+## Tuned for the 0.82 m avatar: 1.05 m/s walking, 2.75 m/s sprinting.
+@export_range(0.5, 12.0, 0.05) var move_speed: float = 1.05
+@export_range(1.0, 4.0, 0.01) var sprint_multiplier: float = 2.62
 @export_range(10.0, 200.0, 1.0) var ground_acceleration: float = 60.0
 @export_range(1.0, 60.0, 0.5) var air_acceleration: float = 12.0
 

@@ -42,17 +42,17 @@ func simulate(
 	var move_dir := wish_dir.normalized() if wish_len > 0.0001 else Vector3.ZERO
 
 	var alignment := 0.0
-	if wish_len > 0.0001:
-		if input.aim:
-			var aim_yaw := view_yaw if not is_nan(view_yaw) else body.rotation.y
-			_turn_body_toward(body, aim_yaw, delta)
-			alignment = 1.0
-		else:
-			var target_yaw := atan2(-move_dir.x, -move_dir.z)
-			_turn_body_toward(body, target_yaw, delta)
-			# Turn in place first: only translate as the facing aligns with the
-			# intended direction. This removes the sliding-sideways look.
-			alignment = maxf(0.0, (-body.transform.basis.z).dot(move_dir))
+	if input.aim and not is_nan(view_yaw):
+		# ADS/fire locks facing to the camera even while standing still. The
+		# upper-body modifier still aims within its clamp while the body turns.
+		_turn_body_toward(body, view_yaw, delta)
+		alignment = 1.0 if wish_len > 0.0001 else 0.0
+	elif wish_len > 0.0001:
+		var target_yaw := atan2(-move_dir.x, -move_dir.z)
+		_turn_body_toward(body, target_yaw, delta)
+		# Turn in place first: only translate as the facing aligns with the
+		# intended direction. This removes the sliding-sideways look.
+		alignment = maxf(0.0, (-body.transform.basis.z).dot(move_dir))
 
 	var horizontal := horizontal_velocity(
 		body.velocity, move_dir * (wish_len * alignment), input.sprint, on_floor, delta

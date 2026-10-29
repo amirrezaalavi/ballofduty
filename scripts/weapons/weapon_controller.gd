@@ -117,7 +117,12 @@ func _fire() -> void:
 	# spawn_projectiles = false and still needs the tracer/flash/audio/recoil).
 	var direction := _aim_direction()
 	var origin := muzzle.global_position
-	Tracer.spawn(get_tree().current_scene, origin, direction)
+	# Networked clients do not spawn local projectiles, so draw the round here.
+	# Offline play already has a visible Projectile node.
+	if not spawn_projectiles:
+		BulletField.spawn(
+			player.get_parent(), origin, direction, stats.projectile_speed, true, _exclusion_rids()
+		)
 	shot_fired.emit(origin, direction)
 	_audio("play_shoot")
 	_show_muzzle_flash()

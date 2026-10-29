@@ -8,10 +8,20 @@ extends RefCounted
 
 const EYE_HEIGHT := 0.62
 const SHOULDER := Vector3(0.14, 0.0, -0.30)
+## Mirror CameraRig: pivot 0.95 m up, camera 0.35 m right and 2.3 m behind.
+## The client aims from the camera, so tracing from the eye alone made shots
+## drift at range and near cover.
+const CAMERA_PIVOT_HEIGHT := 0.95
+const CAMERA_SHOULDER_X := 0.35
+const CAMERA_BACK := 2.3
 
 var stats: WeaponStats
 var world: Node
 var projectiles_fired: int = 0
+var shots_fired: int = 0
+var blocked_cooldown: int = 0
+var blocked_reload: int = 0
+var blocked_ammo: int = 0
 
 
 func _init(target_world: Node, weapon_stats: WeaponStats) -> void:
@@ -46,6 +56,8 @@ func process(entry: Dictionary, actor: PlayerController, frame: PlayerInputFrame
 	if stats == null or actor == null:
 		return {}
 	if float(entry.get("reload_left", 0.0)) > 0.0:
+		if frame.fire:
+			blocked_reload += 1
 		return {}
 	if frame.reload and int(entry.get("ammo", 0)) < stats.magazine_size:
 		entry["reload_left"] = stats.reload_time
@@ -53,11 +65,17 @@ func process(entry: Dictionary, actor: PlayerController, frame: PlayerInputFrame
 	# Mirror the client's automatic reload when the magazine is empty.
 	if int(entry.get("ammo", 0)) <= 0:
 		entry["reload_left"] = stats.reload_time
+		if frame.fire:
+			blocked_ammo += 1
 		return {}
-	if not frame.fire or float(entry.get("cooldown", 0.0)) > 0.0:
+	if not frame.fire:
+		return {}
+	if float(entry.get("cooldown", 0.0)) > 0.0:
+		blocked_cooldown += 1
 		return {}
 
 	entry["ammo"] = int(entry["ammo"]) - 1
+	shots_fired += 1
 	entry["cooldown"] = 1.0 / maxf(stats.fire_rate, 0.1)
 	var yaw := frame.yaw
 	var pitch := frame.pitch
@@ -84,14 +102,37 @@ static func canonical_direction(yaw: float, pitch: float) -> Vector3:
 ## parallel to the view makes close headshots miss, so trace the view first and
 ## aim from the muzzle at the resulting point (the same correction the client
 ## applies in WeaponController._aim_direction).
+## Yaw/pitch that put `target` under the crosshair from the third-person camera.
+## Used by bots/tests; converges in three iterations because the camera offset
+## itself rotates with yaw and pitch.
+static func aim_angles(actor_position: Vector3, target: Vector3) -> Vector2:
+	var yaw := atan2(-(target.x - actor_position.x), -(target.z - actor_position.z))
+	var pitch := 0.0
+	for _i in 3:
+		var cam := camera_origin(actor_position, yaw, pitch)
+		var d := target - cam
+		yaw = atan2(-d.x, -d.z)
+		pitch = atan2(d.y, Vector2(d.x, d.z).length())
+	return Vector2(yaw, pitch)
+
+
+static func camera_origin(actor_position: Vector3, yaw: float, pitch: float) -> Vector3:
+	var basis := Basis.from_euler(Vector3(pitch, yaw, 0.0))
+	return (
+		actor_position
+		+ Vector3(0.0, CAMERA_PIVOT_HEIGHT, 0.0)
+		+ basis * Vector3(CAMERA_SHOULDER_X, 0.0, CAMERA_BACK)
+	)
+
+
 func _aim_direction(actor: PlayerController, yaw: float, pitch: float, muzzle: Vector3) -> Vector3:
-	var eye := actor.global_position + Vector3(0.0, EYE_HEIGHT, 0.0)
+	var cam := camera_origin(actor.global_position, yaw, pitch)
 	var view := canonical_direction(yaw, pitch)
-	var query := PhysicsRayQueryParameters3D.create(eye, eye + view * 250.0, 1 | 8)
+	var query := PhysicsRayQueryParameters3D.create(cam, cam + view * 250.0, 1 | 8)
 	query.collide_with_areas = true
 	query.exclude = _exclusion_rids(actor)
 	var hit := actor.get_world_3d().direct_space_state.intersect_ray(query)
-	var aim_point: Vector3 = hit.position if not hit.is_empty() else eye + view * 250.0
+	var aim_point: Vector3 = hit.position if not hit.is_empty() else cam + view * 250.0
 	return (aim_point - muzzle).normalized()
 
 
