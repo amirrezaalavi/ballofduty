@@ -30,6 +30,8 @@ var _solo: bool = false
 var _was_client: bool = false
 var _match_entered: bool = false
 var _selected_class: int = 0
+## Auto-join endpoint waiting for the first rendered frames (see _deferred_auto_join).
+var _auto_join_endpoint: Dictionary = {}
 
 
 func _ready() -> void:
@@ -331,7 +333,22 @@ func _try_autoconnect(args: PackedStringArray) -> void:
 
 	var auto_join: bool = args.has("--connect") or String(params.get("join", "")) == "1" or params.has("host")
 	if auto_join:
-		_begin_join(endpoint)
+		_auto_join_endpoint = endpoint
+		_deferred_auto_join()
+
+
+## The first rendered frame of the 150 m quarry can stall the main loop for
+## seconds on software WebGL. Starting the socket in _ready burns the 6 s
+## connect budget before WebSocketPeer is polled, so the initial ?join=1 URL
+## used to time out while a manual Join worked. Let the map settle first.
+func _deferred_auto_join() -> void:
+	for _i in 3:
+		await get_tree().process_frame
+	if _auto_join_endpoint.is_empty():
+		return
+	var endpoint := _auto_join_endpoint
+	_auto_join_endpoint = {}
+	_begin_join(endpoint)
 
 
 ## Pure endpoint selection, covered by tests. Rules:
