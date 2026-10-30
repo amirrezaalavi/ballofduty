@@ -9,6 +9,8 @@ var _field: BulletField
 func after_test() -> void:
 	if is_instance_valid(_world):
 		_world.free()
+	# The prewarm test owns the static instance; never leak it into another test.
+	BulletField.reset()
 
 
 func _setup() -> void:
@@ -18,6 +20,45 @@ func _setup() -> void:
 	_field.name = "TestBulletField"
 	_world.add_child(_field)
 	await get_tree().process_frame
+
+
+func test_prewarm_builds_before_first_launch() -> void:
+	# Drop any static field left by an earlier test, then let its queued free run.
+	BulletField.reset()
+	await get_tree().process_frame
+
+	var world := Node3D.new()
+	world.name = "PrewarmWorld"
+	add_child(world)
+	BulletField.prewarm(world)
+
+	var field: BulletField = null
+	for child in world.get_children():
+		if child is BulletField:
+			field = child
+			break
+	expect(field != null, "prewarm adds a BulletField child")
+	if field == null:
+		world.free()
+		return
+	expect(field.pool_builds == 1, "prewarm builds the pool once (builds=%d)" % field.pool_builds)
+	expect(field.get_child_count() == BulletField.POOL_SIZE + BulletField.IMPACT_POOL,
+		"prewarm builds %d bullet + %d impact nodes (got %d)" % [
+			BulletField.POOL_SIZE, BulletField.IMPACT_POOL, field.get_child_count()])
+	expect(BulletField.pool_stats().get("builds", -1) == 1,
+		"pool_stats reports the prewarmed build")
+
+	# The first launch must reuse the prewarmed pool: no build, no new nodes.
+	var children_before := field.get_child_count()
+	var none: Array[RID] = []
+	field._launch(Vector3(0.0, 1.0, 0.0), Vector3.FORWARD, 81.0, true, none)
+	expect(field.pool_builds == 1, "first launch pays no build (builds=%d)" % field.pool_builds)
+	expect(field.get_child_count() == children_before,
+		"first launch adds no nodes (%d vs %d)" % [field.get_child_count(), children_before])
+
+	BulletField.reset()
+	await get_tree().process_frame
+	world.free()
 
 
 func test_pool_is_built_once_at_fixed_size() -> void:

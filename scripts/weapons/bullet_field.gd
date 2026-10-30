@@ -43,6 +43,23 @@ var impacts_shown: int = 0
 var peak_active: int = 0
 
 
+## Build the field and its fixed pool before the first shot. Called when the
+## local player is ready (solo or client) so the ~2 ms build is not paid during
+## the first engagement. Headless/server keeps the lazy path in spawn().
+static func prewarm(parent: Node) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	_ensure(parent)
+
+
+## Test-only: drop the static instance so one test cannot leak the field into
+## the next. Pool sizes and counters are untouched.
+static func reset() -> void:
+	if is_instance_valid(_instance):
+		_instance.queue_free()
+	_instance = null
+
+
 static func spawn(
 	parent: Node,
 	origin: Vector3,

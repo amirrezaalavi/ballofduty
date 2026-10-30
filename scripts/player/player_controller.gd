@@ -65,6 +65,10 @@ func _ready() -> void:
 	_visual_base = visual.position
 	_camera_base = camera_rig.position
 	view_yaw = rotation.y
+	# Build the cosmetic bullet pool before the first shot. Remote actors share
+	# the same field and server actors are headless, so LOCAL is enough.
+	if net_role == NetRole.LOCAL and DisplayServer.get_name() != "headless":
+		BulletField.prewarm(get_parent())
 	# Never request pointer lock here: browsers require a user gesture. The first
 	# click on the canvas captures the mouse (handled below).
 	if DisplayServer.get_name() == "headless":
