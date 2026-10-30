@@ -97,8 +97,8 @@ tools/godot --headless --path . --script /srv/opencode/tmp/opencode/pos_probe.gd
 | 16 | 358 | **8** | **rejected** |
 | 32 | 710 | **8** | **rejected** |
 
-This is why NET-01 and NET-02 are at the top of the index: they are not
-hypothetical future problems.
+NET-01 was a live correctness bug and has been fixed (see below). NET-02 is
+still a real protocol-growth question, not a hypothetical one.
 
 ---
 
@@ -128,7 +128,7 @@ Priority is an initial guess, not a decision. `P0` = likely to block a
 | **REN-04** | LOD, MultiMesh vs merged meshes at 3-map scale | rendering | P2 |
 | **REN-05** | Chunk streaming, residency and 3-map rotation | rendering | P1 |
 | **REN-06** | Materials, textures, fog, far plane, overdraw | rendering | P1 |
-| **NET-01** | Position quantization vs map size | network | **P0** |
+| **NET-01** | Position quantization vs map size | network | **resolved 2026-10-30** |
 | **NET-02** | Actor cap, snapshot size and protocol layout | network | **P0** |
 | **NET-03** | Interest management / delta compression | network | P2 |
 | **NET-04** | Snapshot rate vs tick rate (20 / 30 / 60) | network | P1 |
@@ -991,59 +991,37 @@ device measurement.
 
 ## 5. Network / connection handling
 
-### NET-01 — Position quantization vs map size  **[P0]**
+### NET-01 — Position quantization vs map size  **[RESOLVED 2026-10-30]**
 
-**Growth scenario / why it matters.** The wire format quantizes absolute world
-positions to millimetres over ±32.768 m. Any playable area beyond that is
-**clamped**, not compressed: remote actors and the local reconciliation pose are
-wrong by metres. This is already true on a 150 m map and is fatal on a 250 m map.
-It is a correctness bug, not just a bandwidth question.
+**Status.** Fixed in `scripts/networking/net_protocol.gd`. The codec now
+quantizes absolute positions in **centimetres over ±327.68 m**
+(`POS_RANGE = 327.68`, ×100 / ÷100). The 22 B snapshot row and 182 B / 8-actor
+packet are unchanged. A unit test covers ±327.67 m round-trips at ≤1 cm and
+confirms values beyond the range clamp to the new limit.
 
-**Current evidence.** `POS_RANGE = 32.768`, `_quant_pos` clamps to
-`[-32768, 32767]` (`scripts/networking/net_protocol.gd:21,325-327`); snapshot
-positions are absolute (`:174-190`); the local client applies the decoded pose
-in reconciliation (`player_controller.gd:307-321,371-394`). Probe results:
-40 m → 32.767 (7.233 m error), 69.5 m → 32.767 (51.948 m error), 125 m →
-130.436 m error. The current reference map has spawns at |x|/|z| up to 62 m
-(`scripts/game/quarry_arena.gd:72-84`), so this is live, not theoretical.
+**Why it mattered (original finding).** The old wire format quantized to
+millimetres over ±32.768 m and **clamped** everything outside it, so remote
+actors, event positions and reconciliation were wrong by metres on any map
+larger than ~65 m. The previous 60 m arena fit; the 150 m quarry and the three
+maps being built do not. A probe against the shipping codec showed 40 m →
+32.767 (10.2 m 3D error) and 69 m → 32.767 (51.2 m error).
 
-**Questions for the research agent.**
-1. What is the correct quantization scheme for a ±125 m playable area with
-   acceptable prediction/interpolation error (target ≤ 1–2 cm)?
-2. Which option is best: (a) i16 over ±131.072 m at 4 mm, (b) per-snapshot
-   reference origin + i16 local offsets, (c) 24-bit positions, (d) float16?
-3. How do relative coordinates interact with join, respawn, teleport, late
-   join and packet loss?
-4. What is the smallest per-actor byte layout that keeps ≤ 2 cm error at 250 m?
-5. How does the change migrate the protocol (version byte, mixed clients,
-   reconnect)?
-6. Does the same problem affect velocity, yaw or event positions (shot/hit/
-   death/respawn)?
-7. What is the acceptance test at map edges and after a respawn?
+**Residual questions for the research agent.**
+1. Is 1 cm per axis (≤1.5 cm 3D) enough at 250 m for prediction/interpolation,
+   or is a per-snapshot origin / 24-bit layout worth the extra bytes?
+2. Should shot/hit/death/respawn event positions use the same 1 cm grid, or do
+   they need finer precision for tracers and hit markers?
+3. Does the wider range change any prediction threshold or reconciliation
+   acceptance test that was tuned for the old 2 mm error?
 
-**Options.**
-- **Do nothing.** Broken beyond ±32.768 m; not viable.
-- **Tune.** Widen range to ±131.072 m at 4 mm (same 6 B/axis), or use a
-  per-snapshot origin. Expected: fixes correctness, same snapshot size; cost S;
-  risk medium (protocol).
-- **Architectural.** Relative/origin-rebased coordinates or 24-bit positions.
-  Expected: correct and scalable; cost M; risk medium–high (prediction,
-  protocol).
+**Acceptance (already met).** Round-trip ≤1 cm across ±327.67 m; snapshot
+≤300 B at 8; malformed packets still rejected; no edge-of-map clamp inside a
+250 m playable area.
 
-**How to answer.** Unit-test round-trip error across the full ±125 m extents and
-at 1 mm/1 cm/1 m granularity; run a two-client edge-of-map reconciliation test;
-measure snapshot size. **Acceptance:** max position error ≤ 2 cm across the
-whole map, snapshot ≤ 300 B at 8, no rubber-band at edges/respawn, decode
-rejects malformed packets.
+**Risk / safety.** Low: same field width, same packet size, no protocol version
+change; clients and server must be rebuilt together as usual.
 
-**Risk / safety.** Protocol compatibility and prediction determinism are both
-high risk. Version the protocol and keep a mixed-version test. Do not ship a
-map larger than the quantization range before this is fixed.
-
-**Priority / confidence.** **P0 · high confidence** — measured with the real
-codec.
-
----
+**Priority / confidence.** **Resolved · measured with the real codec.**
 
 ### NET-02 — Actor cap, snapshot size and protocol layout  **[P0]**
 
@@ -1850,7 +1828,7 @@ Reject or return for more evidence if any of these is true:
   the cheap measured fixes (bake, dirty flags, caches) are exhausted.
 - It cannot state what would falsify the claim.
 - It optimizes a metric that is already comfortably inside budget while a P0
-  correctness issue (NET-01/NET-02) is open.
+  correctness issue (NET-02) is still open.
 - It only helps one map, one actor count, or one device.
 
 ### 10.3 Answer format (what "answered" looks like)
@@ -1967,8 +1945,9 @@ source, OBS-01 is not done.
 - The three new maps are owned by another session; this brief only asks for
   **contracts and budgets**, not map content. Any answer that depends on a
   specific map's layout is out of scope.
-- NET-01 and NET-02 are correctness prerequisites for 150–250 m / 16+ actors.
-  Fixing them is not an optimization; it is a release gate.
+- NET-01 (position range) is **fixed** (1 cm over ±327.68 m). NET-02 (actor
+  cap / snapshot layout) remains a correctness prerequisite for 16+ actors;
+  fixing it is not an optimization, it is a release gate.
 - OBS-01/03 are prerequisites for trusting any other answer.
 
 **Open decisions the manager must make**

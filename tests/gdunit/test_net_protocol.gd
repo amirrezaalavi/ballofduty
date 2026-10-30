@@ -71,7 +71,7 @@ func test_snapshot_budget_and_rejection() -> void:
 	var first: Dictionary = back.get("entries")[0]
 	var rpos: Vector3 = first["pos"]
 	var epos: Vector3 = entries[0]["pos"]
-	expect(rpos.distance_to(epos) < 0.002, "position quantization < 2 mm")
+	expect(rpos.distance_to(epos) < 0.01, "position quantization < 1 cm")
 	expect(absf(float(first["yaw"]) - wrapf(float(entries[0]["yaw"]), -PI, PI)) < 0.001, "snapshot yaw < 1 mrad")
 	expect(first["state"] == 0 and first["hp"] == 100 and first["ack"] == 5000, "snapshot state/hp/ack roundtrip")
 	var rvel: Vector3 = first["vel"]
@@ -110,7 +110,7 @@ func test_events_roundtrip() -> void:
 	var shot := NetProtocol.decode_event(NetProtocol.encode_event_shot(3, origin, direction))
 	expect(shot.get("type") == NetProtocol.EventType.SHOT, "shot event type")
 	expect(int(shot.get("shooter_id", -1)) == 3, "shot shooter id")
-	expect((shot.get("origin", Vector3.ZERO) as Vector3).distance_to(origin) < 0.002, "shot origin within 2 mm")
+	expect((shot.get("origin", Vector3.ZERO) as Vector3).distance_to(origin) < 0.01, "shot origin within 1 cm")
 	expect((shot.get("direction", Vector3.ZERO) as Vector3).distance_to(direction) < 0.001, "shot direction quantized")
 
 	var hit := NetProtocol.decode_event(NetProtocol.encode_event_hit(
@@ -128,7 +128,7 @@ func test_events_roundtrip() -> void:
 
 	var respawn := NetProtocol.decode_event(NetProtocol.encode_event_respawn(2, Vector3(4, 0.2, 4), -1.2))
 	expect(respawn.get("type") == NetProtocol.EventType.RESPAWN, "respawn event type")
-	expect((respawn.get("position", Vector3.ZERO) as Vector3).distance_to(Vector3(4, 0.2, 4)) < 0.002, "respawn position")
+	expect((respawn.get("position", Vector3.ZERO) as Vector3).distance_to(Vector3(4, 0.2, 4)) < 0.01, "respawn position")
 	expect(absf(float(respawn.get("yaw", 0.0)) - -1.2) < 0.001, "respawn yaw")
 
 	expect(NetProtocol.decode_event(PackedByteArray([10, 1, 1])) == {}, "truncated event rejected")
@@ -148,3 +148,37 @@ func test_class_id_roundtrip() -> void:
 	]))
 	expect(int(roster["entries"][0]["class_id"]) == 2, "roster class 2")
 	expect(int(roster["entries"][1]["class_id"]) == 4, "roster class 4")
+
+
+func test_long_range_positions_roundtrip() -> void:
+	# A 150-250 m map needs absolute positions far outside the old +/-32.768 m
+	# window. 1 cm quantization must survive the full range, and only values
+	# beyond the new +/-327.68 m limit may clamp.
+	var points := [
+		Vector3(0.0, 0.0, 0.0),
+		Vector3(40.0, 3.0, -40.0),
+		Vector3(-69.0, 5.0, 69.0),
+		Vector3(124.995, 12.0, -124.995),
+		Vector3(-327.67, 0.0, 327.67),
+	]
+	for point in points:
+		var snap := NetProtocol.encode_snapshot(7, [{
+			"id": 1, "pos": point, "yaw": 0.0, "state": 0,
+			"vel": Vector3.ZERO, "on_floor": true, "hp": 100, "ack": 0,
+		}])
+		var back := NetProtocol.decode_snapshot(snap)
+		expect(not back.is_empty(), "long-range snapshot decodes")
+		if back.is_empty():
+			continue
+		var got: Vector3 = back["entries"][0]["pos"]
+		expect(got.distance_to(point) < 0.01,
+			"position %s roundtrips within 1 cm (got %s)" % [point, got])
+		expect(snap.size() == 28, "one actor stays 28 B at long range")
+
+	var far := NetProtocol.encode_snapshot(7, [{
+		"id": 1, "pos": Vector3(400.0, 0.0, -400.0), "yaw": 0.0, "state": 0,
+		"vel": Vector3.ZERO, "on_floor": true, "hp": 100, "ack": 0,
+	}])
+	var clamped: Vector3 = NetProtocol.decode_snapshot(far)["entries"][0]["pos"]
+	expect(clamped.x <= 327.68 and clamped.z >= -327.68,
+		"positions beyond the range clamp to the new limit (got %s)" % clamped)

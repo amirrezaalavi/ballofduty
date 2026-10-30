@@ -33,7 +33,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 8 | 21 | travel, diagonal parity, sprint, L1 jump apex/derivation/asymmetric fall/terminal, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 164 | weapon data, 20/20 body hits at 5/15/30 m, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 9 | 52 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
+| `tests/gdunit/test_net_protocol.gd` | 10 | 58 | roundtrips, 1 cm / ±327.68 m positions, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
@@ -58,7 +58,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**118 test cases · ~960 assertions**, plus **35 walkthrough sections** and the 4-bot match.
+**119 test cases · ~970 assertions**, plus **35 walkthrough sections** and the 4-bot match.
 Quarry budget: 49 draw calls, 192,842 triangles; web export 44,768 KB raw / 14,244 KB gzip.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 

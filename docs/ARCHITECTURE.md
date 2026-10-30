@@ -47,7 +47,7 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 | `SNAPSHOT` | 6 + 22n | tick u32, count, then (id, pos xyz i16 mm, yaw i16, state, vel xyz i16 cm/s, flags u8, hp, acked seq u32) |
 | `PING`/`PONG` | 5 / 9 | client msec; pong adds server tick |
 
-- Position quantization is millimetres over ±32.768 m (2 mm round-trip error in tests); velocity is
+- Position quantization is centimetres over ±327.68 m (≤1 cm round-trip error in tests, enough for 250 m maps); velocity is
   centimetres per second. Flags bit 0 is `on_floor`.
 - **Movement model (CP4b):** `view_yaw` is client-owned and independent of the body. WASD is
   camera-relative; the body turns toward the movement direction (14 rad/s) and only translates as its

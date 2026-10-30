@@ -18,7 +18,10 @@ const MAX_PLAYERS := 8
 const CLASS_COUNT := 5
 const MAX_NAME_BYTES := 16
 const MAX_PACKET_BYTES := 2048
-const POS_RANGE := 32.768
+## Positions are quantized in centimetres over +/-327.68 m. 1 cm is well below
+## one 30 Hz movement step and covers 150-250 m maps; the 22 B snapshot row and
+## 182 B / 8-actor budget are unchanged.
+const POS_RANGE := 327.68
 const PITCH_RANGE := 1.6
 const VEL_RANGE := 327.67
 
@@ -323,11 +326,11 @@ static func msg_type(pkt: PackedByteArray) -> int:
 
 
 static func _quant_pos(v: float) -> int:
-	return clampi(int(roundf(clampf(v, -POS_RANGE, POS_RANGE - 0.001) * 1000.0)), -32768, 32767)
+	return clampi(int(roundf(clampf(v, -POS_RANGE, POS_RANGE - 0.01) * 100.0)), -32768, 32767)
 
 
 static func _dequant_pos(q: int) -> float:
-	return float(q) / 1000.0
+	return float(q) / 100.0
 
 
 static func _quant_vel(v: float) -> int:
