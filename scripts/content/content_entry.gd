@@ -5,7 +5,7 @@ extends Resource
 ## artifact is, where it lives and what it is allowed to cost.
 ##
 ## Entries are authored as .tres files under res://resources/content/entries/ and
-## referenced by a ContentPack. See docs/CONTENT-STANDARD.md.
+## referenced by a ContentPack. See docs/data/CONTENT-STANDARD.md.
 
 const KINDS: Array[StringName] = [
 	&"map", &"class", &"weapon", &"collectible", &"mode", &"cosmetic",

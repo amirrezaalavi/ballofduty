@@ -25,3 +25,7 @@ Thumbs.db
 # Test reports and generated API cache
 reports/
 .cache/
+
+# Browser smoke harness deps + local artifacts
+tools/ci/node_modules/
+artifacts/

@@ -12,7 +12,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S44 | Visible bullets | Long thin tracer: 0.018 m core, 2.2 m trail, 2.4 m rim; muzzle-grown so it never starts at the camera; pooled, 81 m/s | done | CP4c-fix |
 | S43 | Speed retune | Walk 1.05 m/s (+5 %), sprint 2.751 m/s (+10 %), projectile 81 m/s (−10 %) | done | CP4c-fix |
 | S45 | Remote smoothing | 2.5-tick virtual clock (83 ms), 1-tick damped extrapolation, render-offset decay, physics interpolation off on remotes, `_process` updates | done | CP4c-fix |
-| S42 | Revised execution plan | Phase 0 trust/feel, Phase 1 three parallel agents, Phase 2 world, Phase 3 CP4d/CP5 — see `docs/PLAN.md` | done | next |
+| S42 | Revised execution plan | Phase 0 trust/feel, Phase 1 three parallel agents, Phase 2 world, Phase 3 CP4d/CP5 — plan doc retired, see `docs/STATUS.md` | done | next |
 | S41 | Connection state truth | 6 s timeout, refused detection, HUD banner, offline fallback, ghost cleanup, one-origin `/ws` proxy | done | CP4c-fix |
 | S40 | Combat telemetry | Server shots/projectiles/hits/deaths/blocked counters every 150 ticks | done | CP4c-fix |
 | S39 | Gun/turn behavior | Gun welded to hand; additive spine aim ±70°; 8°/150 ms turn-then-shoot; ADS locks body; no idle aim overlay | done | CP4c-fix |
@@ -26,7 +26,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S58 | L6 settings UI | Reusable panel, sensitivity/invert/scope/volume/quality, persistence/reset, both menu entry points; 7 tests | done | CP5 |
 | S57 | Protocol v2 / 16 actors | 18 B row, 150 B @8 / 294 B @16, version handshake, 16-bot probe (p95 ~2–3 ms), 8-marker overflow rings, ring-aware respawn; 148 tests green | done | CP5 |
 | S56 | Optimization batch 1 | HUD dirty flag; bullet-pool prewarm; single-buffer snapshot encode (49→20 µs) + health cache; O(1) roster id index + 10 Hz bot LOS; top-2 respawn rays (24→6); 143 tests green | done | CP5 |
-| S55 | Content / artifact standard | Manifest + packs + entries, `ContentCatalog`, budget validation, `tools/validate_content.gd`, CI gate, catalog-backed `WeaponRegistry`; map/class/weapon/collectible recipes in `docs/CONTENT-STANDARD.md` | done | CP5 |
+| S55 | Content / artifact standard | Manifest + packs + entries, `ContentCatalog`, budget validation, `tools/validate_content.gd`, CI gate, catalog-backed `WeaponRegistry`; map/class/weapon/collectible recipes in `docs/data/CONTENT-STANDARD.md` | done | CP5 |
 | S54 | Quick menu (all phases) | Esc overlay for menu / connecting / match / respawning / solo / match over; resume, cancel, leave, restart solo, settings placeholder, quit; pauses solo only | done | CP5 |
 | S53 | First-load auto-join | `?join=1` now waits 3 rendered frames before opening the socket; the quarry's first software-WebGL frame was eating the 6 s connect budget (manual Join always worked) | done | CP5 |
 | S52 | Damage/scope pass | Head hitbox + headshot multiplier removed; bleed/spread/effect/armour_pierce/gravity removed; flat rounds inherit shooter velocity (experimental); Knight 34, Mage 18 + 8 splash (mag 12), bow 60, crossbow 12, Barbarian 34 → 3-hit kills; Knight reload 1.4 s | done | CP5 |
@@ -35,10 +35,10 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S54 | Map finish pass | Stone shading fixed after linear conversion; seamless gravel grain; 8 central cover clusters; 16 heightfield ring outcrops; cave/terrace screenshots refreshed | done | CP5 |
 | S53 | Map QA walkthrough | Real-physics 35-section harness (chunks, cave, ramps, bridge, tower, lookout, spawns, edges, falls); fixed cave aprons, ramp lane blockers, bridge lip/east landing, lookout access, spawn slopes, cave floor z-fighting | done | CP5 |
 | S49 | Class weapons v1 | Five class profiles, picker (`?class=`), per-class variants/models/animations/HUD; M4 retired for now; Quaternius CC0 spear/bow models | done | CP5 |
-| S48 | Class weapons + bigger map research | Report + decisions at `docs/research/weapons-and-arena.md` / `WEAPONS-DECISIONS.md` | done | CP5 |
+| S48 | Class weapons + bigger map research | Decisions at `docs/data/WEAPONS.md` | done | CP5 |
 | S47 | Roster cap | Accepted **8 total actors** (humans + bots) for V1; soak covers 4+4 and 8+0. 8 clients + 4 bots would need MAX_PLAYERS=12 plus 4 more spawns and a 270 B snapshot row | done | CP4d |
 | S46 | Remote death visuals | Death_A + red pool/shell marker now play for local and remote deaths; corpses stay visible until respawn | done | CP4c-fix |
-| S32 | Playtest 2026-10-29 | Connection never reached `:9180`; see `docs/PLAYTEST-2026-10-29.md` | done | CP4c |
+| S32 | Playtest 2026-10-29 | Connection never reached `:9180`; playtest doc retired, findings folded into `docs/STATUS.md` | done | CP4c |
 | S1 | Jump height +10 % | `jump_velocity` 7.00 → **7.34** (apex 1.23 m → **1.35 m**) | done | CP1 |
 | S2 | Character 20 % smaller | Physical capsule, mesh, hurtboxes scaled to 0.8; camera framing unchanged for now | done | CP1 |
 | S3 | Re-check camera after shrink | User accepted the current 3.6 m / 0.55 m / 1.55 m framing as-is | done | CP1 |
@@ -83,7 +83,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | L6 | Settings UI | **Done:** reusable panel from main menu + quick menu; sensitivity, invert Y, scope scale, master volume, LOW/MEDIUM/HIGH quality; persistence + reset; 7 tests | done |
 | L7 | Animation / stride | Quaternius UAL landed (S15): real walk/sprint/jump/pistol clips. Remaining: strafe/back clips (only in the paid full set), AnimationTree layering, Pistol_Shoot/Pistol_Reload hooks, Death01 wiring | doing |
 | L8 | Server parity | **Step 1 done:** capsule/hurtbox/camera/muzzle read the same profile on all roles; no headshots, no protocol change. **Pending:** camera-compression/muzzle policy and per-class sizes | doing |
-| L9 | Browser matrix | **Research:** 13-cell matrix and 7 questions in `docs/research/L9-QUESTIONS.md`; implementation gated on answers | doing |
+| L9 | Browser matrix | **Implemented:** Playwright boot/WebGL2/console harness (`tools/ci/`), opt-in `?perf=1` probe, shell fallback/mobile/audio/pointer-lock hints, 7 probe tests, matrix + manual protocol in `docs/ci/BROWSER-MATRIX.md`. GitHub runs the light gate only. Remaining manual: H1/H2, Safari/iOS, packet loss, Firefox/Xvfb. | done (CI surface) / manual |
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
 | L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |
 | L12 | Character variants | Remote players need distinct Blocky Characters textures/colors; same animation rig. Add in CP4a roster work. | todo |
@@ -99,6 +99,11 @@ Status: `todo` · `doing` · `done` · `deferred`
   Minecraft-style chunk limits recorded as **L11**.
 - **2026-10-29 — CP3:** rifle/projectile/damage/HUD/audio/training dummies landed. Combat test covers
   20/20 headshots at 5/15/30 m. Weapon viewmodel and player damage feedback recorded as **L13/L14**.
+- **2026-10-30 — L9:** CI browser smoke (Chromium boot/WebGL 2/console/pointer
+  lock), opt-in `?perf=1` probe with `__bod_perf`/`__bod_state`, shell WebGL 2
+  fallback + mobile banner + audio unlock + pointer-lock hint + integer canvas
+  snapping, 7 probe tests, and the 13-cell manual protocol. No protocol changes,
+  no auto quality switching, no MSAA toggle.
 - **2026-10-29 — animation/feel pass:** gun shoulder-mounted + aim-pitched (S11); backwards-reversed
   and air-lean states (S12); character ×0.6 → 0.82 m with 2.3 m camera (S13); scope FOV 48 (S14).
   Animation-pack candidates for real jump/back/strafe clips: Kenney character hub

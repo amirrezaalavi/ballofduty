@@ -23,6 +23,9 @@ const CLASSES := [
 ]
 
 var title_label: Label
+var map_option: OptionButton
+var map_hint: Label
+var selected_map_id: String = MapRegistry.DEFAULT_MAP
 var name_field: LineEdit
 var host_field: LineEdit
 var port_field: LineEdit
@@ -53,6 +56,7 @@ func configure(defaults: Dictionary) -> void:
 	_proxy_ws = String(defaults.get("proxy_ws", ""))
 	if name_field:
 		name_field.text = String(defaults.get("name", "Player"))
+	select_map(String(defaults.get("map_id", selected_map_id)))
 	if host_field:
 		host_field.text = String(defaults.get("host", _page_host))
 	if port_field:
@@ -105,10 +109,22 @@ func join_config() -> Dictionary:
 		"port": port,
 		"name": display_name.left(16),
 		"class_id": selected_class_id,
+		"map_id": selected_map_id,
 		"path": _proxy_ws if proxied else "",
 		"secure": _page_secure,
 		"proxied": proxied,
 	}
+
+
+func selected_map() -> String:
+	return selected_map_id
+
+
+func select_map(map_id: String) -> void:
+	selected_map_id = MapRegistry.sanitize(map_id)
+	if map_option:
+		map_option.select(MapRegistry.index_of(selected_map_id))
+	_update_map_hint()
 
 
 func selected_class() -> int:
@@ -240,6 +256,26 @@ func _build_ui() -> void:
 	box.add_child(class_hint)
 	select_class(0)
 
+	box.add_child(_small_label("MAP"))
+	map_option = OptionButton.new()
+	map_option.name = "MapOption"
+	map_option.custom_minimum_size = Vector2(0.0, 32.0)
+	for entry: Dictionary in MapRegistry.MAPS:
+		map_option.add_item("%s · %s — %s" % [
+			String(entry["display"]), String(entry["size"]), String(entry["desc"]),
+		])
+	map_option.select(MapRegistry.index_of(selected_map_id))
+	map_option.item_selected.connect(func(index: int) -> void: select_map(MapRegistry.id_at(index)))
+	box.add_child(map_option)
+
+	map_hint = Label.new()
+	map_hint.name = "MapHint"
+	map_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	map_hint.add_theme_font_size_override("font_size", 10)
+	map_hint.add_theme_color_override("font_color", ACCENT)
+	box.add_child(map_hint)
+	_update_map_hint()
+
 	var callsign := _small_label("CALLSIGN")
 	box.add_child(callsign)
 	name_field = LineEdit.new()
@@ -348,6 +384,15 @@ func _build_ui() -> void:
 	hint.add_theme_font_size_override("font_size", 9)
 	hint.add_theme_color_override("font_color", Color(0.34, 0.39, 0.51))
 	box.add_child(hint)
+
+
+func _update_map_hint() -> void:
+	if map_hint == null:
+		return
+	var entry: Dictionary = MapRegistry.MAPS[MapRegistry.index_of(selected_map_id)]
+	map_hint.text = "SELECTED · %s %s — %s" % [
+		String(entry["display"]), String(entry["size"]), String(entry["desc"]).to_upper()
+	]
 
 
 func _small_label(text: String) -> Label:

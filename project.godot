@@ -24,6 +24,7 @@ EventBus="*res://scripts/autoload/event_bus.gd"
 AudioManager="*res://scripts/autoload/audio_manager.gd"
 NetworkManager="*res://scripts/networking/network_manager.gd"
 GameManager="*res://scripts/game/game_manager.gd"
+PerfProbe="*res://scripts/autoload/perf_probe.gd"
 
 [display]
 

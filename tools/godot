@@ -1,12 +1,30 @@
 #!/usr/bin/env bash
 # Reproducible Godot launcher. Override with GODOT_BIN if needed.
+#
+# GODOT_BIN may be an absolute/relative executable path or a bare command name
+# on PATH (CI's setup-godot action installs `godot` that way). When GODOT_BIN is
+# unset, the sandbox default is used and falls back to `godot` on PATH.
 set -euo pipefail
 
-GODOT_BIN="${GODOT_BIN:-/srv/opencode/pkg/godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64}"
+DEFAULT_GODOT_BIN="/srv/opencode/pkg/godot-4.7.2/Godot_v4.7.2-stable_linux.x86_64"
+
+if [[ -z "${GODOT_BIN:-}" ]]; then
+  GODOT_BIN="$DEFAULT_GODOT_BIN"
+  if [[ ! -x "$GODOT_BIN" ]]; then
+    if resolved="$(command -v godot 2>/dev/null)" && [[ -n "$resolved" ]]; then
+      GODOT_BIN="$resolved"
+    fi
+  fi
+elif [[ ! -x "$GODOT_BIN" ]]; then
+  # Bare command name: resolve it against PATH instead of failing on `-x`.
+  if resolved="$(command -v "$GODOT_BIN" 2>/dev/null)" && [[ -n "$resolved" ]]; then
+    GODOT_BIN="$resolved"
+  fi
+fi
 
 if [[ ! -x "$GODOT_BIN" ]]; then
   echo "Godot executable not found or not executable: $GODOT_BIN" >&2
-  echo "Set GODOT_BIN=/path/to/godot" >&2
+  echo "Set GODOT_BIN=/path/to/godot (a bare command name on PATH also works)" >&2
   exit 1
 fi
 

@@ -6,6 +6,10 @@ extends Node
 
 var sequence: int = 0
 var _fire_buffered: bool = false
+## Cached `document.hidden`; polled at 4 Hz so a background tab cannot queue
+## seconds of movement into the next snapshot. No protocol resync exists.
+var _hidden_checked_msec: int = -1000
+var _page_hidden: bool = false
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -20,6 +24,13 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func sample(yaw: float, pitch: float) -> PlayerInputFrame:
 	sequence += 1
+	if _is_page_hidden():
+		_fire_buffered = false
+		var idle := PlayerInputFrame.new()
+		idle.seq = sequence
+		idle.yaw = yaw
+		idle.pitch = pitch
+		return idle
 	var frame := PlayerInputFrame.new()
 	frame.seq = sequence
 	frame.move = Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -32,3 +43,16 @@ func sample(yaw: float, pitch: float) -> PlayerInputFrame:
 	frame.yaw = yaw
 	frame.pitch = pitch
 	return frame
+
+
+func _is_page_hidden() -> bool:
+	var now := Time.get_ticks_msec()
+	if now - _hidden_checked_msec < 250:
+		return _page_hidden
+	_hidden_checked_msec = now
+	_page_hidden = false
+	if OS.has_feature("web") and Engine.has_singleton("JavaScriptBridge"):
+		_page_hidden = bool(
+			Engine.get_singleton("JavaScriptBridge").eval("document.hidden === true", true)
+		)
+	return _page_hidden

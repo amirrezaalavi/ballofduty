@@ -2,51 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop]
   pull_request:
+    branches: [develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  pipeline:
-    name: Import, smoke, export
+  light:
+    name: Import, content, tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      GODOT_BIN: godot
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Godot 4.7.2 + export templates
+      - name: Install Godot 4.7.2
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.7.2
+          version: "4.7.2"
           use-dotnet: false
-          include-templates: true
+          include-templates: false
 
       - name: Verify engine
         run: godot --version
 
-      - name: Pipeline
-        run: tools/check.sh
+      - name: Light gate (import + content + gdUnit)
+        run: tools/check.sh --light
 
-      - name: Upload test reports
+      - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-report
           path: reports
           if-no-files-found: ignore
-
-      - name: Upload web build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ballofduty-web
-          path: build/web
-          if-no-files-found: error
-
-      - name: Upload server build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ballofduty-server
-          path: build/server
-          if-no-files-found: error
+          retention-days: 7

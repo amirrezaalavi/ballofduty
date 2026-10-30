@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
-# Full local pipeline check. Fails on any error.
-# Usage: tools/check.sh [--skip-export]
+# Pipeline check. Fails on any error.
+# Usage: tools/check.sh [--skip-export] [--light]
+#   --skip-export  run everything except the web/server exports and size report
+#   --light        import + content + gdUnit only (what GitHub Actions runs)
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 GODOT="./tools/godot"
 SKIP_EXPORT=0
-[[ "${1:-}" == "--skip-export" ]] && SKIP_EXPORT=1
+LIGHT=0
+for arg in "$@"; do
+  case "$arg" in
+    --skip-export) SKIP_EXPORT=1 ;;
+    --light) LIGHT=1; SKIP_EXPORT=1 ;;
+    *) echo "unknown option: $arg" >&2; exit 2 ;;
+  esac
+done
 
 log() { echo -e "\n\033[1;36m== $* ==\033[0m"; }
 
@@ -36,6 +45,11 @@ rm -rf reports
   -a tests/gdunit -c --ignoreHeadlessMode 2>&1 | tee /tmp/bod_tests.log
 grep -q "Exit code: 0" /tmp/bod_tests.log
 
+if [[ "$LIGHT" == "1" ]]; then
+  log "Light gate OK"
+  exit 0
+fi
+
 log "Arena budget"
 "$GODOT" --headless --path . --script tests/headless/arena_stats.gd 2>&1 | tee /tmp/bod_arena.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error|exceed" /tmp/bod_arena.log
@@ -44,6 +58,16 @@ log "Arena walkthrough"
 "$GODOT" --headless --path . --script tests/headless/quarry_walk.gd 2>&1 | tee /tmp/bod_walk.log
 grep -q "result=PASS" /tmp/bod_walk.log
 ! grep -q "QUARRY_WALK_FAIL" /tmp/bod_walk.log
+
+log "Map smoke (all maps)"
+"$GODOT" --headless --path . --script tests/headless/map_smoke.gd 2>&1 | tee /tmp/bod_map_smoke.log
+grep -q "MAP_SMOKE maps=4 failures=0 result=PASS" /tmp/bod_map_smoke.log
+
+log "Map walkthroughs (crater, dunes, jungle)"
+for map in crater dunes jungle; do
+  "$GODOT" --headless --path . --script "tests/headless/${map}_walk.gd" 2>&1 | tee "/tmp/bod_walk_${map}.log"
+  grep -q "result=PASS" "/tmp/bod_walk_${map}.log"
+done
 
 log "Arena 4-bot match"
 "$GODOT" --headless --path . --script tests/headless/quarry_match.gd 2>&1 | tee /tmp/bod_match.log

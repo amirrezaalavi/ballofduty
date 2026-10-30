@@ -1,0 +1,14 @@
+{
+  "name": "bod-browser-smoke",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "L9 Playwright browser smoke harness for the Ball of Duty web build",
+  "scripts": {
+    "smoke": "node browser_smoke.mjs",
+    "probe:firefox": "node firefox_probe.js"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}
