@@ -183,6 +183,22 @@ Player.tscn (CharacterBody3D) — roles: LOCAL (input/camera), REMOTE (snapshot-
 - Autoloads limited to `EventBus`, `GameManager`, `Settings`, `AudioManager`; introduce them as the phase
   needs them (`Settings` in CP1, `EventBus` in CP3, `GameManager` in CP4a, `AudioManager` in CP3/CP5).
 
+## Character body profile (L2/L8 Step 1)
+
+- `CharacterBodyStats` (`scripts/components/character_body_stats.gd`) is the shared
+  source for capsule/hurtbox dimensions, visual scale, camera pivot/spring/shoulder,
+  eye height, canonical server muzzle and death-marker size.
+- `CharacterBodyRegistry` maps `class_id` to one of five profiles. Step 1 keeps all
+  five numerically identical to the old 0.82 m rig; per-class sizes are Step 2.
+- `apply_to_actor(actor, role)` configures LOCAL, REMOTE and SERVER. The actor root
+  and every `CollisionShape3D` stay scale `Vector3.ONE`; only `Visual.scale` carries
+  the mesh scale. The server path never reads `Visual` or the camera.
+- **No headshots.** There is one `BodyHurtbox`; the research answer's mathematical
+  headshot cutoff was rejected because it conflicts with the locked design.
+- Known gap: the client hand muzzle and server canonical muzzle still differ, and
+  the client spring arm compresses against walls while the server aim origin is
+  fixed. Both are documented, not silently changed.
+
 ## Content & artifacts
 
 - The game is logic; maps, classes, weapons, collectibles, modes and cosmetics are

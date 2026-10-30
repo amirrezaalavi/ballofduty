@@ -3,8 +3,11 @@
 A lightweight, cute, web-first 3D third-person arena shooter. Up to 16 players, five classes, five minutes,
 bragging rights.
 
-**Status:** Phase 2A landed — five class weapons, picker, per-class visuals/HUD; 150 m quarry next
-(CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first run pending a remote).
+**Status:** playable vertical slice — five classes, 150 m Sunken Quarry, protocol v2
+(8 default / 16-actor capability), quick menu, settings UI, data-driven content standard.
+**163 tests green** on `develop`; full `tools/check.sh` passes. The three candidate maps,
+L9 browser matrix, L2/L8 Step 2 and match-end flow remain.
+See [`docs/STATUS.md`](docs/STATUS.md) for the current state, stability and open questions.
 Tests run on gdUnit4 with JUnit XML; see [`docs/TESTING.md`](docs/TESTING.md).
 See [`docs/ROADMAP.md`](docs/ROADMAP.md).
 Maps, classes, weapons and collectibles are data-driven; see

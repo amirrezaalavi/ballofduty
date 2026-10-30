@@ -76,13 +76,13 @@ Status: `todo` · `doing` · `done` · `deferred`
 | # | Item | Why / notes | Status |
 |---|---|---|---|
 | L1 | Proper jump physics pass | **Done:** `v=9.03`, rise `g=34`, fall `g×1.35=45.9`, terminal 30; apex stays 1.35 m, full airtime 0.67 → **0.50 s**; coyote 0.12 s, buffer 0.15 s, air accel 18. Analytic `v²/2g` / `2v/g` helpers + tests | done |
-| L2 | Character scale system | **Step 1 done:** `CharacterBodyStats` + five identical profiles, applied on LOCAL/REMOTE/SERVER; per-class sizes deferred to Step 2 | done |
+| L2 | Character scale system | **Step 1 done:** `CharacterBodyStats` + five identical profiles, applied on LOCAL/REMOTE/SERVER. **Step 2 pending:** per-class sizes (Mage 0.856, Knight 0.820, Barbarian 0.773, Rogue 0.703) | doing |
 | L3 | Camera framing pass | Current framing accepted; later add ADS shoulder offset, collision smoothing and wide/tight presets | done |
 | L4 | Larger map performance | Current map is 35 draw calls / 31k tris. A larger final map needs occlusion/LOD/fog decisions and a new budget measurement | todo |
 | L5 | Movement set | Add slide/dash/roll later only if the core loop needs it; do not add before netcode so prediction scope stays small | deferred |
 | L6 | Settings UI | **Done:** reusable panel from main menu + quick menu; sensitivity, invert Y, scope scale, master volume, LOW/MEDIUM/HIGH quality; persistence + reset; 7 tests | done |
 | L7 | Animation / stride | Quaternius UAL landed (S15): real walk/sprint/jump/pistol clips. Remaining: strafe/back clips (only in the paid full set), AnimationTree layering, Pistol_Shoot/Pistol_Reload hooks, Death01 wiring | doing |
-| L8 | Server parity | **Step 1 done:** capsule/hurtbox/camera/muzzle read the same profile on all roles; no headshots, no protocol change | done |
+| L8 | Server parity | **Step 1 done:** capsule/hurtbox/camera/muzzle read the same profile on all roles; no headshots, no protocol change. **Pending:** camera-compression/muzzle policy and per-class sizes | doing |
 | L9 | Browser matrix | **Research:** 13-cell matrix and 7 questions in `docs/research/L9-QUESTIONS.md`; implementation gated on answers | doing |
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
 | L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |
