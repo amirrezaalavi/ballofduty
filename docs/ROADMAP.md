@@ -1,10 +1,19 @@
 # Ball of Duty — Roadmap & Acceptance Criteria
 
-Status: **Phase 2A landed (five class weapons, picker, per-class visuals/HUD) — awaiting retest; 150 m quarry next; plan in [`PLAN.md`](PLAN.md)** (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first remote run pending) · Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility** · Tests: **gdUnit4, 85 cases / ~772 assertions** ([`TESTING.md`](TESTING.md))
+Status: **Phases 0–2A complete; CP5 in progress.** Five classes, four maps,
+protocol v2 (8 default / 16 capability), settings UI, content standard, L9 web
+surface. Engine: **Godot 4.7.2 (GDScript)** · Renderer: **Compatibility** ·
+Tests: **gdUnit4, 172 cases** ([`development/TESTING.md`](development/TESTING.md)).
+Live state: [`STATUS.md`](STATUS.md).
 Platform: **Web (primary) + native desktop/headless Linux (dev & server)**
 
-A checkpoint is **done** only when every acceptance criterion is met and the evidence is recorded
-in `docs/checkpoints/CPn.md` (numbers, screenshots, logs — not "looks good").
+A checkpoint is **done** only when every acceptance criterion is met and the
+evidence is recorded (numbers, logs — not "looks good"). See
+[`development/CHECKPOINTS.md`](development/CHECKPOINTS.md).
+
+> **Note:** the phase descriptions below are the original plan and remain as
+> historical context. Where they disagree with [`STATUS.md`](STATUS.md) or
+> [`data/`](data/), the latter win.
 
 ---
 
@@ -18,12 +27,13 @@ in `docs/checkpoints/CPn.md` (numbers, screenshots, logs — not "looks good").
 | Snapshot rate | 30 Hz, binary `PackedByteArray`, ≤ 300 B | 8 players; ~7 KB/s downstream; no delta compression for V1 |
 | Combat | Server-spawned projectiles, client cosmetic tracer | No lag-compensation/rewind needed for V1 |
 | Interpolation | 2 intervals (67 ms) + jitter margin, newest-wins | ~100 ms render delay; late packets hold last pose, no snap-back |
-| Match | Auto-join room, max 8, 5-min FFA, 3 s respawn | Smallest complete game loop |
+| Match | Auto-join room, 8 default / 16 capability, 5-min FFA, 3 s respawn | Smallest complete game loop; protocol v2 carries 16 rows |
 | Web export | Single-threaded, Compatibility, no SAB | Works on any static host without COOP/COEP |
-| Game scope | 1 arena, 1 rifle, no accounts/progression | Prove the loop before content |
+| Game scope | Five classes, four maps, no accounts/progression | Prove the loop before meta systems |
 
-Out of scope for V1: matchmaking, room codes, accounts, progression, cosmetics, multiple weapons/maps,
-chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond server validation.
+Out of scope for V1: matchmaking, room codes, accounts, progression, cosmetics,
+chat/voice, mobile/touch controls (load-only), recoil patterns beyond cosmetic,
+anti-cheat beyond server validation.
 
 ---
 
@@ -53,7 +63,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 - [ ] Linux server build starts without X11/display and prints the listen banner; WebSocket handshake is verified in CP4a.
 - [ ] `tools/check.sh` passes on a clean checkout; the CI workflow is committed (first green remote run deferred until a remote exists — tracked as a CP0 follow-up).
 - [ ] `config/version` is visible on the in-game boot overlay (build SHA recorded in the evidence file).
-- [ ] Collision layer table documented in `docs/ARCHITECTURE.md` and used consistently.
+- [ ] Collision layer table documented in `docs/development/ARCHITECTURE.md` and used consistently.
 
 ---
 
@@ -293,7 +303,7 @@ chat/voice, mobile/touch, recoil patterns beyond cosmetic, anti-cheat beyond ser
 
 ## Checkpoint evidence template
 
-`docs/checkpoints/CPn.md`:
+`docs/development/CHECKPOINTS.md`:
 
 ```md
 # CPn — <name>

@@ -69,7 +69,7 @@ node browser_smoke.mjs \
 ```
 
 `frame_ms_p50/p95/p99` stay `0` for the first 10 s because the probe discards a
-10 s warm-up. Use a manual 3 × 60 s run (see `docs/BROWSER-MATRIX.md`) for
+10 s warm-up. Use a manual 3 × 60 s run (see `docs/ci/BROWSER-MATRIX.md`) for
 framerate qualification; the smoke only proves the bridge is alive.
 
 ### With an in-match join

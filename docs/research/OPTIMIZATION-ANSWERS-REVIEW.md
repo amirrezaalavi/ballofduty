@@ -1,5 +1,9 @@
 # Review: Optimization Answers (`docs/research/optimization_answers.md`)
 
+> **Note:** this review references the original research answer file, which was
+> removed in the 2026-10-30 restructure. The decisions live here.
+
+
 **Reviewer:** implementation session
 **Reviewed against:** `37775d6` plus the current worktree (2026-10-30)
 **Status:** not accepted as-is. The report contains real findings, useful
@@ -32,7 +36,7 @@ when they are extrapolations or do not exist.
 | **Streaming / post-match (REN-05)** | **Not in this build.** No post-match intermission or scoreboard exists; the suggested `get_tree().unload_unused_resources()` is not the right API. |
 | **Drain cap (NET-05)** | **Wrong bottleneck math.** 64 packets/frame × 30 Hz = 1,920/s, above the 960/s from 32 clients at 30 Hz. No evidence for the claimed ingress bottleneck. |
 | **Match changes (MAT-02)** | **Reject.** It changes the locked 3 s respawn / 5 min match requirements without evidence. |
-| **Rollback/deploy (SAF-02)** | **Fabricated for this repo.** `docs/DEPLOY.md` is a planned CP5 target; there is no Docker/blue-green/health endpoint/rollback script or protocol-version handshake. |
+| **Rollback/deploy (SAF-02)** | **Fabricated for this repo.** `docs/ci/DEPLOY.md` is a planned CP5 target; there is no Docker/blue-green/health endpoint/rollback script or protocol-version handshake. |
 | **Observability (OBS-01/02/03)** | **Useful direction.** The exact 1.8×/1.4×/2.8× multipliers are unsourced; use them only after browser calibration. |
 
 ---
@@ -247,7 +251,7 @@ or 2 based on measured prediction error, not on the report's byte count.
   `match_state_changed`, but no match-end flow emits it yet.
 - **NET-04 projectile speed.** It uses 81 m/s; current class speeds are
   36–77 m/s. The swept-ray conclusion still holds, but the arithmetic is wrong.
-- **SAF-02 deployment.** `docs/DEPLOY.md` is explicitly “planned, CP5”. There is
+- **SAF-02 deployment.** `docs/ci/DEPLOY.md` is explicitly “planned, CP5”. There is
   no Docker, blue-green switch, health endpoint, rollback script, or protocol
   version handshake. Do not present this as an existing rollback plan.
 
@@ -304,7 +308,7 @@ For any of the above, the change needs:
 6. no change to server authority, prediction determinism, or the snapshot
    budget unless that change is explicitly part of the proposal.
 
-The content standard in [`docs/CONTENT-STANDARD.md`](../CONTENT-STANDARD.md) is
+The content standard in [`docs/data/CONTENT-STANDARD.md`](../data/CONTENT-STANDARD.md) is
 the other half of this: new maps, weapons, classes and collectibles declare
 their own budgets and are validated in CI, so optimization work does not have
 to be re-litigated for every artifact.

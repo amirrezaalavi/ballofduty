@@ -64,11 +64,16 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_character_body_parity.gd` | 10 | 0 | profile validation, root/shape scale, LOCAL/REMOTE/SERVER parity, camera/muzzle, 18 B snapshot, no headshot path |
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 | `tests/gdunit/test_perf_probe.gd` | 7 | 0 | percentile empty/single/known, p95/p99, warm-up exclusion, long-frame counters, report shape, headless safety, disabled by default |
+| `tests/gdunit/test_menu.gd` | +2 | 0 | map picker cards, default map selection |
 
-**170 test cases · 34 suites** on `feature/l9-browser-matrix` (163 on `develop`
-+ 7 L9 probe cases), plus **35 walkthrough sections**, the 4-bot match and the
-16-actor probe. The map session adds two map-picker tests when merged.
-Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8 actors, 294 B at 16; web export 44,820 KB raw / 14,292 KB gzip.
+**172 test cases · 34 suites** on `develop` (163 protocol-v2 baseline + 7 L9
+probe + 2 map picker), plus **35 walkthrough sections**, the 4-bot match and the
+16-actor probe.
+Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8
+actors, 294 B at 16; web export ~44.8 MB raw / ~14.3 MB gzip.
+
+CI runs `tools/check.sh --light` (import + content + these suites). Exports,
+walkthroughs and probes are local only — see [`../ci/README.md`](../ci/README.md).
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 
 `test_net_loopback` stays one integration test: the value is the real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
@@ -122,7 +127,7 @@ Typical visual check:
 ```bash
 tools/check.sh && tools/dev.sh up
 tools/capture.sh "http://127.0.0.1:8099/?join=1&host=127.0.0.1&port=9180&name=Shot" \
-  docs/checkpoints/shot.png 6000
+  docs/development/evidence/shot.png 6000
 tools/dev.sh down
 ```
 

@@ -1,10 +1,13 @@
-# L2/L8 Research Answer — Executive Summary
+# Character bodies (L2/L8)
 
-**Status:** received 2026-10-30. The user's full report was referenced as
-`docs/research/L2-L8-CHARACTER-SCALE-AND-PARITY.md`, but that file is not present
-in this workspace. This is the executive summary supplied in chat; the
-implementation agent is using it and the detailed questions in
-[`L2-L8-QUESTIONS.md`](L2-L8-QUESTIONS.md).
+**Status:** Step 1 implemented and merged; Step 2 (per-class sizes) is pending.
+Source: the L2/L8 research answer received 2026-10-30 (the full report file was
+never committed; this is the executive summary plus the decisions actually
+applied).
+
+Code: `scripts/components/character_body_stats.gd`,
+`scripts/components/character_body_registry.gd`,
+`resources/players/body_*.tres`.
 
 ## Decisions
 

@@ -1,8 +1,10 @@
-# Class weapons + arena — manager decision memo
+# Class weapons
 
-Source: `docs/research/weapons-and-arena.md` (the saved file contains the summary version; the
-long-form report did not sync). Recommendations below are based on that summary plus the current
-codebase.
+Decision memo for the five class weapons. The source report was a chat summary;
+these are the decisions actually implemented in `resources/weapons/` and
+`scripts/content/`.
+
+Numbers are authoritative here; the code is the source of truth if they diverge.
 
 ## Recommendations
 

@@ -2,7 +2,7 @@
 # Deterministic screenshot of the web build, written into the repo (the
 # Playwright MCP writes relative to its own cwd, which is not the project).
 #
-#   tools/capture.sh "http://127.0.0.1:8099/?join=1&host=127.0.0.1&port=9180&name=Shot" docs/checkpoints/shot.png
+#   tools/capture.sh "http://127.0.0.1:8099/?join=1&host=127.0.0.1&port=9180&name=Shot" docs/development/evidence/shot.png
 #   tools/capture.sh <url> <out.png> [wait_ms]
 #
 # Start the build with tools/dev.sh up first.

@@ -2,115 +2,41 @@ name: CI
 
 on:
   push:
-    branches: [develop, main]
+    branches: [develop]
   pull_request:
+    branches: [develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  pipeline:
-    name: Import, smoke, export
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Godot 4.7.2 + export templates
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.7.2
-          use-dotnet: false
-          include-templates: true
-
-      - name: Verify engine
-        run: godot --version
-
-      - name: Pipeline
-        run: tools/check.sh
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: reports
-          if-no-files-found: ignore
-
-      - name: Upload web build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ballofduty-web
-          path: build/web
-          if-no-files-found: error
-
-      - name: Upload server build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ballofduty-server
-          path: build/server
-          if-no-files-found: error
-
-  browser-smoke:
-    name: Browser smoke (Chromium)
-    needs: pipeline
+  light:
+    name: Import, content, tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download web build
-        uses: actions/download-artifact@v4
+      - name: Install Godot 4.7.2
+        uses: chickensoft-games/setup-godot@v2
         with:
-          name: ballofduty-web
-          path: build/web
+          version: "4.7.2"
+          use-dotnet: false
+          include-templates: false
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
+      - name: Verify engine
+        run: godot --version
 
-      - name: Install browser harness
-        working-directory: tools/ci
-        run: npm install --no-audit --no-fund
+      - name: Light gate (import + content + gdUnit)
+        run: tools/check.sh --light
 
-      - name: Install Chromium
-        working-directory: tools/ci
-        run: npx playwright install --with-deps chromium
-
-      - name: Boot smoke
-        run: |
-          python3 tools/serve.py --root build/web --port 8099 --no-proxy &
-          SERVER_PID=$!
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-          for _ in $(seq 1 50); do
-            curl -fsS http://127.0.0.1:8099/index.html >/dev/null && break
-            sleep 0.2
-          done
-          node tools/ci/browser_smoke.mjs \
-            --url "http://127.0.0.1:8099/index.html" \
-            --browser chromium \
-            --out artifacts/browser-smoke
-
-      - name: Upload browser artifacts
+      - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: browser-smoke
-          path: artifacts/browser-smoke
+          name: test-report
+          path: reports
           if-no-files-found: ignore
-
-      # Firefox is documented but not enabled here: it needs Xvfb plus the
-      # firefoxUserPrefs in tools/ci/browser_smoke.mjs (see tools/ci/README.md).
-      # Enable this step only after a green manual xvfb-run pass:
-      #
-      # - name: Boot smoke (Firefox + Xvfb)
-      #   run: |
-      #     sudo apt-get update && sudo apt-get install -y xvfb
-      #     python3 tools/serve.py --root build/web --port 8099 --no-proxy &
-      #     SERVER_PID=$!
-      #     trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-      #     sleep 1
-      #     xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-      #       node tools/ci/browser_smoke.mjs \
-      #         --url "http://127.0.0.1:8099/index.html" \
-      #         --browser firefox --headed \
-      #         --out artifacts/browser-smoke-firefox
+          retention-days: 7

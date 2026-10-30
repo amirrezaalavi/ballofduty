@@ -1,8 +1,9 @@
-# Map candidates — Dune Canyon, Starfall Crater, Jungle Ruins
+# Maps
 
 Date: 2026-10-30
-Build: branch `maps-candidates` (from main `a570511`)
-Accepted by: (pending your playtest)
+Source: map session, merged into `develop` from `maps-candidates-wip`
+Status: **merged, WIP** — loads and walks headless; bake/scatter/detail-texture
+pass, per-map budgets and the final rotation are still open.
 
 Three 120 x 120 m map candidates built on the quarry pattern (height field is
 the single source of truth for visual chunks + `HeightMapShape3D` collision,

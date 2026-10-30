@@ -202,7 +202,7 @@ Player.tscn (CharacterBody3D) — roles: LOCAL (input/camera), REMOTE (snapshot-
 ## Content & artifacts
 
 - The game is logic; maps, classes, weapons, collectibles, modes and cosmetics are
-  data. See [`CONTENT-STANDARD.md`](CONTENT-STANDARD.md).
+  data. See [`CONTENT-STANDARD.md`](../data/CONTENT-STANDARD.md).
 - `ContentCatalog` loads `resources/content/manifest.tres`, validates every pack
   and entry (ids, paths, types, wire ids, dependencies, budgets), and resolves
   artifacts by kind + id. `tools/validate_content.gd` is the CI gate.

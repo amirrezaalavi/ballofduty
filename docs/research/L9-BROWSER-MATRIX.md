@@ -1,5 +1,10 @@
 # L9 Research Report: Browser Matrix & Web Performance Harness (CP5)
 
+> **Note:** this is the verbatim research report. Files it references may have
+> been removed in the 2026-10-30 docs restructure; the decisions that survived are
+> in [`L9-ANSWER-SUMMARY.md`](L9-ANSWER-SUMMARY.md) and [`../ci/BROWSER-MATRIX.md`](../ci/BROWSER-MATRIX.md).
+
+
 **Document Version:** 1.0.0  
 **Target Engine:** Godot 4.7.2 stable (GDScript, Compatibility renderer / WebGL 2, single-threaded WASM)  
 **Branch / Worktree:** `feature/l9-browser-matrix` (base `develop@1bdb161`, tracking `develop@5b1ae8a`)  
@@ -449,7 +454,7 @@ When exactly one browser fails a G0 criterion:
 * Edge efficiency mode throttling background tabs when minimized.
 
 #### 5. Audit Package Artifact Manifest
-Before signing off on Checkpoint 5 (CP5), the following package must be archived in `docs/checkpoints/CP5-AUDIT/`:
+Before signing off on Checkpoint 5 (CP5), the following package must be archived in `docs/ci/audit/`:
 ```
 CP5-AUDIT/
 ├── MANIFEST.json               # Git hash, engine version, timestamp

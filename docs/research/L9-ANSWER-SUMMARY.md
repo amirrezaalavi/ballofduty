@@ -12,7 +12,7 @@ Safari/iOS and thermal evidence remain manual.
 
 | Decision | Implementation |
 |---|---|
-| Browser matrix is 13 cells with G0/G1/G2 gates | `docs/BROWSER-MATRIX.md` |
+| Browser matrix is 13 cells with G0/G1/G2 gates | `docs/ci/BROWSER-MATRIX.md` |
 | CI proves boot/WebGL 2/console/pointer lock, never framerate | `tools/ci/browser_smoke.mjs` |
 | Firefox CI needs Xvfb + software-WebRender prefs | documented in `tools/ci/README.md`; not enabled until a green manual run |
 | WebKit-on-Linux is a layout smoke test, not Safari | documented; never used to mark C4/C9 |
@@ -108,7 +108,7 @@ Per automated run (`tools/ci/browser_smoke.mjs --out <dir>`):
 ```
 
 For a CP5 release audit, copy those three files per cell into
-`docs/checkpoints/CP5-AUDIT/` together with:
+`docs/ci/audit/` together with:
 
 ```
 MANIFEST.json                 # git hash, engine version, timestamp

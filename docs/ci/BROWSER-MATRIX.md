@@ -180,7 +180,7 @@ artifacts/browser-smoke/
 Release audit (copy per cell):
 
 ```
-docs/checkpoints/CP5-AUDIT/
+docs/ci/audit/
 ├── MANIFEST.json
 ├── C1_Win11_Chrome_metrics.json
 ├── C1_Win11_Chrome_console.log
