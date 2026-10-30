@@ -12,6 +12,11 @@ match model, safe/risky changes). That file is the live question list for the
 150–250 m / 3-map / 16–32-actor growth path; this file keeps the short
 research/decision queue.
 
+**Answers:** [`optimization_answers.md`](optimization_answers.md) — external research
+response. **Review:** [`OPTIMIZATION-ANSWERS-REVIEW.md`](OPTIMIZATION-ANSWERS-REVIEW.md) —
+what is verified, what is projected, what is rejected, and the safe first batch.
+The content/artifact contract is in [`../CONTENT-STANDARD.md`](../CONTENT-STANDARD.md).
+
 ---
 
 **None currently.** All Phase 1 questions were answered and applied:

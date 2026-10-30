@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="ContentEntry" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_entry.gd" id="1_7t20d"]
+
+[resource]
+script = ExtResource("1_7t20d")
+id = &"core/barbarian_axes"
+kind = &"weapon"
+display_name = "Twin Throwing Axes"
+description = "Core class weapon profile"
+path = "res://resources/weapons/class_barbarian_axes.tres"
+resource_type = &"WeaponStats"
+wire_id = 4
+tags = Array[StringName]([&"core", &"weapon"])
+budgets = {
+"nodes": 20,
+"snapshot_bytes": 0,
+"texture_mb": 2,
+"triangles": 4000
+}
+links = {
+"projectile": "res://scenes/weapons/projectile.tscn"
+}
+attribution = "Quaternius / KayKit (see assets/CREDITS.md)"
+license = "CC0"
+preload_on_load = true

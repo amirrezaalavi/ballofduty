@@ -172,9 +172,15 @@ static func decode_input(pkt: PackedByteArray) -> Dictionary:
 
 static func encode_snapshot(tick: int, entries: Array) -> PackedByteArray:
 	# entries: Array of {id, pos, yaw, state, vel, on_floor, hp, ack}
+	# The count byte and the row loop must agree. Truncating here turns an
+	# oversized roster into a valid packet instead of a 6 + 22 * count mismatch
+	# that the decoder rejects as malformed. Raising MAX_PLAYERS is a separate
+	# layout decision (NET-02), not something this guard does.
+	var count := mini(entries.size(), MAX_PLAYERS)
 	var pkt := PackedByteArray([Msg.SNAPSHOT]) + _u32(tick)
-	pkt.append(mini(entries.size(), MAX_PLAYERS) & 0xFF)
-	for entry in entries:
+	pkt.append(count & 0xFF)
+	for i in count:
+		var entry: Dictionary = entries[i]
 		var pos: Vector3 = entry["pos"]
 		var vel: Vector3 = entry.get("vel", Vector3.ZERO)
 		pkt.append(entry["id"] & 0xFF)

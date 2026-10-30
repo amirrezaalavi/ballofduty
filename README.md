@@ -7,6 +7,8 @@ bragging rights.
 (CP0/CP1/CP2 accepted; CP3 combat feel review pending; CI first run pending a remote).
 Tests run on gdUnit4 with JUnit XML; see [`docs/TESTING.md`](docs/TESTING.md).
 See [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Maps, classes, weapons and collectibles are data-driven; see
+[`docs/CONTENT-STANDARD.md`](docs/CONTENT-STANDARD.md) before adding an artifact.
 
 ```bash
 tools/godot --headless --path . -- --server --port 9180   # authority

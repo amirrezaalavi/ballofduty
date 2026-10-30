@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="ContentEntry" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_entry.gd" id="1_ha7dq"]
+
+[resource]
+script = ExtResource("1_ha7dq")
+id = &"core/rogue"
+kind = &"class"
+display_name = "Rogue"
+description = "Charge skirmisher"
+path = "res://scenes/characters/player.tscn"
+resource_type = &"PackedScene"
+wire_id = 2
+dependencies = Array[StringName]([&"core/rogue_bow"])
+tags = Array[StringName]([&"core", &"class"])
+budgets = {
+"animation_players": 5,
+"nodes": 40,
+"texture_mb": 8,
+"triangles": 18000
+}
+links = {
+"visual": "res://assets/kaykit/adventurers/rogue.scn",
+"weapon": &"core/rogue_bow"
+}
+attribution = "KayKit Adventurers by Kay Lousberg"
+license = "CC0"

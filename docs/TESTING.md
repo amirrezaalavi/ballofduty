@@ -7,7 +7,7 @@ All automated checks run headless on the pinned Godot **4.7.2** binary. The suit
 ## Run
 
 ```bash
-tools/check.sh                            # import → tests → arena budget → boots → exports → size
+tools/check.sh                            # import → content → tests → arena budget → boots → exports → size
 tools/check.sh --skip-export              # tests + boots only
 
 # tests only (writes reports/report_N/results.xml + index.html)
@@ -33,7 +33,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 8 | 21 | travel, diagonal parity, sprint, L1 jump apex/derivation/asymmetric fall/terminal, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 164 | weapon data, 20/20 body hits at 5/15/30 m, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 10 | 58 | roundtrips, 1 cm / ±327.68 m positions, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
+| `tests/gdunit/test_net_protocol.gd` | 11 | 61 | roundtrips, 1 cm / ±327.68 m positions, 182 B snapshot budget, velocity/ground roundtrip, malformed/oversized rejection |
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
@@ -47,6 +47,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_kaykit.gd` | 5 | 0 | five variants, one shadowless skinned surface, scale/yaw, clip set, gun/muzzle, budget |
 | `tests/gdunit/test_menu.gd` | 8 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection |
 | `tests/gdunit/test_quick_menu.gd` | 3 | 0 | phase-aware actions, signals, Esc close, settings placeholder |
+| `tests/gdunit/test_content_catalog.gd` | 8 | 0 | core manifest, catalog-backed weapons, ids/paths/types, wire ids, budgets, dependency cycles, disabled entries |
 | `tests/gdunit/test_menu_network.gd` | 4 | 0 | initial timeout, bounded backoff, dropped-socket grace, real drop/rejoin |
 | `tests/gdunit/test_proxy.gd` | 5 | 0 | shell placeholders, static serving/injection, WS handshake/tunnel, real client through proxy |
 | `tests/gdunit/test_bullet_pool.gd` | 4 | 0 | 500-round no-growth, shared materials, muzzle-grown streak, impact pool |
@@ -58,7 +59,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**119 test cases · ~970 assertions**, plus **35 walkthrough sections** and the 4-bot match.
+**128 test cases · ~1,000 assertions** in this change, plus **35 walkthrough sections** and the 4-bot match. The current worktree also contains two map-picker tests from the map session (**130** total).
 Quarry budget: 49 draw calls, 192,842 triangles; web export 44,768 KB raw / 14,244 KB gzip.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="ContentEntry" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_entry.gd" id="1_vws21"]
+
+[resource]
+script = ExtResource("1_vws21")
+id = &"core/knight_javelin"
+kind = &"weapon"
+display_name = "Heavy Javelin"
+description = "Core class weapon profile"
+path = "res://resources/weapons/class_knight_javelin.tres"
+resource_type = &"WeaponStats"
+wire_id = 0
+tags = Array[StringName]([&"core", &"weapon"])
+budgets = {
+"nodes": 20,
+"snapshot_bytes": 0,
+"texture_mb": 2,
+"triangles": 4000
+}
+links = {
+"projectile": "res://scenes/weapons/projectile.tscn"
+}
+attribution = "Quaternius / KayKit (see assets/CREDITS.md)"
+license = "CC0"
+preload_on_load = true

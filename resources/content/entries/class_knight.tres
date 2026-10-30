@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="ContentEntry" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_entry.gd" id="1_lclpw"]
+
+[resource]
+script = ExtResource("1_lclpw")
+id = &"core/knight"
+kind = &"class"
+display_name = "Knight"
+description = "Frontline anchor"
+path = "res://scenes/characters/player.tscn"
+resource_type = &"PackedScene"
+wire_id = 0
+dependencies = Array[StringName]([&"core/knight_javelin"])
+tags = Array[StringName]([&"core", &"class"])
+budgets = {
+"animation_players": 5,
+"nodes": 40,
+"texture_mb": 8,
+"triangles": 18000
+}
+links = {
+"visual": "res://assets/kaykit/adventurers/knight.scn",
+"weapon": &"core/knight_javelin"
+}
+attribution = "KayKit Adventurers by Kay Lousberg"
+license = "CC0"

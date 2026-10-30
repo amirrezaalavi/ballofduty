@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="ContentPack" format=3]
+
+[ext_resource type="Resource" path="res://resources/content/entries/class_barbarian.tres" id="1_p3slt"]
+[ext_resource type="Resource" path="res://resources/content/entries/class_knight.tres" id="2_pnt71"]
+[ext_resource type="Resource" path="res://resources/content/entries/class_mage.tres" id="3_o87ub"]
+[ext_resource type="Resource" path="res://resources/content/entries/class_rogue.tres" id="4_8xqwb"]
+[ext_resource type="Resource" path="res://resources/content/entries/class_rogue_hooded.tres" id="5_miwm0"]
+[ext_resource type="Resource" path="res://resources/content/entries/weapon_barbarian_axes.tres" id="6_gjfw0"]
+[ext_resource type="Resource" path="res://resources/content/entries/weapon_knight_javelin.tres" id="7_ne0xw"]
+[ext_resource type="Resource" path="res://resources/content/entries/weapon_mage_staff.tres" id="8_42b5r"]
+[ext_resource type="Resource" path="res://resources/content/entries/weapon_rogue_bow.tres" id="9_tij6i"]
+[ext_resource type="Resource" path="res://resources/content/entries/weapon_rogue_hooded_crossbow.tres" id="10_86isc"]
+[ext_resource type="Script" path="res://scripts/content/content_pack.gd" id="11_a7jga"]
+
+[resource]
+script = ExtResource("11_a7jga")
+pack_id = &"core"
+display_name = "Core artifacts"
+min_game_version = "0.1.0"
+entries = Array[Resource]([ExtResource("1_p3slt"), ExtResource("2_pnt71"), ExtResource("3_o87ub"), ExtResource("4_8xqwb"), ExtResource("5_miwm0"), ExtResource("6_gjfw0"), ExtResource("7_ne0xw"), ExtResource("8_42b5r"), ExtResource("9_tij6i"), ExtResource("10_86isc")])

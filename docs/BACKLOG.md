@@ -22,6 +22,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S55 | Content / artifact standard | Manifest + packs + entries, `ContentCatalog`, budget validation, `tools/validate_content.gd`, CI gate, catalog-backed `WeaponRegistry`; map/class/weapon/collectible recipes in `docs/CONTENT-STANDARD.md` | done | CP5 |
 | S54 | Quick menu (all phases) | Esc overlay for menu / connecting / match / respawning / solo / match over; resume, cancel, leave, restart solo, settings placeholder, quit; pauses solo only | done | CP5 |
 | S53 | First-load auto-join | `?join=1` now waits 3 rendered frames before opening the socket; the quarry's first software-WebGL frame was eating the 6 s connect budget (manual Join always worked) | done | CP5 |
 | S52 | Damage/scope pass | Head hitbox + headshot multiplier removed; bleed/spread/effect/armour_pierce/gravity removed; flat rounds inherit shooter velocity (experimental); Knight 34, Mage 18 + 8 splash (mag 12), bow 60, crossbow 12, Barbarian 34 → 3-hit kills; Knight reload 1.4 s | done | CP5 |

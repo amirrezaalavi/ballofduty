@@ -182,3 +182,25 @@ func test_long_range_positions_roundtrip() -> void:
 	var clamped: Vector3 = NetProtocol.decode_snapshot(far)["entries"][0]["pos"]
 	expect(clamped.x <= 327.68 and clamped.z >= -327.68,
 		"positions beyond the range clamp to the new limit (got %s)" % clamped)
+
+
+func test_oversized_roster_truncates_instead_of_malforming() -> void:
+	# NET-02 guard: the count byte and the row loop must agree. Passing more
+	# entries than MAX_PLAYERS used to write count=8 but 16 rows, producing a
+	# packet the decoder rejects. It now truncates to the cap; raising the cap
+	# is a separate layout/budget decision.
+	var entries: Array = []
+	for i in 9:
+		entries.append({
+			"id": i + 1, "pos": Vector3(float(i), 0.0, 0.0), "yaw": 0.0,
+			"state": 0, "vel": Vector3.ZERO, "on_floor": true,
+			"hp": 100, "ack": i,
+		})
+	var snap := NetProtocol.encode_snapshot(9, entries)
+	expect(snap.size() == 6 + NetProtocol.MAX_PLAYERS * 22,
+		"oversized snapshot stays at the 8-actor size (%d B)" % snap.size())
+	expect(int(snap[5]) == NetProtocol.MAX_PLAYERS, "count byte matches the row cap")
+	var back := NetProtocol.decode_snapshot(snap)
+	expect(not back.is_empty(), "truncated snapshot is valid")
+	expect(back["entries"].size() == NetProtocol.MAX_PLAYERS, "only the cap is encoded")
+	expect(int(back["entries"][7]["id"]) == 8, "the ninth actor is not written")

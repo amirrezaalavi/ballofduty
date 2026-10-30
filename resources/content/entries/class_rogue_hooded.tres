@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="ContentEntry" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_entry.gd" id="1_06drm"]
+
+[resource]
+script = ExtResource("1_06drm")
+id = &"core/rogue_hooded"
+kind = &"class"
+display_name = "Rogue Hooded"
+description = "Burst flanker"
+path = "res://scenes/characters/player.tscn"
+resource_type = &"PackedScene"
+wire_id = 3
+dependencies = Array[StringName]([&"core/rogue_hooded_crossbow"])
+tags = Array[StringName]([&"core", &"class"])
+budgets = {
+"animation_players": 5,
+"nodes": 40,
+"texture_mb": 8,
+"triangles": 18000
+}
+links = {
+"visual": "res://assets/kaykit/adventurers/rogue_hooded.scn",
+"weapon": &"core/rogue_hooded_crossbow"
+}
+attribution = "KayKit Adventurers by Kay Lousberg"
+license = "CC0"

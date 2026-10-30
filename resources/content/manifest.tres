@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="ContentManifest" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_manifest.gd" id="1_qo8p1"]
+
+[resource]
+script = ExtResource("1_qo8p1")
+pack_paths = Array[String](["res://resources/content/packs/core.tres"])

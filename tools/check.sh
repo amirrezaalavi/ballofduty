@@ -26,6 +26,10 @@ if grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_import.log; then
   exit 1
 fi
 
+log "Content manifest"
+"$GODOT" --headless --path . --script tools/validate_content.gd 2>&1 | tee /tmp/bod_content.log
+grep -q "CONTENT_OK" /tmp/bod_content.log
+
 log "Tests (gdUnit4)"
 rm -rf reports
 "$GODOT" --headless --path . -s addons/gdUnit4/bin/GdUnitCmdTool.gd \

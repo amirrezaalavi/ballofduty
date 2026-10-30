@@ -178,6 +178,19 @@ Player.tscn (CharacterBody3D) — roles: LOCAL (input/camera), REMOTE (snapshot-
 - Autoloads limited to `EventBus`, `GameManager`, `Settings`, `AudioManager`; introduce them as the phase
   needs them (`Settings` in CP1, `EventBus` in CP3, `GameManager` in CP4a, `AudioManager` in CP3/CP5).
 
+## Content & artifacts
+
+- The game is logic; maps, classes, weapons, collectibles, modes and cosmetics are
+  data. See [`CONTENT-STANDARD.md`](CONTENT-STANDARD.md).
+- `ContentCatalog` loads `resources/content/manifest.tres`, validates every pack
+  and entry (ids, paths, types, wire ids, dependencies, budgets), and resolves
+  artifacts by kind + id. `tools/validate_content.gd` is the CI gate.
+- `WeaponRegistry` resolves the five class weapons from the catalog and falls
+  back to the compiled table if the manifest is missing or invalid. The map
+  registry is the next adapter once the three maps land.
+- Adding an artifact must not require a new hard-coded array in `scripts/`.
+  If it does, add the missing game system first, then expose it as data.
+
 ## Web constraints
 
 - Compatibility renderer only; no SSAO/SSIL/volumetric fog/TAA.

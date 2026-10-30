@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="ContentEntry" format=3]
+
+[ext_resource type="Script" path="res://scripts/content/content_entry.gd" id="1_guucs"]
+
+[resource]
+script = ExtResource("1_guucs")
+id = &"core/mage"
+kind = &"class"
+display_name = "Mage"
+description = "Splash artillery"
+path = "res://scenes/characters/player.tscn"
+resource_type = &"PackedScene"
+wire_id = 1
+dependencies = Array[StringName]([&"core/mage_staff"])
+tags = Array[StringName]([&"core", &"class"])
+budgets = {
+"animation_players": 5,
+"nodes": 40,
+"texture_mb": 8,
+"triangles": 18000
+}
+links = {
+"visual": "res://assets/kaykit/adventurers/mage.scn",
+"weapon": &"core/mage_staff"
+}
+attribution = "KayKit Adventurers by Kay Lousberg"
+license = "CC0"
