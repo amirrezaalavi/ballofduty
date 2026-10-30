@@ -38,6 +38,8 @@ var _quick_menu_paused: bool = false
 var _match_over: bool = false
 ## Auto-join endpoint waiting for the first rendered frames (see _deferred_auto_join).
 var _auto_join_endpoint: Dictionary = {}
+## L9 opt-in performance probe (autoload). Null in headless builds/tests.
+var _perf_probe: Node = null
 
 
 func _ready() -> void:
@@ -52,6 +54,7 @@ func _ready() -> void:
 		return
 	_hud_layer = get_node_or_null("HUD") as CanvasLayer
 	_debug_layer = get_node_or_null("DebugOverlay") as CanvasLayer
+	_perf_probe = get_node_or_null("/root/PerfProbe")
 	_page = _read_page_info()
 	_proxy_ws = String(_page.get("proxy", ""))
 
@@ -107,6 +110,7 @@ func _process(_delta: float) -> void:
 	_update_net_panel_stats()
 	_update_banner()
 	_update_ui_state()
+	_update_perf_state()
 	if _quick_menu and _quick_menu.is_open():
 		_update_quick_menu()
 
@@ -417,6 +421,41 @@ func _quick_detail() -> String:
 	if gm and gm.local_id > 0:
 		parts.append("id %d" % int(gm.local_id))
 	return " · ".join(parts)
+
+
+## L9: mirror the quick-menu phase into `window.__bod_state` for the browser
+## smoke harness. Reporting only; never changes gameplay or quality.
+func _update_perf_state() -> void:
+	if _perf_probe == null or not _perf_probe.enabled:
+		return
+	_perf_probe.set_match_state(_in_game, _current_phase(), _selected_class, _net_label())
+
+
+func _current_phase() -> StringName:
+	if _match_over:
+		return &"match_over"
+	if _loading and _loading.is_loading():
+		return &"connecting"
+	if not _in_game:
+		return &"menu"
+	if _solo:
+		return &"solo"
+	var local := get_node_or_null("Player") as PlayerController
+	if local and local.dead:
+		return &"respawning"
+	return &"match"
+
+
+func _net_label() -> StringName:
+	if _solo:
+		return &"solo"
+	var gm := get_node_or_null("/root/GameManager")
+	if gm:
+		if gm.is_net_server():
+			return &"server"
+		if gm.is_net_client():
+			return &"client"
+	return &"offline"
 
 
 func _arena_label() -> String:

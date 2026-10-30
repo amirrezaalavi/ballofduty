@@ -235,6 +235,89 @@ h1 {
 
 #status-notice button:hover { background: rgba(255, 154, 164, 0.12); }
 
+.fallback-card h2 {
+	margin: 0 0 0.9rem;
+	font-size: clamp(1.05rem, 3.4vw, 1.45rem);
+	letter-spacing: 0.08em;
+	color: var(--error);
+	text-transform: uppercase;
+}
+
+.fallback-card p {
+	margin: 0 0 1.2rem;
+	color: #c3cbe0;
+	font-size: 0.8rem;
+	line-height: 1.6;
+}
+
+.fallback-card button {
+	padding: 0.55rem 1.2rem;
+	background: transparent;
+	border: 1px solid #ff9aa4;
+	border-radius: 4px;
+	color: #ffd7de;
+	font: inherit;
+	font-size: 0.72rem;
+	letter-spacing: 0.12em;
+	cursor: pointer;
+}
+
+.fallback-card button:hover { background: rgba(255, 154, 164, 0.12); }
+
+#mobile-banner {
+	position: fixed;
+	top: 0.9rem;
+	left: 50%;
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+	max-width: min(94vw, 640px);
+	padding: 0.7rem 0.9rem;
+	transform: translateX(-50%);
+	background: rgba(13, 20, 38, 0.96);
+	border: 1px solid var(--warn);
+	border-radius: 8px;
+	color: #ffe4b8;
+	font-size: 0.72rem;
+	line-height: 1.45;
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+#mobile-banner[hidden] { display: none; }
+
+#mobile-banner button {
+	flex: none;
+	padding: 0.3rem 0.6rem;
+	background: transparent;
+	border: 1px solid var(--warn);
+	border-radius: 4px;
+	color: #ffe4b8;
+	font: inherit;
+	font-size: 0.66rem;
+	letter-spacing: 0.08em;
+	cursor: pointer;
+}
+
+#lock-hint {
+	position: fixed;
+	left: 50%;
+	bottom: 2.2rem;
+	z-index: 25;
+	padding: 0.55rem 1rem;
+	transform: translateX(-50%);
+	background: rgba(7, 11, 22, 0.88);
+	border: 1px solid var(--line);
+	border-radius: 999px;
+	color: var(--muted);
+	font-size: 0.7rem;
+	letter-spacing: 0.06em;
+	pointer-events: none;
+	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+#lock-hint[hidden] { display: none; }
+
 @keyframes orbit {
 	from { transform: rotate(0deg) translateX(39px) rotate(0deg); }
 	to { transform: rotate(360deg) translateX(39px) rotate(-360deg); }
@@ -299,6 +382,12 @@ h1 {
 			<div id="hint">Click the canvas to capture the mouse · Esc to release</div>
 		</div>
 
+		<div id="mobile-banner" hidden>
+			<span>Desktop browser recommended — keyboard and mouse required. Load-only on mobile.</span>
+			<button type="button" id="mobile-banner-dismiss">DISMISS</button>
+		</div>
+		<div id="lock-hint" hidden>Click to resume control</div>
+
 		<script src="$GODOT_URL"></script>
 		<script>
 const GODOT_CONFIG = $GODOT_CONFIG;
@@ -306,14 +395,129 @@ const GODOT_THREADS_ENABLED = $GODOT_THREADS_ENABLED;
 const engine = new Engine(GODOT_CONFIG);
 
 (function () {
+	const canvas = document.getElementById('canvas');
 	const bootOverlay = document.getElementById('boot');
 	const progressTrack = document.getElementById('status-progress');
 	const progressFill = document.getElementById('status-progress-fill');
 	const bootLine = document.getElementById('boot-line');
 	const statusNotice = document.getElementById('status-notice');
+	const mobileBanner = document.getElementById('mobile-banner');
+	const mobileBannerDismiss = document.getElementById('mobile-banner-dismiss');
+	const lockHint = document.getElementById('lock-hint');
 
 	let initializing = true;
 	let statusMode = 'progress';
+	let gameRunning = false;
+	let hadPointerLock = false;
+
+	// Integer canvas snapping keeps the CSS size on whole pixels, avoiding the
+	// fractional glViewport warnings Firefox emits. The export's adaptive resize
+	// policy (html/canvas_resize_policy=2) still owns the backing store.
+	function snapCanvasToViewport() {
+		if (!canvas) {
+			return;
+		}
+		const width = Math.max(1, Math.round(window.innerWidth));
+		const height = Math.max(1, Math.round(window.innerHeight));
+		if (canvas.style.width !== width + 'px') {
+			canvas.style.width = width + 'px';
+		}
+		if (canvas.style.height !== height + 'px') {
+			canvas.style.height = height + 'px';
+		}
+	}
+
+	function hasWebGL2() {
+		try {
+			const probe = document.createElement('canvas');
+			return probe.getContext('webgl2') !== null;
+		} catch (err) {
+			return false;
+		}
+	}
+
+	function showWebGL2Fallback() {
+		if (!bootOverlay) {
+			return;
+		}
+		bootOverlay.classList.remove('is-done');
+		const card = bootOverlay.querySelector('.boot-card');
+		if (!card) {
+			return;
+		}
+		card.classList.add('fallback-card');
+		while (card.lastChild) {
+			card.removeChild(card.lastChild);
+		}
+		const heading = document.createElement('h2');
+		heading.textContent = 'Graphics Acceleration Required';
+		const body = document.createElement('p');
+		body.textContent = 'Ball of Duty requires WebGL 2.0. Please enable hardware acceleration in your browser settings or update your GPU drivers.';
+		const retry = document.createElement('button');
+		retry.type = 'button';
+		retry.textContent = 'RETRY';
+		retry.addEventListener('click', () => window.location.reload());
+		card.appendChild(heading);
+		card.appendChild(body);
+		card.appendChild(retry);
+		if (progressTrack) {
+			progressTrack.style.display = 'none';
+		}
+		if (bootLine) {
+			bootLine.style.display = 'none';
+		}
+		const hint = document.getElementById('hint');
+		if (hint) {
+			hint.style.display = 'none';
+		}
+		if (statusNotice) {
+			statusNotice.style.display = 'none';
+		}
+		initializing = false;
+		statusMode = 'notice';
+	}
+
+	function updateLockHint() {
+		if (!lockHint) {
+			return;
+		}
+		const locked = document.pointerLockElement === canvas;
+		if (locked) {
+			hadPointerLock = true;
+		}
+		lockHint.hidden = locked || !gameRunning || !hadPointerLock;
+	}
+
+	snapCanvasToViewport();
+	window.addEventListener('resize', snapCanvasToViewport);
+	document.addEventListener('pointerlockchange', updateLockHint);
+
+	if (mobileBanner && (navigator.maxTouchPoints > 0
+		|| (window.matchMedia && window.matchMedia('(pointer: coarse)').matches))) {
+		mobileBanner.hidden = false;
+		if (mobileBannerDismiss) {
+			mobileBannerDismiss.addEventListener('click', () => {
+				mobileBanner.hidden = true;
+			});
+		}
+	}
+
+	// Godot creates the AudioContext before the gesture; this pointerdown is the supported resume hook.
+	function unlockAudio() {
+		try {
+			if (typeof GodotAudio !== 'undefined' && GodotAudio.ctx
+				&& GodotAudio.ctx.state !== 'running') {
+				GodotAudio.ctx.resume();
+			}
+		} catch (err) {
+			return;
+		}
+		if (typeof GodotAudio !== 'undefined' && GodotAudio.ctx
+			&& GodotAudio.ctx.state === 'running') {
+			window.removeEventListener('pointerdown', unlockAudio);
+		}
+	}
+	window.addEventListener('pointerdown', unlockAudio);
 
 	function setBootLine(text) {
 		if (bootLine) {
@@ -380,6 +584,11 @@ const engine = new Engine(GODOT_CONFIG);
 		statusMode = 'notice';
 	}
 
+	if (!hasWebGL2()) {
+		showWebGL2Fallback();
+		return;
+	}
+
 	const missing = Engine.getMissingFeatures({
 		threads: GODOT_THREADS_ENABLED,
 	});
@@ -424,6 +633,8 @@ const engine = new Engine(GODOT_CONFIG);
 			}
 			initializing = false;
 			statusMode = 'hidden';
+			gameRunning = true;
+			updateLockHint();
 			if (bootOverlay) {
 				bootOverlay.classList.add('is-done');
 				window.setTimeout(() => bootOverlay.remove(), 500);
