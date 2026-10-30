@@ -1,14 +1,14 @@
 # Feature Branches — L2/L8, L9, L6
 
-**Base:** `develop` at `1bdb161` (protocol v2 / 16 actors).
+**Base:** `develop` at `1c20ae2` (protocol v2 / 16 actors + L6 settings UI + research briefs).
 **Policy:** one feature per branch/worktree; no agent touches another worktree; the
 integrator merges into `develop` only after tests pass.
 
 | Feature | Branch | Worktree | Phase |
 |---|---|---|---|
-| L2 character scale + L8 server parity | `feature/l2-l8` | `../ballofduty-wt-l2l8` | research questions first |
-| L9 browser matrix | `feature/l9` | `../ballofduty-wt-l9` | research questions first |
-| L6 settings UI | `feature/l6` | `../ballofduty-wt-l6` | implementation now |
+| L2 character scale + L8 server parity | `feature/l2-l8` | `../ballofduty-wt-l2l8` | **Step 1 implementation in progress** |
+| L9 browser matrix | `feature/l9` | `../ballofduty-wt-l9` | **research questions ready**, awaiting answers |
+| L6 settings UI | `feature/l6` | `../ballofduty-wt-l6` | **merged** into `develop` (`83db67e`) |
 
 ## Research gate
 
@@ -22,7 +22,7 @@ that single file to the user. The user returns the research answers; the
 integrator forwards the relevant section to each agent, who then implements on
 its own branch.
 
-L6 has no research gate and can be merged first.
+L6 is merged first. L2/L8 Step 1 is implementing against the research summary; Step 2 (per-class sizes) is deferred.
 
 ## Merge order
 

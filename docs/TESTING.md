@@ -46,7 +46,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_bots.gd` | 2 | 14 | four bots play, id index, 16 bots on 8 spawns do not stack |
 | `tests/gdunit/test_kaykit.gd` | 5 | 0 | five variants, one shadowless skinned surface, scale/yaw, clip set, gun/muzzle, budget |
 | `tests/gdunit/test_menu.gd` | 8 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection |
-| `tests/gdunit/test_quick_menu.gd` | 3 | 0 | phase-aware actions, signals, Esc close, settings placeholder |
+| `tests/gdunit/test_quick_menu.gd` | 3 | 0 | phase-aware actions, signals, Esc close, real settings entry |
 | `tests/gdunit/test_hud.gd` | 9 | 0 | dirty-flag redraws, transient timers, state setters, death/respawn, debug refresh |
 | `tests/gdunit/test_content_catalog.gd` | 8 | 0 | core manifest, catalog-backed weapons, ids/paths/types, wire ids, budgets, dependency cycles, disabled entries |
 | `tests/gdunit/test_menu_network.gd` | 4 | 0 | initial timeout, bounded backoff, dropped-socket grace, real drop/rejoin |
@@ -60,10 +60,11 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 | `tests/gdunit/test_net_version.gd` | 1 | 4 | stale protocol version denied before peer_joined; current version accepted |
+| `tests/gdunit/test_settings_ui.gd` | 7 | 0 | both entry points, widgets/write-back, reset, clamp, quality, persistence, apply |
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 
-**146 test cases · ~1,050 assertions** in the protocol-v2 batch, plus **35 walkthrough sections**, the 4-bot match and the 16-actor probe. The current worktree also contains two map-picker tests from the map session (**148** total).
-Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8 actors, 294 B at 16.
+**153 test cases · ~1,080 assertions** on `develop` (146 protocol-v2 + 7 settings UI), plus **35 walkthrough sections**, the 4-bot match and the 16-actor probe. The map session adds two map-picker tests when merged (**155** total).
+Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8 actors, 294 B at 16; web export 44,820 KB raw / 14,292 KB gzip.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 
 `test_net_loopback` stays one integration test: the value is the real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
