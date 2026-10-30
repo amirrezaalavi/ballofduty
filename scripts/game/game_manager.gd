@@ -515,21 +515,35 @@ func _respawn(entry: Dictionary) -> void:
 ## two best candidates with rays. The old loop cast a ray for every spawn x
 ## actor pair (up to 64 per death); the distance pass is pure math and the ray
 ## pass is capped at 2 x actors within 25 m.
+##
+## The candidate set includes the overflow rings _spawn_server_actor uses, so a
+## 16-actor lobby on an 8-marker map does not respawn two players onto the same
+## marker. Rings are only generated up to the depth the protocol can need.
 func _choose_respawn(entry: Dictionary) -> Dictionary:
 	var candidates: Array = []
+	var max_ring := 0
+	if not _spawns.is_empty():
+		max_ring = maxi(
+			0,
+			int(ceil(float(NetProtocol.MAX_PLAYERS) / float(_spawns.size()))) - 1
+		)
 	for spawn_point: Vector3 in _spawns:
-		var pos := spawn_point + Vector3(0.0, 0.2, 0.0)
-		var nearest := 999.0
-		for other_peer in _roster:
-			var other: Dictionary = _roster[other_peer]
-			if int(other["id"]) == int(entry["id"]) or int(other["dead_until"]) > 0:
-				continue
-			var other_ref: Variant = other["node"]
-			if not is_instance_valid(other_ref):
-				continue
-			var other_node := other_ref as Node3D
-			nearest = minf(nearest, pos.distance_to(other_node.global_position))
-		candidates.append({"pos": pos, "nearest": nearest, "index": candidates.size()})
+		for ring in range(max_ring + 1):
+			var pos := spawn_point + Vector3(0.0, 0.2, 0.0) + _spawn_ring_offset(ring)
+			var nearest := 999.0
+			for other_peer in _roster:
+				var other: Dictionary = _roster[other_peer]
+				if int(other["id"]) == int(entry["id"]) or int(other["dead_until"]) > 0:
+					continue
+				var other_ref: Variant = other["node"]
+				if not is_instance_valid(other_ref):
+					continue
+				var other_node := other_ref as Node3D
+				nearest = minf(nearest, pos.distance_to(other_node.global_position))
+			candidates.append({
+				"pos": pos, "nearest": nearest, "ring": ring,
+				"index": candidates.size(),
+			})
 	# Farthest from the nearest living enemy is best; equal distances keep the
 	# earlier spawn, as the old first-wins loop did.
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
