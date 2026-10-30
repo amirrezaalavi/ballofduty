@@ -22,7 +22,10 @@ that single file to the user. The user returns the research answers; the
 integrator forwards the relevant section to each agent, who then implements on
 its own branch.
 
-L6 is merged first. L2/L8 Step 1 is implementing against the research summary; Step 2 (per-class sizes) is deferred.
+L6 is merged first. L2/L8 Step 1 is implementing against the research summary;
+Step 2 (per-class sizes) is deferred. L6 browser evidence:
+`docs/checkpoints/settings-panel.png` (panel opened from the main menu, quality
+LOW and 15 % volume persisted after Apply/Close/reopen, 0 console errors).
 
 ## Merge order
 
