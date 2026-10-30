@@ -6,7 +6,7 @@ integrator merges into `develop` only after tests pass.
 
 | Feature | Branch | Worktree | Phase |
 |---|---|---|---|
-| L2 character scale + L8 server parity | `feature/l2-l8` | `../ballofduty-wt-l2l8` | **Step 1 implementation in progress** |
+| L2 character scale + L8 server parity | `feature/l2-l8` | `../ballofduty-wt-l2l8` | **Step 1 merged** into `develop` (`34273aa`); Step 2 deferred |
 | L9 browser matrix | `feature/l9` | `../ballofduty-wt-l9` | **research questions ready**, awaiting answers |
 | L6 settings UI | `feature/l6` | `../ballofduty-wt-l6` | **merged** into `develop` (`83db67e`) |
 
@@ -22,8 +22,9 @@ that single file to the user. The user returns the research answers; the
 integrator forwards the relevant section to each agent, who then implements on
 its own branch.
 
-L6 is merged first. L2/L8 Step 1 is implementing against the research summary;
-Step 2 (per-class sizes) is deferred. L6 browser evidence:
+L6 is merged first. L2/L8 Step 1 is merged: all five profiles are numerically
+identical to the old rig, and LOCAL/REMOTE/SERVER read the same profile. Step 2
+(per-class sizes) is deferred. L6 browser evidence:
 `docs/checkpoints/settings-panel.png` (panel opened from the main menu, quality
 LOW and 15 % volume persisted after Apply/Close/reopen, 0 console errors).
 

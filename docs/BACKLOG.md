@@ -22,6 +22,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S59 | L2/L8 Step 1 | `CharacterBodyStats` + registry, five identical profiles, LOCAL/REMOTE/SERVER application, server camera/muzzle de-duplication, 10 parity tests; no headshots, 18 B snapshot unchanged | done | CP5 |
 | S58 | L6 settings UI | Reusable panel, sensitivity/invert/scope/volume/quality, persistence/reset, both menu entry points; 7 tests | done | CP5 |
 | S57 | Protocol v2 / 16 actors | 18 B row, 150 B @8 / 294 B @16, version handshake, 16-bot probe (p95 ~2–3 ms), 8-marker overflow rings, ring-aware respawn; 148 tests green | done | CP5 |
 | S56 | Optimization batch 1 | HUD dirty flag; bullet-pool prewarm; single-buffer snapshot encode (49→20 µs) + health cache; O(1) roster id index + 10 Hz bot LOS; top-2 respawn rays (24→6); 143 tests green | done | CP5 |
@@ -75,13 +76,13 @@ Status: `todo` · `doing` · `done` · `deferred`
 | # | Item | Why / notes | Status |
 |---|---|---|---|
 | L1 | Proper jump physics pass | **Done:** `v=9.03`, rise `g=34`, fall `g×1.35=45.9`, terminal 30; apex stays 1.35 m, full airtime 0.67 → **0.50 s**; coyote 0.12 s, buffer 0.15 s, air accel 18. Analytic `v²/2g` / `2v/g` helpers + tests | done |
-| L2 | Character scale system | **Doing:** Step 1 `CharacterBodyStats` extraction on `feature/l2-l8`; per-class sizes deferred to Step 2 | doing |
+| L2 | Character scale system | **Step 1 done:** `CharacterBodyStats` + five identical profiles, applied on LOCAL/REMOTE/SERVER; per-class sizes deferred to Step 2 | done |
 | L3 | Camera framing pass | Current framing accepted; later add ADS shoulder offset, collision smoothing and wide/tight presets | done |
 | L4 | Larger map performance | Current map is 35 draw calls / 31k tris. A larger final map needs occlusion/LOD/fog decisions and a new budget measurement | todo |
 | L5 | Movement set | Add slide/dash/roll later only if the core loop needs it; do not add before netcode so prediction scope stays small | deferred |
 | L6 | Settings UI | **Done:** reusable panel from main menu + quick menu; sensitivity, invert Y, scope scale, master volume, LOW/MEDIUM/HIGH quality; persistence + reset; 7 tests | done |
 | L7 | Animation / stride | Quaternius UAL landed (S15): real walk/sprint/jump/pistol clips. Remaining: strafe/back clips (only in the paid full set), AnimationTree layering, Pistol_Shoot/Pistol_Reload hooks, Death01 wiring | doing |
-| L8 | Server parity | **Doing:** same resource applied to LOCAL/REMOTE/SERVER; no headshots, no protocol change | doing |
+| L8 | Server parity | **Step 1 done:** capsule/hurtbox/camera/muzzle read the same profile on all roles; no headshots, no protocol change | done |
 | L9 | Browser matrix | **Research:** 13-cell matrix and 7 questions in `docs/research/L9-QUESTIONS.md`; implementation gated on answers | doing |
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
 | L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |

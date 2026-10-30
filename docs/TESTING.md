@@ -61,9 +61,10 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 | `tests/gdunit/test_net_version.gd` | 1 | 4 | stale protocol version denied before peer_joined; current version accepted |
 | `tests/gdunit/test_settings_ui.gd` | 7 | 0 | both entry points, widgets/write-back, reset, clamp, quality, persistence, apply |
+| `tests/gdunit/test_character_body_parity.gd` | 10 | 0 | profile validation, root/shape scale, LOCAL/REMOTE/SERVER parity, camera/muzzle, 18 B snapshot, no headshot path |
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 
-**153 test cases · ~1,080 assertions** on `develop` (146 protocol-v2 + 7 settings UI), plus **35 walkthrough sections**, the 4-bot match and the 16-actor probe. The map session adds two map-picker tests when merged (**155** total).
+**163 test cases · ~1,100 assertions** on `develop` (146 protocol-v2 + 7 settings UI + 10 body parity), plus **35 walkthrough sections**, the 4-bot match and the 16-actor probe. The map session adds two map-picker tests when merged (**165** total).
 Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8 actors, 294 B at 16; web export 44,820 KB raw / 14,292 KB gzip.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 
