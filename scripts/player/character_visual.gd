@@ -19,7 +19,6 @@ extends Node3D
 ## Phase 2A: the five KayKit variants are selected by `PlayerController.class_id`
 ## (never net_id), and each class swaps its signature weapon under GunMount.
 
-const SCALE := 0.32244
 const HAND_BONE := "handslot.r"
 const SPINE_BONE := "chest"
 const GUN_YAW_OFFSET := 0.08
@@ -198,7 +197,10 @@ func _swap_character(index: int) -> void:
 		character.free()
 	character = VARIANT_SCENES[index].instantiate() as Node3D
 	character.name = "Character"
-	character.scale = Vector3.ONE * SCALE
+	# The KayKit .scn roots are baked at 0.32244 and 180 deg. Neutralise the
+	# baked scale so the single scale source is Visual.scale (the body profile),
+	# never the actor root or a collision shape.
+	character.scale = Vector3.ONE
 	character.rotation.y = PI
 	add_child(character)
 	_variant = index
@@ -408,6 +410,11 @@ func _revive() -> void:
 func _build_death_marker() -> void:
 	if _death_marker != null or body == null:
 		return
+	var profile := _body_stats()
+	var disc_radius := profile.death_disc_radius
+	var shell_radius := profile.death_shell_radius
+	var shell_height := profile.death_shell_height
+	var shell_offset := profile.death_shell_offset
 	_death_marker = Node3D.new()
 	_death_marker.name = "DeathMarker"
 	_death_marker.visible = false
@@ -416,8 +423,8 @@ func _build_death_marker() -> void:
 	body.call_deferred("add_child", _death_marker)
 
 	var disc_mesh := CylinderMesh.new()
-	disc_mesh.top_radius = 0.38
-	disc_mesh.bottom_radius = 0.38
+	disc_mesh.top_radius = disc_radius
+	disc_mesh.bottom_radius = disc_radius
 	disc_mesh.height = 0.012
 	var disc_mat := StandardMaterial3D.new()
 	disc_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -434,8 +441,8 @@ func _build_death_marker() -> void:
 	_death_marker.add_child(disc)
 
 	var shell_mesh := CapsuleMesh.new()
-	shell_mesh.radius = 0.24
-	shell_mesh.height = 0.80
+	shell_mesh.radius = shell_radius
+	shell_mesh.height = shell_height
 	var shell_mat := StandardMaterial3D.new()
 	shell_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	shell_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -447,9 +454,18 @@ func _build_death_marker() -> void:
 	var shell := MeshInstance3D.new()
 	shell.mesh = shell_mesh
 	shell.material_override = shell_mat
-	shell.position = Vector3(0.0, 0.40, 0.0)
+	shell.position = Vector3(0.0, shell_offset, 0.0)
 	shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_death_marker.add_child(shell)
+
+
+func _body_stats() -> CharacterBodyStats:
+	var pc := body as PlayerController
+	if pc != null and pc.body_stats != null:
+		return pc.body_stats
+	var class_id := pc.class_id if pc != null else 0
+	var profile := CharacterBodyRegistry.stats_for(class_id)
+	return profile if profile != null else CharacterBodyRegistry.default_profile()
 
 
 func _update_death_state() -> void:

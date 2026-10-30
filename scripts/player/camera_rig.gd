@@ -32,6 +32,24 @@ func _ready() -> void:
 	_settings = get_node_or_null("/root/Settings")
 
 
+## Apply the shared body profile. Called by CharacterBodyStats.apply_to_actor()
+## on LOCAL/REMOTE only; the headless server never needs the camera rig.
+func apply_body_stats(stats: CharacterBodyStats) -> void:
+	if stats == null:
+		return
+	spring_length = stats.camera_spring_length
+	shoulder_offset = stats.camera_shoulder_offset
+	position = Vector3(0.0, stats.camera_pivot_height, 0.0)
+	if is_instance_valid(spring_arm):
+		spring_arm.spring_length = spring_length
+		spring_arm.margin = stats.camera_spring_margin
+		var probe := SphereShape3D.new()
+		probe.radius = stats.camera_probe_radius
+		spring_arm.shape = probe
+	if is_instance_valid(camera):
+		camera.position = Vector3(shoulder_offset, 0.0, 0.0)
+
+
 ## Applies pitch and returns the yaw delta the caller should apply to the body.
 ## Sensitivity scaling in scope lives here so the feel stays consistent.
 func look(relative: Vector2, scoped: bool) -> float:
