@@ -12,10 +12,12 @@ const DEFAULT_PORT := 9080
 const MAIN_MENU_SCENE: PackedScene = preload("res://scenes/ui/main_menu.tscn")
 const LOADING_SCENE: PackedScene = preload("res://scenes/ui/loading_screen.tscn")
 const QUICK_MENU_SCENE: PackedScene = preload("res://scenes/ui/quick_menu.tscn")
+const SETTINGS_SCENE: PackedScene = preload("res://scenes/ui/settings_panel.tscn")
 
 var _menu
 var _loading
 var _quick_menu
+var _settings_panel
 var _panel: PanelContainer
 var _status_label: Label
 var _leave_button: Button
@@ -59,13 +61,17 @@ func _ready() -> void:
 	add_child(_loading)
 	_quick_menu = QUICK_MENU_SCENE.instantiate()
 	add_child(_quick_menu)
+	_settings_panel = SETTINGS_SCENE.instantiate()
+	add_child(_settings_panel)
 	_menu.join_requested.connect(_on_menu_join)
 	_menu.solo_requested.connect(_on_menu_solo)
+	_menu.settings_requested.connect(_open_settings_panel)
 	_loading.cancel_requested.connect(_on_cancel_loading)
 	_quick_menu.resume_requested.connect(_close_quick_menu)
 	_quick_menu.cancel_requested.connect(_on_quick_cancel)
 	_quick_menu.leave_requested.connect(_on_quick_leave)
 	_quick_menu.restart_requested.connect(_on_quick_restart)
+	_quick_menu.settings_requested.connect(_open_settings_panel)
 	_quick_menu.quit_requested.connect(_on_quick_quit)
 	var bus := get_node_or_null("/root/EventBus")
 	if bus and bus.has_signal("match_state_changed"):
@@ -81,7 +87,10 @@ func _input(event: InputEvent) -> void:
 	# _input (not _unhandled_input) so Esc also works while a LineEdit has focus
 	# on the main menu. Esc is not a text key, so this cannot eat typing.
 	if event.is_action_pressed("pause"):
-		_toggle_quick_menu()
+		if _settings_panel and _settings_panel.is_open():
+			_settings_panel.close()
+		else:
+			_toggle_quick_menu()
 		get_viewport().set_input_as_handled()
 		return
 
@@ -110,6 +119,8 @@ func _open_menu(status: String = "", tone: String = "info") -> void:
 	_match_entered = false
 	_match_over = false
 	_close_quick_menu(false)
+	if _settings_panel:
+		_settings_panel.close()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if _loading:
 		_loading.hide_loading()
@@ -135,6 +146,8 @@ func _enter_match() -> void:
 	_solo = false
 	_match_over = false
 	_close_quick_menu(false)
+	if _settings_panel:
+		_settings_panel.close()
 	if _menu:
 		_menu.hide_menu()
 	if _loading:
@@ -321,6 +334,13 @@ func _on_cancel_loading() -> void:
 
 
 # --- quick menu -----------------------------------------------------------
+
+func _open_settings_panel() -> void:
+	if _settings_panel == null:
+		return
+	_settings_panel.open()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+
 
 func _toggle_quick_menu() -> void:
 	if _quick_menu == null:

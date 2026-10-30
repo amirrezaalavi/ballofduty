@@ -195,10 +195,7 @@ func _build_ui() -> void:
 	box.add_child(restart_button)
 
 	settings_button = _button("SETTINGS", Color(0.09, 0.13, 0.23), TEXT)
-	settings_button.pressed.connect(func() -> void:
-		flash_status("SETTINGS · COMING SOON (CP5 / L6)")
-		settings_requested.emit()
-	)
+	settings_button.pressed.connect(func() -> void: settings_requested.emit())
 	box.add_child(settings_button)
 
 	quit_button = _button("QUIT", Color(0.18, 0.06, 0.09), DANGER)

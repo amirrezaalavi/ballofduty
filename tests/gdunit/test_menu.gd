@@ -81,7 +81,7 @@ func test_menu_join_and_solo_signals() -> void:
 	expect(soloed.size() == 1, "Solo emits one request")
 
 
-func test_menu_settings_placeholder_and_status_tones() -> void:
+func test_menu_settings_entry_and_status_tones() -> void:
 	var menu := _make_menu()
 	var settings_pressed: Array = []
 	menu.settings_requested.connect(func() -> void: settings_pressed.append(true))
@@ -92,8 +92,8 @@ func test_menu_settings_placeholder_and_status_tones() -> void:
 		"error text uses the error colour"
 	)
 	menu.settings_button.pressed.emit()
-	expect(settings_pressed.size() == 1, "settings placeholder is wired")
-	expect(menu.status_label.text.contains("coming soon"), "settings entry explains the placeholder")
+	expect(settings_pressed.size() == 1, "settings entry opens the real panel")
+	expect(menu.settings_button.text == "SETTINGS", "settings entry is no longer a placeholder")
 
 
 func test_menu_visibility_states() -> void:

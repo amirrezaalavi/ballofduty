@@ -61,7 +61,7 @@ func test_every_phase_has_the_right_actions() -> void:
 	expect(menu.leave_button.text == "BACK TO MENU", "match over returns to menu")
 
 
-func test_signals_and_settings_placeholder() -> void:
+func test_signals_and_settings_entry() -> void:
 	var menu := await _make()
 	var counts := {"resume": 0, "cancel": 0, "leave": 0, "restart": 0, "quit": 0}
 	menu.resume_requested.connect(func() -> void: counts["resume"] += 1)
@@ -79,9 +79,10 @@ func test_signals_and_settings_placeholder() -> void:
 		"resume/cancel/leave emit once")
 	expect(counts["restart"] == 1 and counts["quit"] == 1, "restart/quit emit once")
 
+	var settings_pressed := [0]
+	menu.settings_requested.connect(func() -> void: settings_pressed[0] += 1)
 	menu.settings_button.pressed.emit()
-	expect(menu.status_label.text.contains("SETTINGS"), "settings button explains the placeholder")
-	expect(menu.status_label.text.contains("SOON"), "settings is marked coming soon")
+	expect(settings_pressed[0] == 1, "settings opens the real panel from the quick menu")
 
 
 func test_open_close_toggle_and_escape() -> void:
