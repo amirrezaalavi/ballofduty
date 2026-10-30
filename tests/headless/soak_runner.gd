@@ -103,8 +103,10 @@ func _boot(args: PackedStringArray) -> void:
 		_requested_clients, _requested_bots, cap, _effective_clients, _port,
 	])
 	if _requested_clients + _requested_bots > cap:
-		print("SOAK_CAP roster=%d requested=%d cap=%d — raise NetProtocol.MAX_PLAYERS to %d (snapshot then %dB, still under 300B)" % [
-			cap, requested, cap, requested, 6 + requested * 22,
+		print("SOAK_CAP roster=%d requested=%d cap=%d — raise NetProtocol.MAX_PLAYERS to %d (snapshot then %dB at %dB/row; 16 actors = 294B, still under 300B)" % [
+			cap, requested, cap, requested,
+			NetProtocol.SNAPSHOT_HEADER_BYTES + requested * NetProtocol.SNAPSHOT_ROW_BYTES,
+			NetProtocol.SNAPSHOT_ROW_BYTES,
 		])
 		if _require_full:
 			print("SOAK result=FAIL reason=roster_cap")

@@ -49,6 +49,10 @@ log "Arena 4-bot match"
 "$GODOT" --headless --path . --script tests/headless/quarry_match.gd 2>&1 | tee /tmp/bod_match.log
 grep -q "QUARRY_MATCH result=PASS" /tmp/bod_match.log
 
+log "16-actor probe"
+"$GODOT" --headless --path . --script tests/headless/net16_probe.gd 2>&1 | tee /tmp/bod_net16.log
+grep -q "NET16 result=PASS" /tmp/bod_net16.log
+
 log "Headless client boot"
 "$GODOT" --headless --path . --quit-after 120 --max-fps 60 2>&1 | tee /tmp/bod_client.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_client.log
