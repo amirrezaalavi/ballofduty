@@ -43,6 +43,10 @@ var _deaths_seen: int = 0
 var _pool_text: String = ""
 var _net_text: String = ""
 
+# Redraw telemetry: incremented by every queue_redraw() request so tests can
+# assert that idle frames do not repaint the HUD.
+var redraw_requests: int = 0
+
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -92,6 +96,14 @@ func bind_player(target: PlayerController) -> void:
 		if gm.has_signal("server_shot"):
 			_connect(gm, "server_shot", _on_server_shot)
 	visible = true
+	_mark_dirty()
+
+
+## Single redraw entry point. State changes and transient animations call this;
+## idle frames do not.
+func _mark_dirty() -> void:
+	redraw_requests += 1
+	queue_redraw()
 
 
 func _connect(source: Object, signal_name: String, callback: Callable) -> void:
@@ -103,20 +115,30 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3:
 			_debug = not _debug
-			queue_redraw()
+			_mark_dirty()
 
 
 func _process(delta: float) -> void:
+	# Capture before decrementing so the frame that lands on zero still paints.
+	var animating := (
+		_hit_time > 0.0
+		or _kill_time > 0.0
+		or _damage_flash > 0.0
+		or _crosshair_kick > 0.0
+	)
 	_hit_time = maxf(0.0, _hit_time - delta)
 	_kill_time = maxf(0.0, _kill_time - delta)
 	_damage_flash = maxf(0.0, _damage_flash - delta * 2.2)
 	_crosshair_kick = maxf(0.0, _crosshair_kick - delta * 30.0)
+	var refreshed_debug := false
 	if _debug:
 		_debug_timer -= delta
 		if _debug_timer <= 0.0:
 			_debug_timer = 0.25
 			_refresh_debug_text()
-	queue_redraw()
+			refreshed_debug = true
+	if animating or refreshed_debug:
+		_mark_dirty()
 
 
 # --- testable state -------------------------------------------------------
@@ -310,15 +332,18 @@ func _on_health(current: int, maximum: int) -> void:
 		_damage_flash = 1.0
 	_health_current = current
 	_health_max = maximum
+	_mark_dirty()
 
 
 func _on_ammo(magazine: int, reserve: int) -> void:
 	_ammo = magazine
 	_reserve = reserve
+	_mark_dirty()
 
 
 func _on_reload(reloading: bool) -> void:
 	_reloading = reloading
+	_mark_dirty()
 
 
 func _on_weapon_changed(display_name: String) -> void:
@@ -327,15 +352,18 @@ func _on_weapon_changed(display_name: String) -> void:
 		_fire_mode = weapon.fire_mode()
 	else:
 		_fire_mode = "SINGLE"
+	_mark_dirty()
 
 
 func _on_heat(value: float, maximum: float) -> void:
 	_heat = value
 	_heat_max = maximum
+	_mark_dirty()
 
 
 func _on_charge(value: float) -> void:
 	_charge = value
+	_mark_dirty()
 
 
 func _on_hit(killed: bool) -> void:
@@ -344,13 +372,16 @@ func _on_hit(killed: bool) -> void:
 	if killed:
 		_kill_time = 2.2
 		_kills_local += 1
+	_mark_dirty()
 
 
 func _on_shot(_origin: Vector3, _direction: Vector3) -> void:
 	_shots_local += 1
 	_crosshair_kick = 4.0
+	_mark_dirty()
 
 
+## Remote shots only bump a debug counter; the 4 Hz debug refresh paints them.
 func _on_server_shot(_shooter_id: int, _origin: Vector3, _direction: Vector3) -> void:
 	_shots_seen += 1
 
@@ -359,8 +390,10 @@ func _on_death(victim_id: int, _killer_id: int) -> void:
 	_deaths_seen += 1
 	if player and victim_id == player.net_id:
 		_dead = true
+	_mark_dirty()
 
 
 func _on_respawn(player_id: int, _position: Vector3, _yaw: float) -> void:
 	if player and player_id == player.net_id:
 		_dead = false
+	_mark_dirty()
