@@ -23,7 +23,8 @@ That is a scoped refactor, not a one-file flip — plan for it.
 - Input frames are produced once per tick: `{seq, move_x, move_z, jump, sprint, scope, aim_yaw, aim_pitch, buttons}`.
 - Snapshots are sent once per tick at 30 Hz as a binary `PackedByteArray`:
   `{tick, seq, players:[{id, pos_q, yaw_q, state, hp, acked_input_seq}], events[]}`.
-- Budget: **≤ 300 B** snapshot at 8 players → **≤ 10 KB/s** downstream per client (quantized, no dictionaries).
+- Budget: **≤ 300 B** snapshot at 16 players → **≤ 10 KB/s** downstream per client (quantized, no dictionaries).
+  Protocol v2 rows are 18 B: **150 B at 8 actors, 294 B at 16**.
 - Remote players render with a **2-interval (67 ms) buffer + jitter margin**, newest-wins; extrapolation is
   capped at **1 tick**, otherwise hold the last pose. Late packets never snap the pose backwards.
 - Local player: fixed-tick prediction, replay of unacked inputs, visual correction smoothed over 100 ms.
@@ -39,16 +40,20 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 
 | Message | Size | Fields |
 |---|---|---|
-| `JOIN_REQ` | 2 + n | name length, up to 16 sanitized bytes |
-| `JOIN_OK` | 14 | id, server tick, **spawn xyz (mm i16), spawn yaw (i16)** |
-| `DENY` | 2 | reason |
-| `ROSTER` | 2 + Σ(2+n) | count, then (id, name len, name) |
+| `JOIN_REQ` | 4 + n | protocol version, name length, class id, up to 16 sanitized bytes |
+| `JOIN_OK` | 16 | protocol version, id, server tick, **spawn xyz (cm i16), spawn yaw (i16), class id** |
+| `DENY` | 2 | reason (`FULL`, `VERSION`) |
+| `ROSTER` | 2 + Σ(3+n) | count, then (id, class id, name len, name) |
 | `INPUT` | 12 | seq u32, move x/y i8, flags, yaw i16, pitch i16 |
-| `SNAPSHOT` | 6 + 22n | tick u32, count, then (id, pos xyz i16 mm, yaw i16, state, vel xyz i16 cm/s, flags u8, hp, acked seq u32) |
+| `SNAPSHOT` | 6 + 18n | tick u32, count, then (id u8, pos xyz i16 cm, packed24, vel xyz i16 cm/s, ack u16) |
 | `PING`/`PONG` | 5 / 9 | client msec; pong adds server tick |
 
 - Position quantization is centimetres over ±327.68 m (≤1 cm round-trip error in tests, enough for 250 m maps); velocity is
-  centimetres per second. Flags bit 0 is `on_floor`.
+  centimetres per second. The packed24 field holds 12-bit yaw (≈1.53 mrad/step), 2-bit animation state,
+  `on_floor`, and 7-bit HP (0–127). Ack is the low 16 bits of the input sequence; a 5-minute match at
+  30 Hz is 9000 frames, well inside the 36.4-minute wrap window.
+- `PROTOCOL_VERSION = 2`. A JOIN_REQ with a different version is denied with `DENY(VERSION)`; old
+  clients cannot misread the 18 B rows as the old 22 B rows.
 - **Movement model (CP4b):** `view_yaw` is client-owned and independent of the body. WASD is
   camera-relative; the body turns toward the movement direction (14 rad/s) and only translates as its
   facing aligns, so turns read as turns. Aiming locks the body to the view and allows strafing. The
@@ -71,7 +76,7 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   immediately; `Visual`/`CameraPivot` receive a decaying offset (~100 ms) so corrections are not
   visible. The first ack after join is a plain snap (spawn baseline). The server rejects a step
   whose horizontal travel exceeds `8.6 m/s × dt` and logs it.
-- Every decoder rejects wrong lengths, counts above 8, and out-of-range values; the transport also caps
+- Every decoder rejects wrong lengths, counts above 16, and out-of-range values; the transport also caps
   packets at 2 KB and drains at most 64 per frame to prevent stalls.
 - **Spawn authority:** the server owns the spawn pose and ships it in `JOIN_OK`; clients must adopt it
   or they will disagree with every other client about where they are standing.

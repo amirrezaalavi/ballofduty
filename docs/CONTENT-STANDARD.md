@@ -155,7 +155,7 @@ the reference web build when a map or character changes.
 | Map texture memory | 30 MB | 40 MB |
 | Map load (WASM) | 100 ms | 250 ms |
 | Map nodes | 1,200 | 2,000 |
-| Map spawns | 8 | 4 minimum |
+| Map spawns | 16 | 8 minimum (overflow rings cover 8-marker maps) |
 | **Class** nodes | 40 | 60 |
 | Class triangles | 18k | 30k |
 | Class texture memory | 8 MB | 12 MB |
@@ -175,8 +175,8 @@ Per-match budgets (not per artifact) remain:
 |---|---:|
 | Server tick p95, 8 actors | ≤ 6 ms |
 | Server tick p95, 16 actors | ≤ 10 ms |
-| Snapshot, 8 actors | ≤ 182 B |
-| Snapshot, 16 actors | ≤ 300 B |
+| Snapshot, 8 actors | ≤ 150 B |
+| Snapshot, 16 actors | ≤ 294 B |
 | Client frame p95, 720p integrated GPU | ≤ 16.6 ms |
 
 A map that is inside target but causes a per-match budget regression is still a

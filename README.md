@@ -1,6 +1,6 @@
 # Ball of Duty
 
-A lightweight, cute, web-first 3D third-person arena shooter. Eight players, one rifle, five minutes,
+A lightweight, cute, web-first 3D third-person arena shooter. Up to 16 players, five classes, five minutes,
 bragging rights.
 
 **Status:** Phase 2A landed — five class weapons, picker, per-class visuals/HUD; 150 m quarry next

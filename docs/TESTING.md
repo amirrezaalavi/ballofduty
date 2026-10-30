@@ -33,7 +33,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 8 | 21 | travel, diagonal parity, sprint, L1 jump apex/derivation/asymmetric fall/terminal, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 164 | weapon data, 20/20 body hits at 5/15/30 m, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 12 | 72 | roundtrips, 1 cm / ±327.68 m positions, golden 28 B layout, 182 B snapshot budget, velocity/ground roundtrip, malformed/oversized rejection |
+| `tests/gdunit/test_net_protocol.gd` | 14 | 92 | roundtrips, 1 cm / ±327.68 m positions, golden 24 B v2 layout, 150/294 B budgets, 12-bit yaw, u16 ack, malformed/oversized rejection |
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
@@ -43,7 +43,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_rig.gd` | 2 | 16 | gun follows the hand; filtered Pistol_Shoot overlay |
 | `tests/gdunit/test_server_combat.gd` | 4 | 21 | canonical muzzle, body damage, rate/ammo/reload, protection, kill attribution |
 | `tests/gdunit/test_loopback_combat.gd` | 1 | 22 | fire intent through the socket, hit/death/respawn, spoofed damage rejection |
-| `tests/gdunit/test_bots.gd` | 1 | 9 | four bots move, fire, damage each other, stay in the roster, id index |
+| `tests/gdunit/test_bots.gd` | 2 | 14 | four bots play, id index, 16 bots on 8 spawns do not stack |
 | `tests/gdunit/test_kaykit.gd` | 5 | 0 | five variants, one shadowless skinned surface, scale/yaw, clip set, gun/muzzle, budget |
 | `tests/gdunit/test_menu.gd` | 8 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection |
 | `tests/gdunit/test_quick_menu.gd` | 3 | 0 | phase-aware actions, signals, Esc close, settings placeholder |
@@ -59,10 +59,11 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_picker.gd` | 4 | 0 | five-card picker, class URL, solo class, selection state |
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
-| `tests/gdunit/test_respawn.gd` | 1 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths |
+| `tests/gdunit/test_net_version.gd` | 1 | 4 | stale protocol version denied before peer_joined; current version accepted |
+| `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 
-**141 test cases · ~1,030 assertions** in the optimization batch, plus **35 walkthrough sections** and the 4-bot match. The current worktree also contains two map-picker tests from the map session (**143** total).
-Quarry budget: 49 draw calls, 192,842 triangles; web export 44,768 KB raw / 14,244 KB gzip.
+**146 test cases · ~1,050 assertions** in the protocol-v2 batch, plus **35 walkthrough sections**, the 4-bot match and the 16-actor probe. The current worktree also contains two map-picker tests from the map session (**148** total).
+Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8 actors, 294 B at 16.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 
 `test_net_loopback` stays one integration test: the value is the real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.

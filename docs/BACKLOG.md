@@ -22,6 +22,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S57 | Protocol v2 / 16 actors | 18 B row, 150 B @8 / 294 B @16, version handshake, 16-bot probe (p95 ~2–3 ms), 8-marker overflow rings, ring-aware respawn; 148 tests green | done | CP5 |
 | S56 | Optimization batch 1 | HUD dirty flag; bullet-pool prewarm; single-buffer snapshot encode (49→20 µs) + health cache; O(1) roster id index + 10 Hz bot LOS; top-2 respawn rays (24→6); 143 tests green | done | CP5 |
 | S55 | Content / artifact standard | Manifest + packs + entries, `ContentCatalog`, budget validation, `tools/validate_content.gd`, CI gate, catalog-backed `WeaponRegistry`; map/class/weapon/collectible recipes in `docs/CONTENT-STANDARD.md` | done | CP5 |
 | S54 | Quick menu (all phases) | Esc overlay for menu / connecting / match / respawning / solo / match over; resume, cancel, leave, restart solo, settings placeholder, quit; pauses solo only | done | CP5 |
