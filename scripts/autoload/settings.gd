@@ -124,6 +124,9 @@ func _apply_audio() -> void:
 ## Render quality is applied to the root viewport so it survives menu → match
 ## transitions without touching gameplay, maps or the network layer.
 func _apply_quality() -> void:
+	# Settings is also instantiated in unit tests that are not inside the tree.
+	if not is_inside_tree():
+		return
 	var tree := get_tree()
 	if tree == null:
 		return
