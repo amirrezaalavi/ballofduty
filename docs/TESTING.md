@@ -38,7 +38,8 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
 | `tests/gdunit/test_phase0.gd` | 5 | 18 | speed/projectile tuning, turn-then-shoot gate, virtual-clock interpolation, connection timeout, death pose + red marker |
-| `tests/gdunit/test_world_geometry.gd` | 2 | 59 | every tree has a collider; camera never enters the cliff |
+| `tests/gdunit/test_world_geometry.gd` | 2 | 59 | nature arena: every tree has a collider; camera never enters the cliff |
+| `tests/gdunit/test_quarry_arena.gd` | 9 | — | quarry loads, 9 chunks, mesh/heightmap parity, 8 spawns, cave clearance, hero colliders, walkable ramps, boundary, camera wall, main wiring |
 | `tests/gdunit/test_rig.gd` | 2 | 16 | gun follows the hand; filtered Pistol_Shoot overlay |
 | `tests/gdunit/test_server_combat.gd` | 4 | 21 | canonical muzzle, body damage, rate/ammo/reload, protection, kill attribution |
 | `tests/gdunit/test_loopback_combat.gd` | 1 | 22 | fire intent through the socket, hit/death/respawn, spoofed damage rejection |
@@ -56,7 +57,8 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**104 test cases · ~860 assertions.** `test_net_loopback` stays one integration test: the value is the
+**113 test cases · ~940 assertions.** Quarry budget: 49 draw calls, 191,270 triangles; web
+export 44,748 KB raw / 14,217 KB gzip. `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.
@@ -71,7 +73,8 @@ Not in gdUnit4:
 - `tests/headless/net_client_probe.gd` — cross-process client against a live server (probe mode).
 - `tools/soak.sh` / `tests/headless/soak_runner.gd` — 30 Hz soak with real WS clients and bots,
   metrics for tick/frame/CPU/RSS/nodes/snapshot/ack/combat. `--full` is the 10-minute gate.
-- `tests/headless/arena_stats.gd` — draw calls / triangles / collider budget report.
+- `tests/headless/arena_stats.gd` — draw calls / triangles / collider budget report for the nature and quarry arenas.
+- `tests/headless/quarry_match.gd` — 45 s four-bot headless match on the quarry (spawn, movement, shots, hits, deaths).
 
 ## Tooling
 

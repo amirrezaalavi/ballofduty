@@ -97,7 +97,36 @@ while the server hits is expected under lag and is better than an invisible one.
   gravity. Rounds fly flat and inherit the shooter's velocity (experimental toggle in
   `Projectile`). Knight 34 / Mage 18 + 8 splash (mag 12) / bow 60 / crossbow 12 / Barbarian 34;
   Knight and Barbarian kill in **three body hits**. Knight reload 2.2 → **1.4 s**.
-- Next: 150×150 Sunken Quarry/Cavern Pass greybox, then art pass.
+- Next: Phase 2B arena (built below).
+
+
+## 3c. Phase 2B status — Sunken Quarry & Cavern Pass (implemented 2026-10-30)
+
+- **Map:** `scenes/maps/arena_quarry.tscn` + `scripts/game/quarry_arena.gd`, now the default
+  `Arena` in `scenes/main.tscn`. `arena_nature.tscn` stays intact for the old experiment harness.
+- **Terrain:** 150 × 150 m footprint, 3 × 3 chunks of 50 m, one analytic height field sampled by
+  both the low-poly visual mesh (2 m vertices, flat-shaded) and a 51 × 51 `HeightMapShape3D` per
+  chunk. Deterministic (seed `20261101`), no runtime asset or texture download.
+- **Layout:** sunken central bowl, west benches at 3 / 6 m, east benches at 2.5 / 5 m, south
+  terrace at 2 / 4 m, walkable ramps (max step 0.18 m per 0.5 m on the test routes), a dry cut
+  under a timber bridge, and a 61 m double-walled cave bore through a north rock ridge
+  (5.6 m wide × 4.6 m high interior, floor + ceiling + side collision, rock skirts, three warm
+  lamps and a local `Area3D` ambient fade).
+- **Cover:** central ruined plinth, two broken arches, retaining walls, round ruined tower,
+  timber bridge, west lookout deck, fallen log, hand-placed boulders/trees, deterministic
+  MultiMesh scatter (grass, flowers, bushes, mushrooms, small rocks, boulders, pines). Every
+  hand-placed hero prop and every tree has collision.
+- **Spawns/boundary:** `Spawn01`…`Spawn08`, snapped to the height field, ≥ 22 m apart, none
+  blocked. Invisible 40 m boundary walls at ±69.5 m plus the mountain ring/rock faces stop the
+  player and the third-person spring arm.
+- **Budget:** 49 draw calls, 191,270 triangles, 1,804 MultiMesh instances, 371 static colliders
+  (quarry); hard limits remain 150 / 250k. Web export: 44,748 KB raw, **14,217 KB gzip**.
+- **Tests:** `tests/gdunit/test_quarry_arena.gd` (9 cases: load, mesh/heightmap parity, spawns,
+  cave clearance, hero colliders, walkable routes, boundary, camera wall, main-scene wiring);
+  `tests/headless/arena_stats.gd` now validates both maps; `tests/headless/quarry_match.gd`
+  runs a 45 s four-bot match (spawn, movement, shots, hits, kills).
+- **Verified:** four bots moved 39.7–80.7 m and produced 136 shots / 24 hits / 3 deaths on the
+  new map; 113 test cases green; web console clean.
 
 ## 3b. Class weapons + bigger playground (research prompt)
 

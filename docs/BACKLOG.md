@@ -24,7 +24,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
 | S52 | Damage/scope pass | Head hitbox + headshot multiplier removed; bleed/spread/effect/armour_pierce/gravity removed; flat rounds inherit shooter velocity (experimental); Knight 34, Mage 18 + 8 splash (mag 12), bow 60, crossbow 12, Barbarian 34 → 3-hit kills; Knight reload 1.4 s | done | CP5 |
 | S51 | Class balance pass | Projectiles −30 % speed; Mage cycle +40 %, damage −20 %; crossbow 18/36; heavy gravity 12/10; pierce second-hurtbox fix | done | CP5 |
-| S50 | Sunken Quarry arena | 150×150 m, 3×3 mesh chunks, heightmap/collision, double-wall caves, rock skirts, MultiMesh foliage, 8 spawns; greybox then art | todo | CP5 |
+| S50 | Sunken Quarry arena | 150×150 m, 3×3 mesh chunks, heightmap/collision, 61 m double-wall cave, rock skirts, MultiMesh foliage, 8 spawns; 49 draw calls / 198,704 tris | done | CP5 |
 | S49 | Class weapons v1 | Five class profiles, picker (`?class=`), per-class variants/models/animations/HUD; M4 retired for now; Quaternius CC0 spear/bow models | done | CP5 |
 | S48 | Class weapons + bigger map research | Report + decisions at `docs/research/weapons-and-arena.md` / `WEAPONS-DECISIONS.md` | done | CP5 |
 | S47 | Roster cap | Accepted **8 total actors** (humans + bots) for V1; soak covers 4+4 and 8+0. 8 clients + 4 bots would need MAX_PLAYERS=12 plus 4 more spawns and a 270 B snapshot row | done | CP4d |
@@ -34,7 +34,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S2 | Character 20 % smaller | Physical capsule, mesh, hurtboxes scaled to 0.8; camera framing unchanged for now | done | CP1 |
 | S3 | Re-check camera after shrink | User accepted the current 3.6 m / 0.55 m / 1.55 m framing as-is | done | CP1 |
 | S4 | Re-check speed after shrink | Keep 5.6 m/s after the size change; only revisit if CP2 playtests ask for it | done | CP1/CP2 |
-| S5 | Map scale | CP2 nature arena keeps the 60×60 m playable footprint; final map is still expected to be larger (90–120 m or distinct arenas) | todo | CP3+ |
+| S5 | Map scale | Final map is the 150×150 m Sunken Quarry (`arena_quarry.tscn`); the 60×60 nature arena remains for experiments | done | CP3+ |
 | S6 | Jump floatiness | Deferred by request. Current airtime is unchanged conceptually; fixing requires retuning gravity, jump velocity, air control and maybe fall curves together | deferred | CP3+ |
 | S7 | Shadow/lighting verification | Headless software rendering does not show directional shadows; verify on real Chrome/desktop GPU before changing the lighting budget | doing | CP2/CP3 |
 | S8 | Character model | Replaced the capsule with Kenney Blocky `character-a`, 1.36 m, animated idle/walk/sprint | done | CP2 |
