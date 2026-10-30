@@ -65,10 +65,12 @@ func _ready() -> void:
 	_visual_base = visual.position
 	_camera_base = camera_rig.position
 	view_yaw = rotation.y
-	# Build the cosmetic bullet pool before the first shot. Remote actors share
-	# the same field and server actors are headless, so LOCAL is enough.
+	# Build the cosmetic bullet pool before the first shot. Defer it: _ready can
+	# run while the world is still adding children, and add_child() on a busy
+	# parent fails. Remote actors share the same field and server actors are
+	# headless, so LOCAL is enough.
 	if net_role == NetRole.LOCAL and DisplayServer.get_name() != "headless":
-		BulletField.prewarm(get_parent())
+		call_deferred("_prewarm_bullet_pool")
 	# Never request pointer lock here: browsers require a user gesture. The first
 	# click on the canvas captures the mouse (handled below).
 	if DisplayServer.get_name() == "headless":
@@ -77,6 +79,12 @@ func _ready() -> void:
 		var camera := get_node_or_null("CameraPivot/SpringArm3D/Camera3D") as Camera3D
 		if camera:
 			camera.current = false
+
+
+func _prewarm_bullet_pool() -> void:
+	var world := get_parent()
+	if is_instance_valid(world):
+		BulletField.prewarm(world)
 
 
 func make_remote(remote_id: int, player_class: int = 0) -> void:

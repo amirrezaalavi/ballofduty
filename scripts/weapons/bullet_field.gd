@@ -47,7 +47,7 @@ var peak_active: int = 0
 ## local player is ready (solo or client) so the ~2 ms build is not paid during
 ## the first engagement. Headless/server keeps the lazy path in spawn().
 static func prewarm(parent: Node) -> void:
-	if parent == null or not parent.is_inside_tree():
+	if not is_instance_valid(parent) or not parent.is_inside_tree():
 		return
 	_ensure(parent)
 
