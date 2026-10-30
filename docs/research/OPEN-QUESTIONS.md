@@ -4,7 +4,13 @@
 this file; the manager removes answered entries. Context and the asker are included so the
 external research agent can answer without the full chat history.
 
-Last updated: 2026-10-29.
+Last updated: 2026-10-30.
+
+**See also:** [`OPTIMIZATION-QUESTIONS.md`](OPTIMIZATION-QUESTIONS.md) — the map-agnostic
+optimization research brief (server, client, rendering, network, memory, observability,
+match model, safe/risky changes). That file is the live question list for the
+150–250 m / 3-map / 16–32-actor growth path; this file keeps the short
+research/decision queue.
 
 ---
 
