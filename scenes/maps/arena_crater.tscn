@@ -1,0 +1,77 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/game/crater_arena.gd" id="1_arena"]
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+sky_top_color = Color(0.008, 0.012, 0.035, 1)
+sky_horizon_color = Color(0.09, 0.12, 0.2, 1)
+sky_curve = 0.09
+ground_bottom_color = Color(0.008, 0.01, 0.02, 1)
+ground_horizon_color = Color(0.05, 0.07, 0.12, 1)
+
+[sub_resource type="Sky" id="Sky_main"]
+sky_material = SubResource("SkyMat")
+
+[sub_resource type="Environment" id="Env_crater"]
+background_mode = 2
+sky = SubResource("Sky_main")
+ambient_light_source = 2
+ambient_light_color = Color(0.45, 0.52, 0.68, 1)
+ambient_light_energy = 0.5
+tonemap_mode = 2
+tonemap_exposure = 1.0
+fog_enabled = true
+fog_light_color = Color(0.35, 0.42, 0.55, 1)
+fog_light_energy = 0.3
+fog_density = 0.004
+fog_sky_affect = 0.2
+
+[node name="ArenaCrater" type="Node3D"]
+script = ExtResource("1_arena")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_crater")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.819152, 0, 0.573576, 0.37059, 0.766044, -0.52936, -0.439385, 0.642788, 0.627507, 0, 24, 0)
+light_color = Color(0.55, 0.65, 0.9, 1)
+light_energy = 0.55
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 90.0
+
+[node name="Fill" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.819152, 0, -0.573576, 0.258819, 0.866025, -0.422618, 0.510407, 0.5, 0.699694, 0, 20, 0)
+light_color = Color(0.4, 0.7, 0.9, 1)
+light_energy = 0.18
+shadow_enabled = false
+
+[node name="Terrain" type="Node3D" parent="."]
+
+[node name="Boundary" type="Node3D" parent="."]
+
+[node name="Props" type="Node3D" parent="."]
+
+[node name="Spawn01" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -40, 0.5, -36)
+
+[node name="Spawn02" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0.5, -36)
+
+[node name="Spawn03" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 38, 0.5, -30)
+
+[node name="Spawn04" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -44, 0.5, 6)
+
+[node name="Spawn05" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 30, 0.5, 24)
+
+[node name="Spawn06" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -28, 0.5, 38)
+
+[node name="Spawn07" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.5, 42)
+
+[node name="Spawn08" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12, 0.5, 6)
