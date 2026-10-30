@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="CharacterBodyStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/components/character_body_stats.gd" id="1_body"]
+
+[resource]
+script = ExtResource("1_body")
+class_id = 1
+capsule_radius = 0.19
+capsule_height = 0.82
+capsule_offset = 0.41
+hurtbox_radius = 0.19
+hurtbox_height = 0.8
+hurtbox_offset = 0.4
+visual_scale = 0.32244
+camera_pivot_height = 0.95
+camera_spring_length = 2.3
+camera_shoulder_offset = 0.35
+camera_spring_margin = 0.08
+camera_probe_radius = 0.05
+eye_height = 0.62
+muzzle_offset = Vector3(0.14, 0, -0.3)
+death_disc_radius = 0.38
+death_shell_radius = 0.24
+death_shell_height = 0.8
+death_shell_offset = 0.4

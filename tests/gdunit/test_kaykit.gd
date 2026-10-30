@@ -67,9 +67,15 @@ func test_five_variants_have_one_shadowless_skinned_mesh() -> void:
 		var variant := String(character.get_meta("kaykit_variant", ""))
 		variants[variant] = true
 		expect(variant == CharacterVisual.VARIANT_NAMES[class_id], "class %d is %s" % [class_id, variant])
+		var profile := CharacterBodyRegistry.stats_for(class_id)
+		var visual := player.get_node("Visual") as Node3D
 		expect(
-			character.scale.is_equal_approx(Vector3.ONE * CharacterVisual.SCALE),
-			"%s uses scale %.5f" % [variant, CharacterVisual.SCALE]
+			visual != null and visual.scale.is_equal_approx(Vector3.ONE * profile.visual_scale),
+			"%s uses Visual.scale %.5f" % [variant, profile.visual_scale]
+		)
+		expect(
+			character.scale.is_equal_approx(Vector3.ONE),
+			"%s keeps the Character node at scale 1.0" % variant
 		)
 		expect(
 			absf(wrapf(character.rotation.y - PI, -PI, PI)) < 0.01,
@@ -94,7 +100,7 @@ func test_five_variants_have_one_shadowless_skinned_mesh() -> void:
 					material.albedo_texture.get_width() <= 512,
 					"%s atlas is at most 512 px (got %d)" % [variant, material.albedo_texture.get_width()]
 				)
-			var bounds: AABB = character.transform * mesh_instance.get_aabb()
+			var bounds: AABB = visual.transform * character.transform * mesh_instance.get_aabb()
 			var height := bounds.size.y
 			print("  %s height=%.3f m tris=%d" % [variant, height, mesh_instance.mesh.get_faces().size() / 3])
 			expect(height > 0.65 and height < 0.90, "%s sits inside the 0.82 m silhouette (%.3f m)" % [variant, height])

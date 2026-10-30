@@ -692,7 +692,7 @@ func _bot_frame(entry: Dictionary, actor: PlayerController, delta: float) -> Pla
 		spread_left = BOT_AIM_ERROR_RESAMPLE_SEC
 	entry["bot_spread_left"] = spread_left
 
-	var aim := ServerCombat.aim_angles(actor.global_position, aim_point)
+	var aim := ServerCombat.aim_angles(actor.global_position, aim_point, actor.body_stats)
 	var desired_yaw := aim.x + float(entry.get("bot_aim_err_yaw", 0.0))
 	var desired_pitch := clampf(
 		aim.y + float(entry.get("bot_aim_err_pitch", 0.0)), -1.45, 1.45

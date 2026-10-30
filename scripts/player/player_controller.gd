@@ -24,7 +24,19 @@ const AIM_HOLD_MSEC := 1500
 
 var net_role: NetRole = NetRole.LOCAL
 var net_id: int = 0
-var class_id: int = 0
+## Selecting a class also selects its body profile. Direct assignments (roster,
+## tests, class picker) are therefore enough; no separate apply call is needed.
+var class_id: int = 0:
+	set(value):
+		var sanitized := NetProtocol.sanitize_class(value)
+		if sanitized == class_id:
+			return
+		class_id = sanitized
+		if is_node_ready():
+			_apply_body_profile(net_role)
+## Shared rigid body/camera profile; the server reads this instead of duplicating
+## camera or muzzle constants.
+var body_stats: CharacterBodyStats
 var last_seq: int = 0
 var dead: bool = false
 var net_dead: bool = false
@@ -61,6 +73,9 @@ var _fire_buffer_until_msec: int = 0
 
 
 func _ready() -> void:
+	# Apply the shared body profile before capturing rest poses: the camera pivot
+	# and visual scale are data, not scene-only defaults.
+	_apply_body_profile(net_role)
 	# Capture child rest poses before any correction offset is applied.
 	_visual_base = visual.position
 	_camera_base = camera_rig.position
@@ -87,10 +102,31 @@ func _prewarm_bullet_pool() -> void:
 		BulletField.prewarm(world)
 
 
+## Resolve and apply the class body profile. Called from _ready, the class_id
+## setter, make_remote() and make_server() via the setter. The SERVER path only
+## touches collision/hurtbox data; it never depends on Visual or the camera.
+func _apply_body_profile(role: NetRole) -> void:
+	var profile := CharacterBodyRegistry.stats_for(class_id)
+	if profile == null:
+		profile = CharacterBodyRegistry.default_profile()
+	body_stats = profile
+	if not profile.apply_to_actor(self, int(role)):
+		push_error("PlayerController: failed to apply body profile for class %d" % class_id)
+		return
+	# A late class/role change (roster, remote spawn) can move the camera pivot.
+	# Keep the reconciliation rest pose in sync with the applied profile.
+	if is_node_ready() and role != NetRole.SERVER:
+		_visual_base = visual.position
+		_camera_base = camera_rig.position
+
+
 func make_remote(remote_id: int, player_class: int = 0) -> void:
 	disable_prediction()
 	net_role = NetRole.REMOTE
 	class_id = player_class
+	# The class may already match the LOCAL default, in which case the setter
+	# does not fire; role changes still need the profile applied.
+	_apply_body_profile(net_role)
 	# Remote puppets are driven from _process; engine physics interpolation
 	# would add a second, conflicting 30 Hz interpolation pass.
 	physics_interpolation_mode = Node.PHYSICS_INTERPOLATION_MODE_OFF
@@ -127,6 +163,9 @@ func make_server(server_id: int, player_class: int = 0) -> void:
 	net_role = NetRole.SERVER
 	net_id = server_id
 	class_id = player_class
+	# See make_remote(): applying the SERVER role must not depend on the class
+	# value actually changing.
+	_apply_body_profile(net_role)
 	if weapon:
 		weapon.spawn_projectiles = false
 	for path: String in ["BodyHurtbox"]:

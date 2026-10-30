@@ -16,14 +16,9 @@ extends RefCounted
 ## built. Rejections are bucketed by weapon id so a future loadout can be read
 ## without a new log format.
 
-const EYE_HEIGHT := 0.62
-const SHOULDER := Vector3(0.14, 0.0, -0.30)
-## Mirror CameraRig: pivot 0.95 m up, camera 0.35 m right and 2.3 m behind.
-## The client aims from the camera, so tracing from the eye alone made shots
-## drift at range and near cover.
-const CAMERA_PIVOT_HEIGHT := 0.95
-const CAMERA_SHOULDER_X := 0.35
-const CAMERA_BACK := 2.3
+## Camera/muzzle geometry lives in CharacterBodyStats now. The server reads the
+## actor's profile (or the class-0 default for legacy test helpers) instead of
+## mirroring CameraRig constants by hand.
 var stats: WeaponStats
 var world: Node
 
@@ -257,8 +252,9 @@ func _fire_one(
 			entry["overheated"] = true
 	var yaw := frame.yaw
 	var pitch := frame.pitch
-	var origin := canonical_muzzle(actor.global_position, yaw, pitch)
-	var direction := _aim_direction(actor, yaw, pitch, origin)
+	var body := _body_stats(actor)
+	var origin := canonical_muzzle(actor.global_position, yaw, pitch, body)
+	var direction := _aim_direction(actor, yaw, pitch, origin, body)
 	_spawn_projectile(actor, origin, direction, weapon, speed, damage)
 	return {
 		"shooter_id": actor.net_id,
@@ -419,9 +415,11 @@ func _tick_status(entry: Dictionary, delta: float) -> void:
 		statuses[entity_id] = status
 
 
-static func canonical_muzzle(actor_position: Vector3, yaw: float, pitch: float) -> Vector3:
-	var basis := Basis.from_euler(Vector3(pitch, yaw, 0.0))
-	return actor_position + Vector3(0.0, EYE_HEIGHT, 0.0) + basis * SHOULDER
+static func canonical_muzzle(
+	actor_position: Vector3, yaw: float, pitch: float,
+	profile: CharacterBodyStats = null
+) -> Vector3:
+	return _profile_or_default(profile).canonical_muzzle(actor_position, yaw, pitch)
 
 
 static func canonical_direction(yaw: float, pitch: float) -> Vector3:
@@ -435,30 +433,41 @@ static func canonical_direction(yaw: float, pitch: float) -> Vector3:
 ## Yaw/pitch that put `target` under the crosshair from the third-person camera.
 ## Used by bots/tests; converges in three iterations because the camera offset
 ## itself rotates with yaw and pitch.
-static func aim_angles(actor_position: Vector3, target: Vector3) -> Vector2:
+static func aim_angles(
+	actor_position: Vector3, target: Vector3, profile: CharacterBodyStats = null
+) -> Vector2:
 	var yaw := atan2(-(target.x - actor_position.x), -(target.z - actor_position.z))
 	var pitch := 0.0
 	for _i in 3:
-		var cam := camera_origin(actor_position, yaw, pitch)
+		var cam := camera_origin(actor_position, yaw, pitch, profile)
 		var d := target - cam
 		yaw = atan2(-d.x, -d.z)
 		pitch = atan2(d.y, Vector2(d.x, d.z).length())
 	return Vector2(yaw, pitch)
 
 
-static func camera_origin(actor_position: Vector3, yaw: float, pitch: float) -> Vector3:
-	var basis := Basis.from_euler(Vector3(pitch, yaw, 0.0))
-	return (
-		actor_position
-		+ Vector3(0.0, CAMERA_PIVOT_HEIGHT, 0.0)
-		+ basis * Vector3(CAMERA_SHOULDER_X, 0.0, CAMERA_BACK)
-	)
+static func camera_origin(
+	actor_position: Vector3, yaw: float, pitch: float,
+	profile: CharacterBodyStats = null
+) -> Vector3:
+	return _profile_or_default(profile).camera_origin(actor_position, yaw, pitch)
+
+
+static func _profile_or_default(profile: CharacterBodyStats) -> CharacterBodyStats:
+	return profile if profile != null else CharacterBodyRegistry.default_profile()
+
+
+func _body_stats(actor: PlayerController) -> CharacterBodyStats:
+	if actor != null and actor.body_stats != null:
+		return actor.body_stats
+	return CharacterBodyRegistry.default_profile()
 
 
 func _aim_direction(
-	actor: PlayerController, yaw: float, pitch: float, muzzle: Vector3
+	actor: PlayerController, yaw: float, pitch: float, muzzle: Vector3,
+	body: CharacterBodyStats
 ) -> Vector3:
-	var cam := camera_origin(actor.global_position, yaw, pitch)
+	var cam := camera_origin(actor.global_position, yaw, pitch, body)
 	var view := canonical_direction(yaw, pitch)
 	var query := PhysicsRayQueryParameters3D.create(cam, cam + view * 250.0, 1 | 8)
 	query.collide_with_areas = true
