@@ -78,15 +78,15 @@ const SPAWN_LAYOUT := [
 	Vector3(0.0, 0.0, -30.0),    # south of the cave ridge
 	Vector3(24.0, 0.0, -34.0),   # north-east floor
 	Vector3(44.0, 2.5, 10.0),    # east bench, by the bridge
-	Vector3(52.0, 3.0, 40.0),    # east/south ramp
-	Vector3(0.0, 2.0, 52.0),     # south terrace
+	Vector3(60.0, 5.0, 40.0),    # east high bench
+	Vector3(0.0, 2.0, 54.0),     # south terrace
 ]
 
 # Hand-placed cover. Only (x, z) drive the layout; y comes from the height field.
 const HERO_TREES := [
 	Vector3(-36.0, -30.0, 3.2), Vector3(-40.0, 18.0, 3.6),
 	Vector3(-58.0, -20.0, 4.2), Vector3(-62.0, 12.0, 4.0),
-	Vector3(36.0, 24.0, 3.4), Vector3(42.0, -20.0, 3.2),
+	Vector3(36.0, 24.0, 3.4), Vector3(46.0, -30.0, 3.2),
 	Vector3(58.0, 26.0, 4.2), Vector3(60.0, -6.0, 3.8),
 	Vector3(-12.0, 42.0, 2.8), Vector3(14.0, 46.0, 3.0),
 	Vector3(20.0, -40.0, 3.0), Vector3(-22.0, -34.0, 2.8),
@@ -99,6 +99,7 @@ const HERO_ROCKS := [
 	Vector3(-60.0, -8.0, 3.6), Vector3(58.0, 8.0, 3.2),
 	Vector3(-34.0, 36.0, 2.8), Vector3(20.0, 52.0, 3.0),
 	Vector3(-18.0, -36.0, 3.4), Vector3(34.0, 34.0, 2.6),
+	Vector3(56.0, 45.0, 2.6), Vector3(-4.0, 57.0, 2.6),
 ]
 
 var _rng := RandomNumberGenerator.new()
@@ -191,6 +192,15 @@ static func height_at(x: float, z: float) -> float:
 		var cut := 1.0 - smoothstep(0.0, 4.0, absf(x - 50.0))
 		h -= 4.5 * cut * along
 
+	# Flatten the two cave approaches into the terrace. Without this the west
+	# mouth sits two metres above the tunnel floor and the east mouth has a
+	# half-metre lip; both become real entry steps.
+	var apron := _cave_apron(x, z)
+	if apron > 0.0:
+		h = lerpf(h, 0.0, apron)
+	if absf(z - CAVE_Z) < CAVE_HALF_WIDTH + 0.6 and absf(x) < CAVE_HALF_LEN + 1.0:
+		h = 0.0
+
 	# Mountain ring as three open-pit benches. Flat shelves at 8 / 18 m are
 	# separated by steep faces, so the edge reads as a quarried mountain rather
 	# than a smooth dune. The invisible boundary sits on the first shelf.
@@ -221,6 +231,14 @@ static func terrain_normal(x: float, z: float) -> Vector3:
 	var dx := height_at(x + E, z) - height_at(x - E, z)
 	var dz := height_at(x, z + E) - height_at(x, z - E)
 	return Vector3(-dx, 2.0 * E, -dz).normalized()
+
+
+static func _cave_apron(x: float, z: float) -> float:
+	var zt := 1.0 - smoothstep(5.0, 9.0, absf(z - CAVE_Z))
+	if zt <= 0.0:
+		return 0.0
+	var xt := 1.0 - smoothstep(30.0, 44.0, absf(x))
+	return zt * xt
 
 
 static func slope_at(x: float, z: float) -> float:
@@ -302,9 +320,9 @@ func _build_materials() -> void:
 	_mat_terrain.uv1_scale = Vector3(0.12, 0.12, 0.12)
 	_mat_terrain.uv1_triplanar_sharpness = 2.0
 
-	_mat_stone = _flat_material("quarry_stone", Color(0.50, 0.49, 0.45))
-	_mat_wood = _flat_material("quarry_wood", Color(0.42, 0.29, 0.18))
-	_mat_cave = _flat_material("quarry_cave", Color(0.24, 0.23, 0.22))
+	_mat_stone = _flat_material("quarry_stone", Color(0.55, 0.54, 0.50))
+	_mat_wood = _flat_material("quarry_wood", Color(0.58, 0.43, 0.27))
+	_mat_cave = _flat_material("quarry_cave", Color(0.36, 0.35, 0.33))
 
 	_synthetic_meshes["stone_box"] = _unit_box(_mat_stone)
 	_synthetic_meshes["wood_box"] = _unit_box(_mat_wood)
@@ -486,9 +504,6 @@ func _build_cave() -> void:
 	for i in segments:
 		var cx := -CAVE_HALF_LEN - 0.7 + length * (float(i) + 0.5)
 		_add_instance("cave_lining", Transform3D(
-			Basis().scaled(Vector3(length + 0.18, CAVE_LINING, CAVE_HALF_WIDTH * 2.0 + 0.8)),
-			Vector3(cx, -CAVE_LINING * 0.5, CAVE_Z)))
-		_add_instance("cave_lining", Transform3D(
 			Basis().scaled(Vector3(length + 0.18, 0.7, CAVE_HALF_WIDTH * 2.0 + 0.8)),
 			Vector3(cx, CAVE_HEIGHT + 0.35, CAVE_Z)))
 		for side in [-1.0, 1.0]:
@@ -591,15 +606,17 @@ func _build_cave() -> void:
 	light_root.name = "Lights"
 	_cave_root.add_child(light_root)
 	var lamp_positions := [
-		Vector3(-19.0, 3.5, CAVE_Z), Vector3(0.0, 3.5, CAVE_Z), Vector3(19.0, 3.5, CAVE_Z),
+		Vector3(-26.0, 3.5, CAVE_Z), Vector3(-13.0, 3.5, CAVE_Z),
+		Vector3(0.0, 3.5, CAVE_Z), Vector3(13.0, 3.5, CAVE_Z),
+		Vector3(26.0, 3.5, CAVE_Z),
 	]
 	for i in lamp_positions.size():
 		var light := OmniLight3D.new()
 		light.name = "CaveLamp_%d" % i
 		light.position = lamp_positions[i]
-		light.light_color = Color(1.0, 0.72, 0.42) if i != 1 else Color(0.62, 0.78, 1.0)
-		light.light_energy = 1.1
-		light.omni_range = 13.0
+		light.light_color = Color(1.0, 0.72, 0.42) if i != 2 else Color(0.62, 0.78, 1.0)
+		light.light_energy = 1.8
+		light.omni_range = 16.0
 		light.shadow_enabled = false
 		light_root.add_child(light)
 
@@ -620,7 +637,7 @@ func _on_cave_body_entered(body: Node) -> void:
 	if not _is_local_player(body):
 		return
 	_cave_active = true
-	_ambient_target = _base_ambient * 0.34
+	_ambient_target = _base_ambient * 0.6
 	set_process(true)
 
 
@@ -724,52 +741,73 @@ func _ruined_walls() -> void:
 
 
 func _bridge() -> void:
-	var base := height_at(50.0, 6.0)
-	var deck_y := 2.62
-	# Deck (z is bridge width, x is span). The ravine under it is ~4.5 m deep.
+	# The east bank is one terrace higher than the west bank, so the deck ramps
+	# gently between them instead of ending buried under the east grass.
+	var west_top := 2.45
+	var east_top := height_at(57.0, 6.0)
+	var slope := atan2(east_top - west_top, 14.0)
+	var deck_basis := Basis(Vector3(0.0, 0.0, 1.0), slope)
+	_add_collider_box_basis(Vector3(50.0, (west_top + east_top) * 0.5 - 0.1, 6.0),
+		Vector3(14.2, 0.2, 3.8), deck_basis)
 	for i in 19:
 		var x := 43.0 + float(i) * 0.75
-		_add_wood_box(Vector3(x, deck_y, 6.0), Vector3(0.72, 0.16, 3.6), 0.0)
-	_add_collider_box(Vector3(50.0, deck_y - 0.12, 6.0), Vector3(14.0, 0.3, 3.8), 0.0)
-	_hero_anchors.append(Vector3(50.0, deck_y, 6.0))
-	# Posts, cross-braces and hand rails.
+		var t := (x - 43.0) / 14.0
+		var top := lerpf(west_top, east_top, t)
+		_add_instance("wood_box", Transform3D(
+			Basis().scaled(Vector3(0.72, 0.16, 3.6)), Vector3(x, top - 0.08, 6.0)))
+	_hero_anchors.append(Vector3(50.0, (west_top + east_top) * 0.5, 6.0))
+	# Posts and rails follow the slope. Rails are visual; the posts carry the
+	# collision so a player can still step off into the cut.
 	for x in [43.8, 47.8, 52.2, 56.2]:
+		var t := (float(x) - 43.0) / 14.0
+		var top := lerpf(west_top, east_top, t)
 		for zsign in [-1.0, 1.0]:
-			_add_wood_box(Vector3(x, deck_y + 0.62, 6.0 + zsign * 1.78),
+			_add_wood_box(Vector3(x, top + 0.62, 6.0 + zsign * 1.78),
 				Vector3(0.16, 1.24, 0.16), 0.0)
-			_add_wood_box(Vector3(x, deck_y - 0.8, 6.0 + zsign * 1.78),
+			_add_wood_box(Vector3(x, top - 0.8, 6.0 + zsign * 1.78),
 				Vector3(0.18, 1.6, 0.18), 0.0)
 	for zsign in [-1.0, 1.0]:
-		_add_wood_box(Vector3(50.0, deck_y + 1.18, 6.0 + zsign * 1.78),
-			Vector3(14.0, 0.14, 0.16), 0.0)
-		_add_collider_box(Vector3(50.0, deck_y + 1.05, 6.0 + zsign * 1.78),
-			Vector3(14.0, 0.7, 0.2), 0.0)
-		_hero_anchors.append(Vector3(50.0, deck_y + 1.05, 6.0 + zsign * 1.78))
-	# Stone abutments read as built supports rather than floating planks.
-	_add_stone_box(Vector3(43.2, base + 0.1, 6.0), Vector3(2.4, 1.4, 4.4), 0.0)
-	_add_stone_box(Vector3(56.8, height_at(56.8, 6.0) + 0.1, 6.0),
-		Vector3(2.4, 1.4, 4.4), 0.0)
-
+		for i in 4:
+			var x0 := 43.8 + float(i) * 3.2
+			var x1 := x0 + 3.2
+			var t0 := (x0 - 43.0) / 14.0
+			var t1 := (x1 - 43.0) / 14.0
+			var y0 := lerpf(west_top, east_top, t0) + 1.18
+			var y1 := lerpf(west_top, east_top, t1) + 1.18
+			_add_wood_box(Vector3((x0 + x1) * 0.5, (y0 + y1) * 0.5,
+				6.0 + zsign * 1.78), Vector3(3.2, 0.14, 0.16), 0.0)
+	# Stone abutments sit under the two deck ends, not on the ravine floor.
+	var west_ground := height_at(43.0, 6.0)
+	var east_ground := height_at(57.0, 6.0)
+	_add_stone_box(Vector3(43.2, west_ground - 1.0, 6.0), Vector3(2.4, 1.4, 4.4), 0.0)
+	_add_stone_box(Vector3(56.8, east_ground - 1.0, 6.0), Vector3(2.4, 1.4, 4.4), 0.0)
 
 func _lookout() -> void:
 	var base := height_at(-62.0, 48.0)
-	# Timber lookout on the high west bench. The deck is only 0.15 m above the
-	# bench, so it is walk-on without a step.
-	_add_wood_box(Vector3(-62.0, base + 0.08, 48.0), Vector3(6.0, 0.3, 5.0), 0.0)
-	_add_collider_box(Vector3(-62.0, base + 0.08, 48.0), Vector3(6.0, 0.3, 5.0), 0.0)
-	_hero_anchors.append(Vector3(-62.0, base + 0.08, 48.0))
+	var deck_top := base + 1.56
+	# Raised timber lookout with a south ramp. The deck is a real elevated
+	# platform; the ramp is a single sloped collider, because this controller
+	# cannot climb vertical step boxes.
+	_add_wood_box(Vector3(-62.0, deck_top - 0.15, 48.0), Vector3(6.0, 0.3, 5.8), 0.0)
+	_hero_anchors.append(Vector3(-62.0, deck_top, 48.0))
+	var ramp_angle := atan2(1.9, 6.7)
+	_add_wood_box_basis(Vector3(-62.0, base + 0.55, 54.15),
+		Vector3(2.2, 0.2, 6.7), Basis(Vector3.RIGHT, ramp_angle))
 	for corner in [Vector2(-2.7, -2.2), Vector2(2.7, -2.2), Vector2(-2.7, 2.2), Vector2(2.7, 2.2)]:
-		_add_wood_box(Vector3(-62.0 + corner.x, base - 2.0, 48.0 + corner.y),
-			Vector3(0.22, 4.4, 0.22), 0.0)
+		_add_wood_box(Vector3(-62.0 + corner.x, base + 0.5, 48.0 + corner.y),
+			Vector3(0.22, 3.6, 0.22), 0.0)
+	# Rails on the north/east/west sides; the south side is the ramp opening.
+	_add_wood_box(Vector3(-62.0, deck_top + 1.05, 45.55),
+		Vector3(6.0, 0.15, 0.15), 0.0)
+	_add_collider_box(Vector3(-62.0, deck_top + 0.9, 45.55),
+		Vector3(6.0, 0.7, 0.2), 0.0)
+	_hero_anchors.append(Vector3(-62.0, deck_top + 0.9, 45.55))
 	for side in [-1.0, 1.0]:
-		_add_wood_box(Vector3(-62.0, base + 1.05, 48.0 + side * 2.45),
-			Vector3(6.0, 0.15, 0.15), 0.0)
-		_add_wood_box(Vector3(-62.0 + side * 2.95, base + 1.05, 48.0),
-			Vector3(0.15, 0.15, 5.0), 0.0)
-		_add_collider_box(Vector3(-62.0, base + 0.9, 48.0 + side * 2.45),
-			Vector3(6.0, 0.7, 0.2), 0.0)
-		_hero_anchors.append(Vector3(-62.0, base + 0.9, 48.0 + side * 2.45))
-
+		_add_wood_box(Vector3(-62.0 + side * 2.95, deck_top + 1.05, 48.0),
+			Vector3(0.15, 0.15, 5.6), 0.0)
+		_add_collider_box(Vector3(-62.0 + side * 2.95, deck_top + 0.9, 48.0),
+			Vector3(0.2, 0.7, 5.6), 0.0)
+		_hero_anchors.append(Vector3(-62.0 + side * 2.95, deck_top + 0.9, 48.0))
 
 func _fallen_log() -> void:
 	var base := height_at(-8.0, -14.0)
@@ -789,6 +827,12 @@ func _add_stone_box(pos: Vector3, size: Vector3, yaw: float) -> void:
 func _add_wood_box(pos: Vector3, size: Vector3, yaw: float) -> void:
 	_add_instance("wood_box", Transform3D(Basis(Vector3.UP, yaw).scaled(size), pos))
 	_add_collider_box(pos, size, yaw)
+	_hero_anchors.append(pos)
+
+
+func _add_wood_box_basis(pos: Vector3, size: Vector3, basis: Basis) -> void:
+	_add_instance("wood_box", Transform3D(basis.scaled(size), pos))
+	_add_collider_box_basis(pos, size, basis)
 	_hero_anchors.append(pos)
 
 
@@ -887,6 +931,8 @@ func _scatter_mountain_rocks(count: int) -> void:
 		pos.y = height_at(pos.x, pos.z)
 		if pos.y > 7.0 or slope_at(pos.x, pos.z) > 0.9:
 			continue
+		if _in_traversal_lane(pos):
+			continue
 		if absf(pos.x) < 36.0 and absf(pos.z - CAVE_Z) < 17.0:
 			continue
 		if not _is_dressing_clear(pos, 1.8):
@@ -932,6 +978,8 @@ func _scatter_ridge_pines(count: int) -> void:
 				pos = Vector3(along, 0.0, -depth)
 		pos.y = height_at(pos.x, pos.z)
 		if pos.y > 5.0 or slope_at(pos.x, pos.z) > 0.7:
+			continue
+		if _in_traversal_lane(pos):
 			continue
 		if absf(pos.x) < 36.0 and absf(pos.z - CAVE_Z) < 17.0:
 			continue
@@ -992,6 +1040,8 @@ func _random_dressing_point(max_slope: float) -> Vector3:
 			continue
 		if x > 41.0 and x < 59.0 and z > 1.0 and z < 11.0:
 			continue
+		if _in_traversal_lane(Vector3(x, 0.0, z)):
+			continue
 		if slope_at(x, z) > max_slope:
 			continue
 		var y := height_at(x, z)
@@ -1002,6 +1052,26 @@ func _random_dressing_point(max_slope: float) -> Vector3:
 			continue
 		return pos
 	return Vector3.INF
+
+
+func _in_traversal_lane(pos: Vector3) -> bool:
+	# Keep the main ramp/bridge/spawn approaches free of scatter. Hero props are
+	# hand-placed and are checked separately.
+	if absf(pos.z) < 4.5 and pos.x < -18.0 and pos.x > -70.0:
+		return true
+	if absf(pos.z + 20.0) < 4.5 and pos.x > 18.0 and pos.x < 70.0:
+		return true
+	if absf(pos.x - 8.0) < 4.5 and pos.z > 34.0 and pos.z < 68.0:
+		return true
+	if pos.x > 39.0 and pos.x < 61.0 and pos.z > 1.0 and pos.z < 11.0:
+		return true
+	if pos.x > -69.0 and pos.x < -55.0 and pos.z > 40.0 and pos.z < 57.0:
+		return true
+	if pos.x > -62.0 and pos.x < -50.0 and pos.z > 10.0 and pos.z < 26.0:
+		return true
+	if absf(pos.z + 54.0) < 10.0 and absf(pos.x) > 22.0 and absf(pos.x) < 58.0:
+		return true
+	return false
 
 
 func _is_dressing_clear(pos: Vector3, clearance: float) -> bool:
@@ -1083,7 +1153,10 @@ func _build_colliders() -> void:
 		body.collision_layer = 1
 		body.collision_mask = 0
 		body.position = collider["pos"]
-		body.rotation.y = float(collider.get("yaw", 0.0))
+		if collider.has("basis"):
+			body.transform.basis = collider["basis"]
+		else:
+			body.rotation.y = float(collider.get("yaw", 0.0))
 		var shape_node := CollisionShape3D.new()
 		if collider["shape"] == "box":
 			var box := BoxShape3D.new()
@@ -1104,6 +1177,13 @@ func _add_collider_box(pos: Vector3, size: Vector3, yaw: float) -> void:
 		push_error("Non-positive collider box %s at %s" % [str(size), str(pos)])
 		return
 	_colliders.append({"shape": "box", "pos": pos, "size": size, "yaw": yaw})
+
+
+func _add_collider_box_basis(pos: Vector3, size: Vector3, basis: Basis) -> void:
+	if size.x <= 0.01 or size.y <= 0.01 or size.z <= 0.01:
+		push_error("Non-positive collider box %s at %s" % [str(size), str(pos)])
+		return
+	_colliders.append({"shape": "box", "pos": pos, "size": size, "basis": basis})
 
 
 func _add_collider_cylinder(base_pos: Vector3, radius: float, height: float) -> void:

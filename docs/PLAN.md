@@ -119,14 +119,25 @@ while the server hits is expected under lag and is better than an invisible one.
 - **Spawns/boundary:** `Spawn01`…`Spawn08`, snapped to the height field, ≥ 22 m apart, none
   blocked. Invisible 40 m boundary walls at ±69.5 m plus the mountain ring/rock faces stop the
   player and the third-person spring arm.
-- **Budget:** 49 draw calls, 191,270 triangles, 1,804 MultiMesh instances, 371 static colliders
-  (quarry); hard limits remain 150 / 250k. Web export: 44,748 KB raw, **14,217 KB gzip**.
+- **Budget:** 49 draw calls, 190,110 triangles, 1,798 MultiMesh instances, 353 static colliders
+  (quarry); hard limits remain 150 / 250k. Web export: 44,752 KB raw, **14,219 KB gzip**.
 - **Tests:** `tests/gdunit/test_quarry_arena.gd` (9 cases: load, mesh/heightmap parity, spawns,
   cave clearance, hero colliders, walkable routes, boundary, camera wall, main-scene wiring);
   `tests/headless/arena_stats.gd` now validates both maps; `tests/headless/quarry_match.gd`
   runs a 45 s four-bot match (spawn, movement, shots, hits, kills).
-- **Verified:** four bots moved 39.7–80.7 m and produced 136 shots / 24 hits / 3 deaths on the
-  new map; 113 test cases green; web console clean.
+- **QA walkthrough:** `tests/headless/quarry_walk.gd` drives the real `PlayerController` /
+  `LocomotionComponent` through 35 sections (all 9 chunks, both cave directions including the
+  aprons, six ramp directions, bridge, tower, raised lookout, all 8 spawns, four edges and three
+  platform falls). Result: **PASS**, 536.1 m travelled, 0 fall-through, 0 camera clips, 0
+  stuck episodes over 1.5 s (the only long stationary periods are the expected edge pushes).
+- **Map fixes from the walkthrough:** cave mouth aprons flattened to the tunnel floor; a boulder
+  and two trees removed from the west/east ramp lanes; a tree removed from the cave approach;
+  bridge rebuilt as a sloped deck with flush landings and correct abutments; lookout raised to a
+  real 1.6 m platform with a sloped ramp (vertical step boxes are not climbable by this
+  controller); spawns 7/8 moved onto flat benches; cave floor z-fighting removed; cave lamps and
+  wood/stone values raised for web readability.
+- **Verified:** four bots moved 47–108 m and produced 74 shots / 29 hits / 3 deaths on the new
+  map; 113 gdUnit cases green; 35 walkthrough sections green; web console clean.
 
 ## 3b. Class weapons + bigger playground (research prompt)
 

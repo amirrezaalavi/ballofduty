@@ -57,8 +57,9 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**113 test cases · ~940 assertions.** Quarry budget: 49 draw calls, 191,270 triangles; web
-export 44,748 KB raw / 14,217 KB gzip. `test_net_loopback` stays one integration test: the value is the
+**113 test cases · ~940 assertions**, plus **35 walkthrough sections** and the 4-bot match.
+Quarry budget: 49 draw calls, 190,110 triangles; web export 44,752 KB raw / 14,219 KB gzip.
+Walkthrough: 536.1 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s. `test_net_loopback` stays one integration test: the value is the
 real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.
@@ -74,7 +75,10 @@ Not in gdUnit4:
 - `tools/soak.sh` / `tests/headless/soak_runner.gd` — 30 Hz soak with real WS clients and bots,
   metrics for tick/frame/CPU/RSS/nodes/snapshot/ack/combat. `--full` is the 10-minute gate.
 - `tests/headless/arena_stats.gd` — draw calls / triangles / collider budget report for the nature and quarry arenas.
+- `tests/headless/quarry_walk.gd` — 35-section real-physics walkthrough on the quarry (chunks, cave aprons/bore, ramps, bridge, tower, lookout, spawns, edges, falls). Fails on fall-through, >1.5 s stuck, unreachable spawn, cave camera clipping or boundary escape.
 - `tests/headless/quarry_match.gd` — 45 s four-bot headless match on the quarry (spawn, movement, shots, hits, deaths).
+
+`tools/check.sh` runs both arena harnesses after the gdUnit suite and arena budget.
 
 ## Tooling
 
