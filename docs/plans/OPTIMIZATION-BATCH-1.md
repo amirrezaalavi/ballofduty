@@ -1,6 +1,6 @@
 # Optimization Batch 1 — Safe, Map-Agnostic Steps
 
-**Status:** in progress.
+**Status:** complete. Steps 1–5 committed; full check green.
 **Source:** [`../research/OPTIMIZATION-ANSWERS-REVIEW.md`](../research/OPTIMIZATION-ANSWERS-REVIEW.md) §7.
 **Constraint:** the map session's uncommitted files are off-limits. Do not edit
 `scripts/game/main.gd`, `scripts/ui/main_menu.gd`, `scripts/game/map_registry.gd`,
@@ -79,7 +79,9 @@ longer redraws when idle; transients and 4 Hz debug text still paint.
   (it moves to player ready).
 
 **Result:** 5 bullet-pool tests + 4 class-weapon visual tests green. The pool
-is built once before the first launch; first launch adds no nodes.
+is built once before the first launch; first launch adds no nodes. The prewarm
+is **deferred** (`call_deferred`) because `_ready` can run while the world is
+still adding children; a browser solo run then had **0 console errors**.
 
 **Rollback:** remove the prewarm call; first shot builds the pool as before.
 
@@ -112,7 +114,7 @@ green. Golden 28 B hex unchanged; 8-actor packet still 182 B. Encode
 
 ---
 
-## Step 4 — Bot id index + LOS stagger  ⏳ in progress
+## Step 4 — Bot id index + LOS stagger  ✅ done (`874c3c4`)
 
 **Files:** `scripts/game/game_manager.gd`, `tests/gdunit/test_bots.gd` (or a
 focused new suite).
@@ -130,11 +132,16 @@ focused new suite).
 - `test_bots`, `test_bot_feel`, `test_class_weapons` bot test pass.
 - `_entry_by_id` returns the same entry for every roster id after join/leave.
 
+**Result:** 11 bot/feel/class tests green. 4 bots, 30 frames: **40 LOS
+checks** instead of ~120. 1-bot duel, 30 calls: **11 checks**. `quarry_match`
+still PASS: 84 shots / 22 hits / 3 deaths (baseline 114/31/4; same order,
+expected effect of 10 Hz target LOS).
+
 **Rollback:** restore per-tick `_has_los`; id index can stay.
 
 ---
 
-## Step 5 — Respawn top-2 raycast
+## Step 5 — Respawn top-2 raycast  ✅ done (`c37e64b`)
 
 **Files:** `scripts/game/game_manager.gd`, `tests/gdunit/test_bots.gd` or a
 focused respawn test.
@@ -151,6 +158,9 @@ focused respawn test.
 - Clustered deaths do not exceed 1.2× the running tick average.
 - `quarry_match` and `test_bots` pass.
 - Add a `spawn_raycasts` counter to make the reduction testable.
+
+**Result:** respawn test green. **6 rays per call** (top-2 × 3 living others)
+vs the old 8 × 3 = 24; 10 clustered calls stay at 6. `quarry_match` PASS.
 
 **Rollback:** restore the full spawn × roster raycast loop.
 
@@ -176,3 +186,20 @@ focused respawn test.
 After steps 3 and 5, rerun `tests/headless/perf_probe.gd` and compare to the
 baseline. After step 5, run `tools/check.sh --skip-export`. Full `tools/check.sh`
 once at the end of the batch.
+
+## Batch result
+
+- **143 tests, 0 failures** in the current worktree (141 from this batch + the
+  map session's 2 in-progress map-picker tests).
+- `tools/check.sh --skip-export`: content, tests, arena budget, 35-section
+  walkthrough and 4-bot match all green.
+- Full `tools/check.sh`: web + Linux server export, server smoke, all green.
+- Browser solo after the deferred-prewarm fix: HUD visible, **0 console
+  errors**; screenshot `hud_batch1_fixed.png` (local, not committed).
+- Snapshot encode: **49.42 → ~21 µs avg**, p95 **59 → ~24 µs**, packet 182 B.
+- Bot LOS: 4 bots, 30 frames: **40 checks** instead of ~120; `quarry_match`
+  PASS (87 shots / 23 hits / 3 deaths).
+- Respawn: **6 rays per call** (top-2 × 3 living others) instead of up to 24;
+  10 clustered calls stay at 6.
+- Headless HUD/GPU numbers are not meaningful; the browser check is the
+  functional gate.
