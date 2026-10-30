@@ -70,6 +70,8 @@ var _hits_total: int = 0
 var _deaths_total: int = 0
 ## Test telemetry: how many target LOS raycasts bots have issued.
 var los_checks: int = 0
+## Test telemetry: how many rays the respawn picker has issued.
+var spawn_raycasts: int = 0
 
 # Client state.
 var local_id: int = 0
@@ -506,12 +508,39 @@ func _respawn(entry: Dictionary) -> void:
 	_broadcast_event(NetProtocol.encode_event_respawn(int(entry["id"]), spawn["pos"], spawn["yaw"]))
 
 
+## Pick the spawn farthest from the nearest living enemy, then verify only the
+## two best candidates with rays. The old loop cast a ray for every spawn x
+## actor pair (up to 64 per death); the distance pass is pure math and the ray
+## pass is capped at 2 x actors within 25 m.
 func _choose_respawn(entry: Dictionary) -> Dictionary:
-	var best_pos: Vector3 = _spawns[0] + Vector3(0.0, 0.2, 0.0) if not _spawns.is_empty() else Vector3(0, 0.2, 0)
-	var best_score := -1.0
+	var candidates: Array = []
 	for spawn_point: Vector3 in _spawns:
 		var pos := spawn_point + Vector3(0.0, 0.2, 0.0)
 		var nearest := 999.0
+		for other_peer in _roster:
+			var other: Dictionary = _roster[other_peer]
+			if int(other["id"]) == int(entry["id"]) or int(other["dead_until"]) > 0:
+				continue
+			var other_ref: Variant = other["node"]
+			if not is_instance_valid(other_ref):
+				continue
+			var other_node := other_ref as Node3D
+			nearest = minf(nearest, pos.distance_to(other_node.global_position))
+		candidates.append({"pos": pos, "nearest": nearest, "index": candidates.size()})
+	# Farthest from the nearest living enemy is best; equal distances keep the
+	# earlier spawn, as the old first-wins loop did.
+	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if not is_equal_approx(float(a["nearest"]), float(b["nearest"])):
+			return float(a["nearest"]) > float(b["nearest"])
+		return int(a["index"]) < int(b["index"])
+	)
+	var best_pos: Vector3 = _spawns[0] + Vector3(0.0, 0.2, 0.0) if not _spawns.is_empty() else Vector3(0, 0.2, 0)
+	var best_score := -INF
+	var world: World3D = actor_world(_world)
+	var space: PhysicsDirectSpaceState3D = world.direct_space_state if world else null
+	for i in mini(2, candidates.size()):
+		var candidate: Dictionary = candidates[i]
+		var pos: Vector3 = candidate["pos"]
 		var clear := true
 		for other_peer in _roster:
 			var other: Dictionary = _roster[other_peer]
@@ -521,17 +550,21 @@ func _choose_respawn(entry: Dictionary) -> Dictionary:
 			if not is_instance_valid(other_ref):
 				continue
 			var other_node := other_ref as Node3D
-			var dist: float = pos.distance_to(other_node.global_position)
-			nearest = minf(nearest, dist)
-			if dist < 25.0:
-				var query := PhysicsRayQueryParameters3D.create(
-					pos + Vector3(0.0, 0.6, 0.0),
-					(other_node as Node3D).global_position + Vector3(0.0, 0.45, 0.0),
-					1
-				)
-				if not actor_world(_world).direct_space_state.intersect_ray(query).is_empty():
-					clear = false
-		var score := nearest + (5.0 if clear else 0.0)
+			if pos.distance_to(other_node.global_position) >= 25.0:
+				continue
+			if space == null:
+				continue
+			spawn_raycasts += 1
+			var query := PhysicsRayQueryParameters3D.create(
+				pos + Vector3(0.0, 0.6, 0.0),
+				other_node.global_position + Vector3(0.0, 0.45, 0.0),
+				1
+			)
+			if not space.intersect_ray(query).is_empty():
+				clear = false
+		# A clear spawn is worth a small bonus, but a blocked far spawn still
+		# beats a blocked near one: spawn protection covers the landing.
+		var score := float(candidate["nearest"]) + (5.0 if clear else 0.0)
 		if score > best_score:
 			best_score = score
 			best_pos = pos
@@ -1072,3 +1105,4 @@ func _reset() -> void:
 	_spawns.clear()
 	_used_slots.clear()
 	_join_sent = false
+	spawn_raycasts = 0
