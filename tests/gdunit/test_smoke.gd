@@ -49,24 +49,32 @@ func test_scenes_have_required_nodes() -> void:
 		["Floor", "Ramp", "PlatformA", "PlatformB", "CameraWall", "Spawn01", "Spawn08"])
 	_check_scene("res://scenes/maps/arena_nature.tscn",
 		["Floor", "PlatformA", "PlatformB", "CameraWall", "Props", "DummyA", "DummyB", "DummyC", "Spawn01", "Spawn08"])
+	_check_scene("res://scenes/maps/arena_quarry.tscn",
+		["Terrain", "Cave", "Cave/CaveInterior", "Cave/CaveEntranceWest", "Cave/CaveEntranceEast",
+		"Boundary", "Props", "Spawn01", "Spawn08"])
 	_check_scene("res://scenes/characters/training_dummy.tscn",
 		["HealthComponent", "BodyHurtbox"])
 
 
 func test_arena_spawns() -> void:
-	var nature := (load("res://scenes/maps/arena_nature.tscn") as PackedScene).instantiate()
+	_check_spawn_layout("res://scenes/maps/arena_nature.tscn", "nature")
+	_check_spawn_layout("res://scenes/maps/arena_quarry.tscn", "quarry")
+
+
+func _check_spawn_layout(path: String, label: String) -> void:
+	var arena := (load(path) as PackedScene).instantiate()
 	var spawns: Array[Vector3] = []
-	for child in nature.get_children():
+	for child in arena.get_children():
 		if child is Marker3D and child.name.begins_with("Spawn"):
 			spawns.append((child as Marker3D).position)
-	expect(spawns.size() == 8, "nature arena has 8 spawn points")
+	expect(spawns.size() == 8, "%s arena has 8 spawn points" % label)
 	var too_close := false
 	for a in spawns.size():
 		for b in range(a + 1, spawns.size()):
 			if spawns[a].distance_to(spawns[b]) < 15.0:
 				too_close = true
-	expect(not too_close, "all spawn points are at least 15 m apart")
-	nature.free()
+	expect(not too_close, "%s spawn points are at least 15 m apart" % label)
+	arena.free()
 
 
 func test_movement_tuning() -> void:
