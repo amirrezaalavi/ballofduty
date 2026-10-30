@@ -64,6 +64,9 @@ var _server_tick: int = 0
 var _world: Node
 var _spawns: Array = [] # Array[Vector3]
 var _used_slots: Dictionary = {} # slot -> peer_id
+## peer_id -> overflow ring (0 = own marker, 1 = first overflow ring, ...)
+var _spawn_ring: Dictionary = {}
+var _next_overflow: int = 0
 var _combat: ServerCombat
 var _client_error: String = ""
 var _hits_total: int = 0
@@ -215,7 +218,7 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 	_next_id = maxi(_next_id, assigned + 1)
 	var slot := _claim_slot(peer_id)
 	var player_class := NetProtocol.sanitize_class(class_id)
-	var node := _spawn_server_actor(assigned, slot, player_class)
+	var node := _spawn_server_actor(assigned, slot, player_class, peer_id)
 	# The client must start where authority put it, or every other player sees it
 	# 20+ m away from where its owner does.
 	var spawn_pos := node.global_position
@@ -582,7 +585,7 @@ func _spawn_bot(index: int) -> void:
 	var peer_id := BOT_PEER_BASE - index
 	var slot := _claim_slot(peer_id)
 	var bot_class := index % NetProtocol.CLASS_COUNT
-	var node := _spawn_server_actor(id, slot, bot_class)
+	var node := _spawn_server_actor(id, slot, bot_class, peer_id)
 	_roster[peer_id] = _new_entry(id, "BOT %d" % (index + 1), node, peer_id, bot_class)
 	_index_entry(_roster[peer_id])
 	print("BALL_OF_DUTY bot id=%d name=BOT %d" % [id, index + 1])
@@ -817,15 +820,22 @@ func server_player_stats(player_id: int) -> Dictionary:
 	return {}
 
 
-func _spawn_server_actor(assigned_id: int, slot: int, player_class: int = 0) -> PlayerController:
+func _spawn_server_actor(
+	assigned_id: int, slot: int, player_class: int = 0, peer_id: int = 0
+) -> PlayerController:
 	var actor := PLAYER_SCENE.instantiate() as PlayerController
 	actor.name = "ServerPlayer_%d" % assigned_id
 	_world.add_child(actor)
 	actor.make_server(assigned_id, player_class)
 	var pos := Vector3(0.0, 0.2, 0.0)
 	var yaw := 0.0
+	# _claim_slot keys the ring by peer id (negative for bots), while the actor
+	# carries the roster player id. Prefer the peer key, fall back to the id for
+	# hand-built callers that pass neither.
+	var ring_key := peer_id if _spawn_ring.has(peer_id) else assigned_id
+	var ring := int(_spawn_ring.get(ring_key, 0))
 	if slot >= 0 and slot < _spawns.size():
-		pos = _spawns[slot] + Vector3(0.0, 0.2, 0.0)
+		pos = _spawns[slot] + Vector3(0.0, 0.2, 0.0) + _spawn_ring_offset(ring)
 		# Forward is -Z, so to look at the arena centre the yaw is atan2(x, z).
 		# The negated form points players at the perimeter wall instead.
 		yaw = atan2(pos.x, pos.z)
@@ -834,19 +844,39 @@ func _spawn_server_actor(assigned_id: int, slot: int, player_class: int = 0) -> 
 	return actor
 
 
+## Spawn markers are per-map (the shipping maps expose 8), while the protocol
+## allows 16 actors. Overflow actors reuse a marker but are pushed out onto a
+## ring so they never share the exact origin: ring 1 is 0.8 m out, ring 2 is
+## 1.6 m out, stepping 60 degrees so successive rings do not overlap.
+func _spawn_ring_offset(ring: int) -> Vector3:
+	if ring <= 0:
+		return Vector3.ZERO
+	var angle := float(ring) * TAU / 6.0
+	return Vector3(cos(angle), 0.0, sin(angle)) * (0.8 * float(ring))
+
+
 func _claim_slot(peer_id: int) -> int:
 	for i in _spawns.size():
 		if not _used_slots.has(i):
 			_used_slots[i] = peer_id
+			_spawn_ring[peer_id] = 0
 			return i
-	return -1
+	if _spawns.is_empty():
+		_spawn_ring[peer_id] = 0
+		return -1
+	var slot := _next_overflow % _spawns.size()
+	var ring := 1 + int(_next_overflow / _spawns.size())
+	_spawn_ring[peer_id] = ring
+	_next_overflow += 1
+	return slot
 
 
 func _release_slot(peer_id: int) -> void:
-	for slot in _used_slots:
+	for slot in _used_slots.keys():
 		if int(_used_slots[slot]) == peer_id:
 			_used_slots.erase(slot)
-			return
+			break
+	_spawn_ring.erase(peer_id)
 
 
 func _broadcast_roster() -> void:
@@ -1107,5 +1137,7 @@ func _reset() -> void:
 	_world = null
 	_spawns.clear()
 	_used_slots.clear()
+	_spawn_ring.clear()
+	_next_overflow = 0
 	_join_sent = false
 	spawn_raycasts = 0

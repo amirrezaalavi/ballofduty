@@ -14,6 +14,9 @@ const GM_SCRIPT := preload("res://scripts/game/game_manager.gd")
 const BUS_SCRIPT := preload("res://scripts/autoload/event_bus.gd")
 
 const ACTORS := 16
+## Shipping maps expose eight spawn markers; the probe must match them so the
+## overflow ring path is exercised, not the 16-point generated fallback.
+const SPAWNS := 8
 const WARMUP_TICKS := 30
 const MEASURED_TICKS := 300
 const PORT := 9199
@@ -32,12 +35,14 @@ func _init() -> void:
 func _run() -> void:
 	seed(20261102)
 	_ensure_bus()
-	print("NET16 config actors=%d ticks=%d port=%d" % [ACTORS, MEASURED_TICKS, PORT])
 
 	var world := _build_world()
 	root.add_child(world)
 	for _i in 3:
 		await physics_frame
+
+	print("NET16 config actors=%d ticks=%d port=%d spawns=%d" % [
+		ACTORS, MEASURED_TICKS, PORT, SPAWNS])
 
 	var net: Node = NET_SCRIPT.new()
 	var gm: Node = GM_SCRIPT.new()
@@ -50,6 +55,33 @@ func _run() -> void:
 		return
 	if gm.server_player_count() != ACTORS:
 		await _fail(gm, net, world, "roster=%d/%d" % [gm.server_player_count(), ACTORS])
+		return
+	if int(gm._spawns.size()) != SPAWNS:
+		await _fail(gm, net, world, "spawns=%d/%d" % [int(gm._spawns.size()), SPAWNS])
+		return
+
+	# Overflow actors reuse one of the eight markers, so verify the ring offset
+	# before any tick moves them: no exact stacking, and everyone near a marker.
+	var positions: Array = []
+	for peer_id in gm._roster:
+		positions.append((gm._roster[peer_id]["node"] as Node3D).global_position)
+	var overlapping := 0
+	for i in positions.size():
+		for j in range(i + 1, positions.size()):
+			if (positions[i] as Vector3).distance_to(positions[j]) <= 0.1:
+				overlapping += 1
+	if overlapping > 0:
+		await _fail(gm, net, world, "overlapping_pairs=%d" % overlapping)
+		return
+	var far_from_spawn := 0
+	for pos in positions:
+		var nearest := INF
+		for spawn_point: Vector3 in gm._spawns:
+			nearest = minf(nearest, (pos as Vector3).distance_to(spawn_point))
+		if nearest > 5.0:
+			far_from_spawn += 1
+	if far_from_spawn > 0:
+		await _fail(gm, net, world, "actors_far_from_spawn=%d" % far_from_spawn)
 		return
 
 	# The engine must not also tick the manager: exactly one measured call per
@@ -95,14 +127,15 @@ func _run() -> void:
 			p95_us, P95_LIMIT_US])
 		return
 
-	print("NET16 result=PASS actors=%d bytes=%d tick_avg_us=%.0f tick_p95_us=%.0f shots=%d deaths=%d" % [
-		ACTORS, snap.size(), avg_us, p95_us, shots, deaths,
+	print("NET16 spawns=%d overlap_ok=true result=PASS actors=%d bytes=%d tick_avg_us=%.0f tick_p95_us=%.0f shots=%d deaths=%d" % [
+		SPAWNS, ACTORS, snap.size(), avg_us, p95_us, shots, deaths,
 	])
 	await _cleanup(gm, net, world)
 	quit(0)
 
 
-## Flat world with a single large floor box. Its top sits at y = 0.45, just
+## Flat world with a single large floor box plus the eight spawn markers the
+## shipping maps expose, on a 20 m ring. Its top sits at y = 0.45, just
 ## under the generated spawn feet (0.4), so the bots settle instead of falling.
 func _build_world() -> Node3D:
 	var world := Node3D.new()
@@ -119,6 +152,12 @@ func _build_world() -> Node3D:
 	collider.shape = box
 	floor_body.add_child(collider)
 	world.add_child(floor_body)
+	for i in SPAWNS:
+		var angle := TAU * float(i) / float(SPAWNS)
+		var marker := Marker3D.new()
+		marker.name = "Spawn%02d" % (i + 1)
+		marker.position = Vector3(cos(angle) * 20.0, 0.2, sin(angle) * 20.0)
+		world.add_child(marker)
 	return world
 
 
