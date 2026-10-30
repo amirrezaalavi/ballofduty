@@ -17,6 +17,10 @@ response. **Review:** [`OPTIMIZATION-ANSWERS-REVIEW.md`](OPTIMIZATION-ANSWERS-RE
 what is verified, what is projected, what is rejected, and the safe first batch.
 The content/artifact contract is in [`../CONTENT-STANDARD.md`](../CONTENT-STANDARD.md).
 
+**Feature research (L2/L8, L9):** [`FEATURE-QUESTIONS.md`](FEATURE-QUESTIONS.md) — the
+combined brief for the external research agent. L6 is implementation-only and does not
+need a research gate.
+
 ---
 
 **None currently.** All Phase 1 questions were answered and applied:
