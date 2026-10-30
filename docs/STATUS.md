@@ -1,7 +1,7 @@
 # Project Status
 
 **Date:** 2026-10-30
-**Canonical branch:** `develop` at `61e414f`
+**Canonical branch:** `develop` at `5c6e7fa`
 **Engine:** Godot 4.7.2, GDScript, Compatibility/WebGL 2, single-threaded WASM
 **Tests:** **163 green, 0 failures** on `develop`; full `tools/check.sh` green
 
