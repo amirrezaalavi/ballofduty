@@ -46,6 +46,9 @@ const BOT_FIRE_RANGE := 20.0
 const BOT_TARGET_STICKY_RANGE := 26.0
 const BOT_BURST_SHOTS := 6
 const BOT_BURST_PAUSE_SEC := 0.35
+## Target LOS is a raycast, so evaluate it on a per-bot 3-tick phase (~10 Hz at
+## 30 Hz) instead of every tick. Movement, aim and fire still run every tick.
+const BOT_LOS_INTERVAL_TICKS := 3
 
 var net_mode: NetMode = NetMode.OFFLINE
 ## Dev-server console stats (1 line/s/player); enabled with --net-stats.
@@ -53,6 +56,8 @@ var net_stats := OS.get_cmdline_user_args().has("--net-stats")
 
 # Server state: peer_id -> {id, name, node, frame: PlayerInputFrame, ack: int}
 var _roster: Dictionary = {}
+## id -> the same entry dictionary, so _entry_by_id is O(1).
+var _by_id: Dictionary = {}
 var _free_ids: Array = []
 var _next_id: int = 1
 var _server_tick: int = 0
@@ -63,6 +68,8 @@ var _combat: ServerCombat
 var _client_error: String = ""
 var _hits_total: int = 0
 var _deaths_total: int = 0
+## Test telemetry: how many target LOS raycasts bots have issued.
+var los_checks: int = 0
 
 # Client state.
 var local_id: int = 0
@@ -214,6 +221,7 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 	var initial := PlayerInputFrame.new()
 	initial.yaw = spawn_yaw
 	_roster[peer_id] = _new_entry(assigned, player_name, node, peer_id, player_class)
+	_index_entry(_roster[peer_id])
 	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
 	net.server_send(peer_id, NetProtocol.encode_join_ok(
 		assigned, _server_tick, spawn_pos, spawn_yaw, player_class
@@ -231,6 +239,7 @@ func _on_peer_left(peer_id: int) -> void:
 	var node_ref: Variant = entry["node"]
 	if is_instance_valid(node_ref):
 		(node_ref as Node).queue_free()
+	_unindex_entry(entry)
 	_roster.erase(peer_id)
 	_free_ids.append(int(entry["id"]))
 	_free_ids.sort()
@@ -542,6 +551,7 @@ func _spawn_bot(index: int) -> void:
 	var bot_class := index % NetProtocol.CLASS_COUNT
 	var node := _spawn_server_actor(id, slot, bot_class)
 	_roster[peer_id] = _new_entry(id, "BOT %d" % (index + 1), node, peer_id, bot_class)
+	_index_entry(_roster[peer_id])
 	print("BALL_OF_DUTY bot id=%d name=BOT %d" % [id, index + 1])
 
 
@@ -552,11 +562,13 @@ func _bot_frame(entry: Dictionary, actor: PlayerController, delta: float) -> Pla
 	var target := _nearest_enemy(entry)
 	if target.is_empty():
 		entry["bot_target_id"] = 0
+		entry["bot_has_los"] = false
 		frame.yaw = actor.rotation.y
 		return frame
 	var target_node: Node = target["node"]
 	if not is_instance_valid(target_node):
 		entry["bot_target_id"] = 0
+		entry["bot_has_los"] = false
 		frame.yaw = actor.rotation.y
 		return frame
 	var target_actor := target_node as PlayerController
@@ -578,7 +590,14 @@ func _bot_frame(entry: Dictionary, actor: PlayerController, delta: float) -> Pla
 	var flat := aim_point - actor.global_position
 	flat.y = 0.0
 	var dist := flat.length()
-	var has_los := _has_los(actor, target_actor)
+	# Cached target LOS, refreshed on a per-bot 3-tick phase (~10 Hz). The
+	# feeler ray below still runs every tick because it is a movement probe.
+	entry["bot_think_tick"] = int(entry.get("bot_think_tick", 0)) + 1
+	var think_los := int(entry["bot_think_tick"]) % BOT_LOS_INTERVAL_TICKS == 0
+	var has_los := bool(entry.get("bot_has_los", false))
+	if fresh_target or think_los or not entry.has("bot_has_los"):
+		has_los = _has_los(actor, target_actor)
+		entry["bot_has_los"] = has_los
 
 	# Cover breaks the aim: reacquiring costs a shorter, still bounded reaction.
 	var was_seen := bool(entry.get("bot_was_seen", false))
@@ -694,7 +713,16 @@ func _nearest_enemy(entry: Dictionary) -> Dictionary:
 	return best
 
 
+func _index_entry(entry: Dictionary) -> void:
+	_by_id[int(entry["id"])] = entry
+
+
+func _unindex_entry(entry: Dictionary) -> void:
+	_by_id.erase(int(entry["id"]))
+
+
 func _has_los(from_actor: PlayerController, to_actor: PlayerController) -> bool:
+	los_checks += 1
 	var query := PhysicsRayQueryParameters3D.create(
 		from_actor.global_position + Vector3(0.0, 0.6, 0.0),
 		to_actor.global_position + Vector3(0.0, 0.45, 0.0),
@@ -704,6 +732,10 @@ func _has_los(from_actor: PlayerController, to_actor: PlayerController) -> bool:
 
 
 func _entry_by_id(player_id: int) -> Dictionary:
+	var found: Dictionary = _by_id.get(player_id, {})
+	if not found.is_empty():
+		return found
+	# Fallback for rosters built by hand (tests) that bypass _index_entry.
 	for peer_id in _roster:
 		var entry: Dictionary = _roster[peer_id]
 		if int(entry["id"]) == player_id:
@@ -1031,6 +1063,7 @@ func _reset() -> void:
 	net_mode = NetMode.OFFLINE
 	local_id = 0
 	_roster.clear()
+	_by_id.clear()
 	_remotes.clear()
 	_free_ids.clear()
 	_next_id = 1

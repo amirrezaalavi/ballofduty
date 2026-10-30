@@ -102,6 +102,21 @@ func test_reaction_delay_and_bounded_spread() -> void:
 		"aim is not perfect (max error %.2f°)" % rad_to_deg(max_error))
 
 
+func test_los_checks_staggered() -> void:
+	var duel := await _duel()
+	var entry: Dictionary = duel["entry"]
+	var actor: PlayerController = duel["a"]
+	var before := int(_gm.los_checks)
+	for _i in 30:
+		_gm._bot_frame(entry, actor, DT)
+		await get_tree().physics_frame
+	var delta := int(_gm.los_checks) - before
+	print("  bot feel los window: %d checks in 30 frames (1 bot)" % delta)
+	expect(delta > 0, "bot still evaluates target LOS")
+	expect(delta <= 12,
+		"target LOS runs on a ~10 Hz phase (%d checks in 30 frames)" % delta)
+
+
 func test_four_bots_still_deal_damage() -> void:
 	await _flat_world()
 	_net = load("res://scripts/networking/network_manager.gd").new()

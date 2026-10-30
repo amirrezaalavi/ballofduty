@@ -35,11 +35,24 @@ func test_four_bots_play() -> void:
 	_gm.net = _net
 	expect(_gm.server_start(_world, PORT, 4) == OK, "server starts with four bots")
 	expect(_gm.server_player_count() == 4, "four bots join the roster")
+	expect(_gm._by_id.size() == 4, "roster id index holds one entry per bot")
+	for peer_id in _gm._roster:
+		var indexed: Dictionary = _gm._roster[peer_id]
+		expect(_gm._entry_by_id(int(indexed["id"]))["id"] == indexed["id"],
+			"id index resolves id %d" % int(indexed["id"]))
 
 	var initial: Array[Vector3] = []
 	for peer_id in _gm._roster:
 		initial.append((_gm._roster[peer_id]["node"] as Node3D).global_position)
-	for _i in 90:
+	var los_before := int(_gm.los_checks)
+	for _i in 30:
+		await get_tree().physics_frame
+	var los_window := int(_gm.los_checks) - los_before
+	print("  bots los window: %d checks in 30 frames (4 bots)" % los_window)
+	expect(los_window <= 4 * 12,
+		"bot LOS is staggered, not per tick (%d checks in 30 frames)" % los_window)
+	expect(los_window > 0, "bots still evaluate target LOS")
+	for _i in 60:
 		await get_tree().physics_frame
 
 	expect(_gm.server_player_count() == 4, "bots remain in the roster")
