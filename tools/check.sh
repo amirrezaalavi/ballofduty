@@ -36,6 +36,15 @@ log "Arena budget"
 "$GODOT" --headless --path . --script tests/headless/arena_stats.gd 2>&1 | tee /tmp/bod_arena.log
 ! grep -E "FAIL|SCRIPT ERROR|Parse Error|exceed" /tmp/bod_arena.log
 
+log "Arena walkthrough"
+"$GODOT" --headless --path . --script tests/headless/quarry_walk.gd 2>&1 | tee /tmp/bod_walk.log
+grep -q "result=PASS" /tmp/bod_walk.log
+! grep -q "QUARRY_WALK_FAIL" /tmp/bod_walk.log
+
+log "Arena 4-bot match"
+"$GODOT" --headless --path . --script tests/headless/quarry_match.gd 2>&1 | tee /tmp/bod_match.log
+grep -q "QUARRY_MATCH result=PASS" /tmp/bod_match.log
+
 log "Headless client boot"
 "$GODOT" --headless --path . --quit-after 120 --max-fps 60 2>&1 | tee /tmp/bod_client.log
 ! grep -E "ERROR|SCRIPT ERROR|Parse Error" /tmp/bod_client.log
