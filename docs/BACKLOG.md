@@ -83,7 +83,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | L6 | Settings UI | **Done:** reusable panel from main menu + quick menu; sensitivity, invert Y, scope scale, master volume, LOW/MEDIUM/HIGH quality; persistence + reset; 7 tests | done |
 | L7 | Animation / stride | Quaternius UAL landed (S15): real walk/sprint/jump/pistol clips. Remaining: strafe/back clips (only in the paid full set), AnimationTree layering, Pistol_Shoot/Pistol_Reload hooks, Death01 wiring | doing |
 | L8 | Server parity | **Step 1 done:** capsule/hurtbox/camera/muzzle read the same profile on all roles; no headshots, no protocol change. **Pending:** camera-compression/muzzle policy and per-class sizes | doing |
-| L9 | Browser matrix | **Research:** 13-cell matrix and 7 questions in `docs/research/L9-QUESTIONS.md`; implementation gated on answers | doing |
+| L9 | Browser matrix | **Implemented:** CI Chromium boot/WebGL2/console gate (`tools/ci/`), opt-in `?perf=1` probe, shell fallback/mobile/audio/pointer-lock hints, 7 probe tests, matrix + protocol in `docs/BROWSER-MATRIX.md`. Remaining manual: H1/H2, Safari/iOS, packet loss, Firefox/Xvfb CI enablement. | done (CI surface) / manual |
 | L10 | CI remote | GitHub/GitLab remote for the first green pipeline run | todo |
 | L11 | 3D terrain & mountains | Future map: heightfield/terrain with climbable mountains, surfaces that block bullets and create hiding spots. Area target ≥15× the current 60×60 m (~232×232 m). Needs chunked terrain, LOD, occlusion/visibility ranges, collision streaming and a new performance budget — the Minecraft-style rendering limit. Do not start before V1 netcode is stable. | deferred |
 | L12 | Character variants | Remote players need distinct Blocky Characters textures/colors; same animation rig. Add in CP4a roster work. | todo |
@@ -99,6 +99,11 @@ Status: `todo` · `doing` · `done` · `deferred`
   Minecraft-style chunk limits recorded as **L11**.
 - **2026-10-29 — CP3:** rifle/projectile/damage/HUD/audio/training dummies landed. Combat test covers
   20/20 headshots at 5/15/30 m. Weapon viewmodel and player damage feedback recorded as **L13/L14**.
+- **2026-10-30 — L9:** CI browser smoke (Chromium boot/WebGL 2/console/pointer
+  lock), opt-in `?perf=1` probe with `__bod_perf`/`__bod_state`, shell WebGL 2
+  fallback + mobile banner + audio unlock + pointer-lock hint + integer canvas
+  snapping, 7 probe tests, and the 13-cell manual protocol. No protocol changes,
+  no auto quality switching, no MSAA toggle.
 - **2026-10-29 — animation/feel pass:** gun shoulder-mounted + aim-pitched (S11); backwards-reversed
   and air-lean states (S12); character ×0.6 → 0.82 m with 2.3 m camera (S13); scope FOV 48 (S14).
   Animation-pack candidates for real jump/back/strafe clips: Kenney character hub

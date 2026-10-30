@@ -3,7 +3,7 @@
 **Date:** 2026-10-30
 **Canonical branch:** `develop` (latest)
 **Engine:** Godot 4.7.2, GDScript, Compatibility/WebGL 2, single-threaded WASM
-**Tests:** **163 green, 0 failures** on `develop`; full `tools/check.sh` green
+**Tests:** **170 green, 0 failures** on `feature/l9-browser-matrix` (163 on `develop`); full `tools/check.sh --skip-export` green
 
 ---
 
@@ -29,11 +29,15 @@ Ball of Duty is a **playable vertical slice**, not a finished release:
 
 ### Current verification
 
-- `tools/check.sh`: content manifest, 163 tests, arena budget, 35-section
+- `tools/check.sh`: content manifest, 170 tests, arena budget, 35-section
   quarry walkthrough, 4-bot match, 16-actor probe, headless client/server boot,
   web + Linux server export, server smoke.
 - Browser (Chromium, software WebGL): auto-join renders character, gun, camera
   and HUD with **0 console errors**; settings panel persists quality/volume.
+- L9: `tools/ci/browser_smoke.mjs` gates boot/WebGL 2/console/pointer lock on
+  Chromium; the opt-in `?perf=1` probe exposes draw calls, primitives, frame
+  percentiles and `__bod_state`. Shell fallback/mobile/audio/pointer-lock hints
+  are in `web/shell.html`.
 - `NET16`: 16 bots, 8 spawn markers, 294 B snapshot, tick p95 ~2–3 ms.
 - `QUARRY_MATCH`: 4 bots, PASS.
 
@@ -55,10 +59,12 @@ Strong:
 Not yet proven:
 
 - **No real Firefox/Safari/low-end-GPU evidence.** Chromium in this sandbox is
-  SwiftShader; Playwright Firefox cannot create WebGL2 here. L9 is research-gated.
+  SwiftShader and Playwright Firefox cannot create WebGL2 without Xvfb. The L9
+  CI gate proves boot/console only; C1–C5 and C8–C13 stay manual.
 - **No real deployment.** `docs/DEPLOY.md` is a planned CP5 target; no Docker,
   blue-green, health endpoint or protocol-update rollback drill.
-- **No CI remote or browser job** yet.
+- **No CI remote.** The browser job is committed but has not run on a remote;
+  the Firefox/Xvfb step is documented and still disabled.
 - **Current map is slated for replacement.** The three candidate maps are being
   built in another session and are not integrated into `develop`.
 - **L2/L8 Step 2 is not done.** All classes still share the same body size;
@@ -81,9 +87,10 @@ Not yet proven:
 1. **Integrate the three maps** from the map session (`arena_crater`,
    `arena_dunes`, `arena_jungle`), retire/replace the quarry, add a map content
    pack, make `MapRegistry` a catalog adapter, and run each map's walkthrough.
-2. **L9 browser matrix** — answer the research brief, then implement the
-   Playwright/CI matrix, real-GPU measurements, pointer-lock/audio/reconnect
-   checks and quality fallbacks.
+2. **L9 browser matrix** — implemented the CI boot/console gate, the opt-in
+   performance probe and the shell hardening. Remaining: real H1/H2/Safari/iOS
+   runs, Firefox/Xvfb enablement and the 3 × 60 s qualification protocol
+   (`docs/BROWSER-MATRIX.md`).
 3. **L2/L8 Step 2** — decide and apply per-class body sizes (Mage 0.856,
    Knight 0.820, Barbarian 0.773, Rogue 0.703), then re-run silhouette, hurtbox,
    camera and prediction tests.
@@ -102,7 +109,8 @@ Not yet proven:
 - `MapRegistry` and `main_menu.CLASSES` still duplicate catalog data.
 - `GameManager` spawn/LOS/aim height literals are not fully profile-derived.
 - Training dummy is not wired to `CharacterBodyStats`.
-- Audio unlock / "click for sound" hint is not explicit.
+- Audio unlock is now explicit: the shell resumes `GodotAudio.ctx` on the first
+  `pointerdown` (still needs a human ear check).
 - Web payload is ~14.3 MB gzip; precompressed Brotli hosting is planned, not live.
 - 32 actors are not supported; needs a snapshot-budget/AOI decision.
 - Deployment, rollback drill, CI remote and browser CI are all open.
@@ -111,8 +119,9 @@ Not yet proven:
 
 ## Open questions for the user/researcher
 
-1. **L9:** answer the 13-cell browser/OS/hardware matrix and 7 questions in
-   `docs/research/L9-QUESTIONS.md` / `docs/research/FEATURE-QUESTIONS.md`.
+1. **L9:** answers are in `docs/research/L9-ANSWER-SUMMARY.md`; the open item is
+   real-hardware evidence (H1/H2, Safari/iOS, packet loss) and enabling the
+   Firefox/Xvfb CI step.
 2. **L2/L8 Step 2:** approve per-class body sizes; choose the camera-compression
    policy (server spring-arm query vs fixed aim origin vs documented divergence);
    choose canonical muzzle vs animated hand for the visible tracer; decide
@@ -135,7 +144,7 @@ Not yet proven:
 | `maps-candidates` | map session | **uncommitted map/UI work**, not merged |
 | `feature/l2-l8` | L2/L8 | Step 1 merged; Step 2 pending |
 | `feature/l6` | settings UI | merged |
-| `feature/l9` | browser matrix | research only, awaiting answers |
+| `feature/l9-browser-matrix` | browser matrix + perf harness | implemented; awaiting merge |
 
 Old phase worktrees `ballofduty-wt-a`…`-e` and their merged branches were removed.
 The L6 worktree/branch was removed after merge. Generated `build/` and `reports/`

@@ -7,20 +7,19 @@ integrator merges into `develop` only after tests pass.
 | Feature | Branch | Worktree | Phase |
 |---|---|---|---|
 | L2 character scale + L8 server parity | `feature/l2-l8` | `../ballofduty-wt-l2l8` | **Step 1 merged** into `develop` (`34273aa`); Step 2 deferred |
-| L9 browser matrix | `feature/l9` | `../ballofduty-wt-l9` | **research questions ready**, awaiting answers |
+| L9 browser matrix | `feature/l9-browser-matrix` | (single clone) | **implemented**, awaiting merge |
 | L6 settings UI | `feature/l6` | `../ballofduty-wt-l6` | **merged** into `develop` (`83db67e`) |
 
 ## Research gate
 
-L2/L8 and L9 are blocked on external research. Each agent writes:
+L2/L8 and L9 were blocked on external research. Each agent wrote:
 
 - `docs/research/L2-L8-QUESTIONS.md`
 - `docs/research/L9-QUESTIONS.md`
 
-The integrator merges them into **`docs/research/FEATURE-QUESTIONS.md`** and gives
-that single file to the user. The user returns the research answers; the
-integrator forwards the relevant section to each agent, who then implements on
-its own branch.
+The integrator merged them into **`docs/research/FEATURE-QUESTIONS.md`** and gave
+that single file to the user. L9's answers and implementation are now in
+`docs/research/L9-ANSWER-SUMMARY.md` and `docs/BROWSER-MATRIX.md`.
 
 L6 is merged first. L2/L8 Step 1 is merged: all five profiles are numerically
 identical to the old rig, and LOCAL/REMOTE/SERVER read the same profile. Step 2
@@ -31,7 +30,7 @@ LOW and 15 % volume persisted after Apply/Close/reopen, 0 console errors).
 ## Merge order
 
 1. `feature/l6` — independent UI; merge first.
-2. `feature/l9` — test/tooling/docs after answers; merge second.
+2. `feature/l9-browser-matrix` — test/tooling/docs; merge second.
 3. `feature/l2-l8` — resource/schema change after answers; merge last because it
    touches `PlayerStats`, the player scene, camera and server parity.
 

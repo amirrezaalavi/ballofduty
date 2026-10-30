@@ -63,8 +63,11 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_settings_ui.gd` | 7 | 0 | both entry points, widgets/write-back, reset, clamp, quality, persistence, apply |
 | `tests/gdunit/test_character_body_parity.gd` | 10 | 0 | profile validation, root/shape scale, LOCAL/REMOTE/SERVER parity, camera/muzzle, 18 B snapshot, no headshot path |
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
+| `tests/gdunit/test_perf_probe.gd` | 7 | 0 | percentile empty/single/known, p95/p99, warm-up exclusion, long-frame counters, report shape, headless safety, disabled by default |
 
-**163 test cases · ~1,100 assertions** on `develop` (146 protocol-v2 + 7 settings UI + 10 body parity), plus **35 walkthrough sections**, the 4-bot match and the 16-actor probe. The map session adds two map-picker tests when merged (**165** total).
+**170 test cases · 34 suites** on `feature/l9-browser-matrix` (163 on `develop`
++ 7 L9 probe cases), plus **35 walkthrough sections**, the 4-bot match and the
+16-actor probe. The map session adds two map-picker tests when merged.
 Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8 actors, 294 B at 16; web export 44,820 KB raw / 14,292 KB gzip.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 
@@ -96,6 +99,23 @@ Not in gdUnit4:
 | `tools/gdcheck.sh [files…]` | `--check-only` parse gate, ~2 s per file; defaults to changed/untracked `.gd` files |
 | `tools/dev.sh up\|down\|status` | Pidfile supervisor for server `:9180` and web `:8099`; refuses a port held by another process |
 | `tools/capture.sh URL OUT [wait_ms]` | Deterministic 1280×720 Playwright screenshot written inside the repo |
+| `tools/ci/browser_smoke.mjs` | Playwright boot/WebGL 2/console/pointer-lock gate; writes `metrics_*`, `console_*`, `screenshot_*` |
+| `tools/ci/firefox_probe.js` | Q3a Firefox/Xvfb feasibility probe (not a release gate) |
+
+Browser smoke (Chromium, software WebGL) observed in this workspace:
+
+```bash
+./tools/godot --headless --path . --export-release "Web" build/web/index.html
+python3 tools/serve.py --root build/web --port 8099 --no-proxy &
+cd tools/ci
+node browser_smoke.mjs --url http://127.0.0.1:8099/index.html \
+  --browser chromium --out ../../artifacts/browser-smoke
+# boot_ms 7.8–8.9 s, WebGL 2.0, 0 console errors, 4 driver warnings
+```
+
+`?join=1&perf=1` also passed with `pointer_lock: true` and `in_match: true` on
+the same Chromium/SwiftShader setup. Firefox and WebKit are not runnable here
+(no Xvfb / WebKit not installed); see `tools/ci/README.md`.
 
 Typical visual check:
 
