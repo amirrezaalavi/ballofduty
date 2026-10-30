@@ -71,6 +71,9 @@ Not yet proven:
   against walls while the server aim origin is fixed.
 - **No match-end flow.** The quick menu has a match-over phase, but nothing
   emits it yet.
+- **Loss recovery is TCP-bound.** A lost segment stalls the stream for at least
+  one RTO; the 67 ms interpolation buffer hides most of it, but a 300 ms stall is
+  visible.
 - **No headshots** (locked decision), no mobile/touch controls.
 
 ---

@@ -19,10 +19,16 @@ const RIFLE_STATS: WeaponStats = preload("res://resources/weapons/rifle_stats.tr
 const MAX_INPUT_QUEUE := 16
 const INPUT_RATE_LIMIT := 90
 ## If a client cannot feed 30 inputs/s, extrapolate at most this many server
-## ticks, then freeze the actor until input arrives. The ack stays pinned to the
-## last input actually received, so the client never replays against a state the
-## server invented. (Advancing the ack on a repeat would have no client-side
-## state to compare and would force a snap.)
+## ticks, then simulate a neutral frame until input arrives. The ack stays pinned
+## to the last input actually received, so the client never replays against a
+## state the server invented. (Advancing the ack on a repeat would have no
+## client-side state to compare and would force a snap.)
+##
+## The neutral frame (not a hard freeze) matters: a client on a 50-150 ms link,
+## a throttled tab or a low-end GPU regularly misses a few ticks. Freezing the
+## body stopped gravity too, so a player caught mid-air stayed there and every
+## correction was huge. Simulating idle input lets them land and keeps the
+## divergence bounded to the missed movement.
 const MAX_EXTRAPOLATION_TICKS := 2
 const RESPAWN_DELAY_MSEC := 3000
 const SPAWN_PROTECTION_MSEC := 1500
@@ -325,51 +331,36 @@ func _physics_process(delta: float) -> void:
 			_combat.tick(entry, delta)
 
 		var frame: PlayerInputFrame = entry["last_frame"]
-		var simulate := true
 		if bool(entry["is_bot"]):
 			frame = _bot_frame(entry, actor, delta)
 			entry["last_frame"] = frame
 			entry["ack"] = frame.seq
 			entry["has_input"] = true
 		else:
-			var queue: Array = entry["queue"]
-			if not queue.is_empty():
-				frame = queue.pop_front()
-				entry["last_frame"] = frame
-				entry["ack"] = frame.seq
-				entry["has_input"] = true
-				entry["starved_ticks"] = 0
-			elif bool(entry["has_input"]):
-				entry["starved_ticks"] = int(entry["starved_ticks"]) + 1
-				if int(entry["starved_ticks"]) > MAX_EXTRAPOLATION_TICKS:
-					entry["frozen_ticks"] = int(entry["frozen_ticks"]) + 1
-					simulate = false
-			else:
-				entry["starved_ticks"] = 0
+			frame = _pick_server_frame(entry)
 
-		if simulate:
-			var shot := _combat.process(entry, actor, frame, delta) if _combat else {}
-			if not shot.is_empty():
-				# Firing cancels spawn protection.
-				entry["protected_until"] = 0
-				_set_hurtboxes(actor, true)
-				_broadcast_event(NetProtocol.encode_event_shot(
-					int(shot["shooter_id"]), shot["origin"], shot["direction"]
-				))
-			var before := actor.global_position
-			actor.server_step(frame, delta)
-			if _check_displacement(entry, before, actor.global_position, delta):
-				actor.global_position = before
-				actor.velocity = Vector3(0.0, actor.velocity.y, 0.0)
+		var shot := _combat.process(entry, actor, frame, delta) if _combat else {}
+		if not shot.is_empty():
+			# Firing cancels spawn protection.
+			entry["protected_until"] = 0
+			_set_hurtboxes(actor, true)
+			_broadcast_event(NetProtocol.encode_event_shot(
+				int(shot["shooter_id"]), shot["origin"], shot["direction"]
+			))
+		var before := actor.global_position
+		actor.server_step(frame, delta)
+		if _check_displacement(entry, before, actor.global_position, delta):
+			actor.global_position = before
+			actor.velocity = Vector3(0.0, actor.velocity.y, 0.0)
 		entries.append(_snapshot_entry(entry, actor))
 
 	if net_stats and _server_tick % 30 == 0:
 		for peer_id in _roster:
 			var e: Dictionary = _roster[peer_id]
-			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d frozen=%d hp=%d ammo=%d" % [
+			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d idle=%d hp=%d ammo=%d" % [
 				int(e["id"]), int(e["ack"]), int(e["last_seq"]),
 				(e["queue"] as Array).size(), int(e["inputs_dropped"]),
-				int(e["starved_ticks"]), int(e["frozen_ticks"]),
+				int(e["starved_ticks"]), int(e["idle_ticks"]),
 				_health(e["node"]).current if _health(e["node"]) else 0,
 				int(e["ammo"]),
 			])
@@ -386,6 +377,44 @@ func _physics_process(delta: float) -> void:
 				net.server_send(peer_id, snapshot)
 
 
+## Input intake for a remote player. Returns the frame to simulate this tick and
+## updates the entry's starve counters. Bots and local/server actors do not use
+## this path.
+##
+## 1-2 missed ticks: repeat the last input (short extrapolation).
+## Beyond that: neutral input, so gravity and collision keep running. Never a
+## hard freeze, and never an ack the client cannot compare against.
+func _pick_server_frame(entry: Dictionary) -> PlayerInputFrame:
+	var queue: Array = entry["queue"]
+	if not queue.is_empty():
+		var queued: PlayerInputFrame = queue.pop_front()
+		entry["last_frame"] = queued
+		entry["ack"] = queued.seq
+		entry["has_input"] = true
+		entry["starved_ticks"] = 0
+		entry["idle_ticks"] = 0
+		return queued
+	if not bool(entry["has_input"]):
+		entry["starved_ticks"] = 0
+		return entry["last_frame"]
+	entry["starved_ticks"] = int(entry["starved_ticks"]) + 1
+	if int(entry["starved_ticks"]) <= MAX_EXTRAPOLATION_TICKS:
+		return entry["last_frame"]
+	entry["idle_ticks"] = int(entry["idle_ticks"]) + 1
+	return _idle_frame(entry)
+
+
+## Reused neutral frame: no movement, no fire, last known view. Keeping the view
+## means the body still faces where the player was looking while idle.
+func _idle_frame(entry: Dictionary) -> PlayerInputFrame:
+	var idle: PlayerInputFrame = entry["idle_frame"]
+	var last: PlayerInputFrame = entry["last_frame"]
+	idle.seq = last.seq
+	idle.yaw = last.yaw
+	idle.pitch = last.pitch
+	return idle
+
+
 func _new_entry(
 	player_id: int, player_name: String, node: PlayerController, peer_id: int,
 	player_class: int = 0
@@ -398,7 +427,8 @@ func _new_entry(
 		"class_id": node.class_id,
 		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
 		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
-		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "frozen_ticks": 0,
+		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "idle_ticks": 0,
+		"idle_frame": PlayerInputFrame.new(),
 		"protected_until": Time.get_ticks_msec() + SPAWN_PROTECTION_MSEC,
 		"dead_until": 0, "is_bot": peer_id < 0, "bot_seq": 0,
 		"bot_strafe": 1.0, "bot_strafe_ticks": 0, "kills": 0, "deaths": 0,
@@ -829,7 +859,7 @@ func server_player_stats(player_id: int) -> Dictionary:
 				"dropped": int(entry["inputs_dropped"]),
 				"displacements": int(entry["displacements"]),
 				"starved": int(entry["starved_ticks"]),
-				"frozen": int(entry["frozen_ticks"]),
+				"idle": int(entry["idle_ticks"]),
 			}
 	return {}
 

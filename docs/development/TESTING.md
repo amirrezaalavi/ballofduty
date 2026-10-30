@@ -64,13 +64,21 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_character_body_parity.gd` | 10 | 0 | profile validation, root/shape scale, LOCAL/REMOTE/SERVER parity, camera/muzzle, 18 B snapshot, no headshot path |
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 | `tests/gdunit/test_perf_probe.gd` | 7 | 0 | percentile empty/single/known, p95/p99, warm-up exclusion, long-frame counters, report shape, headless safety, disabled by default |
+| `tests/gdunit/test_net_resilience.gd` | 10 | 0 | server extrapolate-then-idle, ack stays pinned, resume on input, idle frame reuse, client backlog clamp, prediction reset on focus, ack latency, stats fields |
 | `tests/gdunit/test_menu.gd` | +2 | 0 | map picker cards, default map selection |
 
-**172 test cases · 34 suites** on `develop` (163 protocol-v2 baseline + 7 L9
-probe + 2 map picker), plus **35 walkthrough sections**, the 4-bot match and the
-16-actor probe.
+**182 test cases · 35 suites** on `develop` (163 protocol-v2 baseline + 7 L9
+probe + 2 map picker + 10 net resilience), plus **35 walkthrough sections**, the
+4-bot match and the 16-actor probe.
 Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8
 actors, 294 B at 16; web export ~44.8 MB raw / ~14.3 MB gzip.
+
+### Manual diagnostics
+
+| Script | What it answers |
+|---|---|
+| `tests/headless/map_surface_probe.gd` | Collision floor per map on a 1 m grid: holes, and how many edges are unclimbable steps (>0.3 m). Not a gate — cliffs are intended. |
+| `tools/ci/browser_smoke.mjs` | Boot, WebGL 2, console budget, pointer lock, join handshake (see [`../ci/README.md`](../ci/README.md)). |
 
 CI runs `tools/check.sh --light` (import + content + these suites). Exports,
 walkthroughs and probes are local only — see [`../ci/README.md`](../ci/README.md).

@@ -253,7 +253,8 @@ func test_replication_pipeline() -> void:
 	expect(int(b_stats["dropped"]) == dropped_before + 1, "duplicate input seq is rejected")
 
 	# Starved client: one input every 5 ticks. The server may extrapolate two
-	# ticks, then must freeze instead of running ahead indefinitely.
+	# ticks, then must idle (neutral input) instead of running ahead, while the
+	# ack stays pinned to the last input actually received.
 	var starve_seq := int(b_stats["last_seq"])
 	for _i in 8:
 		starve_seq += 1
@@ -262,10 +263,12 @@ func test_replication_pipeline() -> void:
 		for _k in 5:
 			await get_tree().physics_frame
 	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
-	print("  starvation: starved=%d frozen=%d ack=%d last_seq=%d" % [
-		int(b_stats["starved"]), int(b_stats["frozen"]),
+	print("  starvation: starved=%d idle=%d ack=%d last_seq=%d" % [
+		int(b_stats["starved"]), int(b_stats["idle"]),
 		int(b_stats["ack"]), int(b_stats["last_seq"])])
-	expect(int(b_stats["frozen"]) > 0, "starved client freezes after bounded extrapolation")
+	expect(int(b_stats["idle"]) > 0, "starved client idles after bounded extrapolation")
+	expect(int(b_stats["starved"]) > 2, "server went past the extrapolation grace")
+	expect(int(b_stats["ack"]) <= int(b_stats["last_seq"]), "ack never exceeds the received seq")
 	expect(int(b_stats["displacements"]) == 0, "starvation does not reject legitimate steps")
 
 	var flood_before := int(b_stats["dropped"])

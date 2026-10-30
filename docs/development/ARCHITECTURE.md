@@ -34,6 +34,24 @@ That is a scoped refactor, not a one-file flip — plan for it.
   cannot hide head-of-line retransmit stalls; a lost packet is a visible hitch of at least the RTO. Keep
   snapshots small and budget for it. Revisit WebTransport only if this is unacceptable.
 
+## Robustness under unstable clients
+
+A normal link is **50-150 ms RTT**; tabs get throttled to ~1 FPS, low-end GPUs drop physics
+catch-up, and Wi-Fi bursts lose packets. The rules that keep a bad client from becoming a
+permanent desync:
+
+| Layer | Rule | Where |
+|---|---|---|
+| Client intake | One input per 30 Hz physics tick; `max_physics_steps_per_frame = 8` keeps 30 Hz down to ~3.75 FPS | `main.gd`, `player_controller.gd` |
+| Server intake | 1-2 missed ticks repeat the last input; beyond that the actor is simulated with a **neutral frame** (gravity and collision keep running). Never a hard freeze | `game_manager.gd::_pick_server_frame` |
+| Ack | Stays pinned to the last input actually received. Never ack state the server invented | `game_manager.gd` |
+| Client backlog | More than `MAX_UNACKED_INPUTS` (30 = 1 s) ahead of the ack: hold with a neutral frame instead of running further ahead | `player_controller.gd::input_backlog_blocked` |
+| Focus / visibility | Returning to a tab after >250 ms drops prediction history and snaps to the next snapshot | `player_controller.gd::reset_prediction` |
+| Telemetry | HUD shows `unacked`, input-to-ack latency and stalled ticks; server logs `starved` / `idle` | `debug_overlay.gd` |
+
+The invariant: **the client may be wrong, but it must be able to catch up**. Every path above
+converges to the next authoritative snapshot instead of accumulating divergence.
+
 ## Wire protocol (CP4a)
 
 All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-packed; no dictionaries.

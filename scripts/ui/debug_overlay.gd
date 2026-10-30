@@ -87,6 +87,11 @@ func _update_text() -> void:
 			int(pred.get("pending", 0)),
 			int(pred.get("replay_depth", 0)),
 		])
+		lines.append("unacked %d   ack %.0f ms   stalled %d" % [
+			int(pred.get("unacked", 0)),
+			float(pred.get("ack_latency_ms", 0.0)),
+			int(pred.get("stalled_ticks", 0)),
+		])
 		lines.append("ack err %.3f m   corr %d (%.1f/s)   vis %.3f m" % [
 			float(pred.get("recent_ack_error_m", 0.0)),
 			int(pred.get("corrections", 0)),

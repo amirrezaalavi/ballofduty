@@ -273,7 +273,7 @@ func _measure() -> Dictionary:
 			alive += 1
 		var player_stats: Dictionary = stats.call(int(gm.local_id)) if int(gm.local_id) > 0 else {}
 		if not player_stats.is_empty():
-			frozen_total += int(player_stats.get("frozen", 0))
+			frozen_total += int(player_stats.get("idle", 0))
 			starved_total += int(player_stats.get("starved", 0))
 			ack_lag_max = maxi(ack_lag_max, int(session["seq"]) - int(player_stats.get("ack", 0)))
 
@@ -336,7 +336,7 @@ func _measure() -> Dictionary:
 		"rss_peak": peak_rss,
 		"nodes_base": node_base, "nodes_end": node_end, "nodes_peak": peak_nodes,
 		"snap_avg": snap_avg, "snap_max": snap_max,
-		"alive": alive, "frozen": frozen_total, "starved": starved_total,
+		"alive": alive, "idle": frozen_total, "starved": starved_total,
 		"ack_lag_max": ack_lag_max, "snapshots_processed": snapshots_processed,
 		"snapshots_dropped": max_snapshots_dropped,
 		"shots": combat.shots_fired, "spawned": spawned, "resolved": resolved,
@@ -427,7 +427,7 @@ func _report(m: Dictionary, joined: int) -> void:
 	print("SOAK clients joined=%d alive=%d snapshots=%d dropped=%d ack_lag_max=%d" % [
 		joined, m["alive"], m["snapshots_processed"], m["snapshots_dropped"], m["ack_lag_max"],
 	])
-	print("SOAK stall starved=%d frozen=%d" % [m["starved"], m["frozen"]])
+	print("SOAK stall starved=%d idle=%d" % [m["starved"], m["idle"]])
 	var stats_call := Callable(_server_gm, "server_player_stats")
 	for session: Dictionary in _sessions:
 		var cgm: Node = session["gm"]
@@ -436,7 +436,7 @@ func _report(m: Dictionary, joined: int) -> void:
 		var s: Dictionary = stats_call.call(cid) if cid > 0 else {}
 		print("SOAK client id=%d seq=%d ack=%d queue=%d dropped=%d starved=%d frozen=%d snaps=%d" % [
 			cid, int(session["seq"]), int(s.get("ack", -1)), int(s.get("queued", -1)),
-			int(s.get("dropped", -1)), int(s.get("starved", -1)), int(s.get("frozen", -1)),
+			int(s.get("dropped", -1)), int(s.get("starved", -1)), int(s.get("idle", -1)),
 			int(cnet.snapshots_processed),
 		])
 	print("SOAK combat shots=%d spawned=%d resolved=%d active=%d hits=%d world=%d expired=%d dmg=%d deaths=%d" % [
