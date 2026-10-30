@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [develop, main]
   pull_request:
 
 jobs:
@@ -10,8 +10,6 @@ jobs:
     name: Import, smoke, export
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      GODOT_BIN: godot
 
     steps:
       - uses: actions/checkout@v4
@@ -50,3 +48,69 @@ jobs:
           name: ballofduty-server
           path: build/server
           if-no-files-found: error
+
+  browser-smoke:
+    name: Browser smoke (Chromium)
+    needs: pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download web build
+        uses: actions/download-artifact@v4
+        with:
+          name: ballofduty-web
+          path: build/web
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install browser harness
+        working-directory: tools/ci
+        run: npm install --no-audit --no-fund
+
+      - name: Install Chromium
+        working-directory: tools/ci
+        run: npx playwright install --with-deps chromium
+
+      - name: Boot smoke
+        run: |
+          python3 tools/serve.py --root build/web --port 8099 --no-proxy &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 50); do
+            curl -fsS http://127.0.0.1:8099/index.html >/dev/null && break
+            sleep 0.2
+          done
+          node tools/ci/browser_smoke.mjs \
+            --url "http://127.0.0.1:8099/index.html" \
+            --browser chromium \
+            --out artifacts/browser-smoke
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke
+          path: artifacts/browser-smoke
+          if-no-files-found: ignore
+
+      # Firefox is documented but not enabled here: it needs Xvfb plus the
+      # firefoxUserPrefs in tools/ci/browser_smoke.mjs (see tools/ci/README.md).
+      # Enable this step only after a green manual xvfb-run pass:
+      #
+      # - name: Boot smoke (Firefox + Xvfb)
+      #   run: |
+      #     sudo apt-get update && sudo apt-get install -y xvfb
+      #     python3 tools/serve.py --root build/web --port 8099 --no-proxy &
+      #     SERVER_PID=$!
+      #     trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+      #     sleep 1
+      #     xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+      #       node tools/ci/browser_smoke.mjs \
+      #         --url "http://127.0.0.1:8099/index.html" \
+      #         --browser firefox --headed \
+      #         --out artifacts/browser-smoke-firefox
