@@ -84,7 +84,9 @@ func test_movement_tuning() -> void:
 		expect(is_equal_approx(stats.move_speed, 1.05), "walk speed is 1.05 m/s for the 0.82 m avatar")
 		expect(is_equal_approx(stats.sprint_multiplier, 2.62), "sprint multiplier gives 2.75 m/s")
 		expect(stats.turn_speed > 0.0, "body turn speed is data-driven")
-		expect(is_equal_approx(stats.jump_velocity, 7.34), "jump velocity is the +10% value")
+		expect(is_equal_approx(stats.jump_velocity, 9.03), "L1 jump velocity keeps the 1.35 m apex")
+		expect(is_equal_approx(stats.gravity, 34.0), "L1 uses a snappier 34 m/s^2 rise")
+		expect(stats.fall_gravity_multiplier > 1.0, "descent gravity is stronger than rise gravity")
 		expect(stats.ground_acceleration > stats.air_acceleration, "air control is weaker than ground control")
 
 

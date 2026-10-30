@@ -11,9 +11,11 @@ extends Node3D
 const DEFAULT_PORT := 9080
 const MAIN_MENU_SCENE: PackedScene = preload("res://scenes/ui/main_menu.tscn")
 const LOADING_SCENE: PackedScene = preload("res://scenes/ui/loading_screen.tscn")
+const QUICK_MENU_SCENE: PackedScene = preload("res://scenes/ui/quick_menu.tscn")
 
 var _menu
 var _loading
+var _quick_menu
 var _panel: PanelContainer
 var _status_label: Label
 var _leave_button: Button
@@ -30,6 +32,8 @@ var _solo: bool = false
 var _was_client: bool = false
 var _match_entered: bool = false
 var _selected_class: int = 0
+var _quick_menu_paused: bool = false
+var _match_over: bool = false
 ## Auto-join endpoint waiting for the first rendered frames (see _deferred_auto_join).
 var _auto_join_endpoint: Dictionary = {}
 
@@ -53,14 +57,33 @@ func _ready() -> void:
 	add_child(_menu)
 	_loading = LOADING_SCENE.instantiate()
 	add_child(_loading)
+	_quick_menu = QUICK_MENU_SCENE.instantiate()
+	add_child(_quick_menu)
 	_menu.join_requested.connect(_on_menu_join)
 	_menu.solo_requested.connect(_on_menu_solo)
 	_loading.cancel_requested.connect(_on_cancel_loading)
+	_quick_menu.resume_requested.connect(_close_quick_menu)
+	_quick_menu.cancel_requested.connect(_on_quick_cancel)
+	_quick_menu.leave_requested.connect(_on_quick_leave)
+	_quick_menu.restart_requested.connect(_on_quick_restart)
+	_quick_menu.quit_requested.connect(_on_quick_quit)
+	var bus := get_node_or_null("/root/EventBus")
+	if bus and bus.has_signal("match_state_changed"):
+		bus.match_state_changed.connect(_on_match_state_changed)
 
 	_build_net_panel()
 	_build_banner()
 	_open_menu()
 	_try_autoconnect(user_args)
+
+
+func _input(event: InputEvent) -> void:
+	# _input (not _unhandled_input) so Esc also works while a LineEdit has focus
+	# on the main menu. Esc is not a text key, so this cannot eat typing.
+	if event.is_action_pressed("pause"):
+		_toggle_quick_menu()
+		get_viewport().set_input_as_handled()
+		return
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -75,6 +98,8 @@ func _process(_delta: float) -> void:
 	_update_net_panel_stats()
 	_update_banner()
 	_update_ui_state()
+	if _quick_menu and _quick_menu.is_open():
+		_update_quick_menu()
 
 
 # --- menu / loading -------------------------------------------------------
@@ -83,6 +108,9 @@ func _open_menu(status: String = "", tone: String = "info") -> void:
 	_in_game = false
 	_solo = false
 	_match_entered = false
+	_match_over = false
+	_close_quick_menu(false)
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	if _loading:
 		_loading.hide_loading()
 	_set_hud_visible(false)
@@ -105,6 +133,8 @@ func _enter_match() -> void:
 	_match_entered = true
 	_in_game = true
 	_solo = false
+	_match_over = false
+	_close_quick_menu(false)
 	if _menu:
 		_menu.hide_menu()
 	if _loading:
@@ -290,11 +320,133 @@ func _on_cancel_loading() -> void:
 	_leave_to_menu("Join cancelled.", "info")
 
 
+# --- quick menu -----------------------------------------------------------
+
+func _toggle_quick_menu() -> void:
+	if _quick_menu == null:
+		return
+	if _quick_menu.is_open():
+		_close_quick_menu()
+	else:
+		_open_quick_menu()
+
+
+func _open_quick_menu() -> void:
+	if _quick_menu == null:
+		return
+	_update_quick_menu()
+	_quick_menu.open()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Solo can pause locally; a networked match must keep simulating.
+	if _solo and _in_game and not get_tree().paused:
+		get_tree().paused = true
+		_quick_menu_paused = true
+
+
+func _close_quick_menu(recapture: bool = true) -> void:
+	if _quick_menu:
+		_quick_menu.close()
+	if _quick_menu_paused:
+		get_tree().paused = false
+		_quick_menu_paused = false
+	if recapture and _in_game and not (_menu and _menu.is_open()) and not (
+		_loading and _loading.is_loading()
+	):
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _update_quick_menu() -> void:
+	if _quick_menu == null:
+		return
+	var phase: StringName = &"menu"
+	var detail := ""
+	if _match_over:
+		phase = &"match_over"
+		detail = "%s · match complete" % _arena_label()
+	elif _loading and _loading.is_loading():
+		phase = &"connecting"
+		var host := String(_join_endpoint.get("host", "127.0.0.1"))
+		var port := int(_join_endpoint.get("port", DEFAULT_PORT))
+		detail = "Connecting to %s:%d…" % [host, port]
+	elif _in_game:
+		var local := get_node_or_null("Player") as PlayerController
+		if _solo:
+			phase = &"solo"
+		elif local and local.dead:
+			phase = &"respawning"
+		else:
+			phase = &"match"
+		detail = _quick_detail()
+	else:
+		detail = "Choose a class and join, or play offline."
+	_quick_menu.set_phase(phase, detail)
+
+
+func _quick_detail() -> String:
+	var parts: Array[String] = [_arena_label()]
+	if _solo:
+		parts.append("OFFLINE")
+		return " · ".join(parts)
+	if _menu:
+		var info: Dictionary = _menu.class_summary(_selected_class)
+		parts.append(String(info.get("name", "KNIGHT")))
+	var net := get_node_or_null("/root/NetworkManager")
+	if net:
+		parts.append("%d ms" % int(net.rtt_ms))
+	var gm := get_node_or_null("/root/GameManager")
+	if gm and gm.local_id > 0:
+		parts.append("id %d" % int(gm.local_id))
+	return " · ".join(parts)
+
+
+func _arena_label() -> String:
+	var arena := get_node_or_null("Arena")
+	if arena and String(arena.scene_file_path) != "":
+		return String(arena.scene_file_path).get_file().get_basename().replace("_", " ").to_upper()
+	return "ARENA"
+
+
+func _on_quick_cancel() -> void:
+	_leave_to_menu("Join cancelled.", "info")
+
+
+func _on_quick_leave() -> void:
+	_leave_to_menu("Left match.", "info")
+
+
+func _on_quick_restart() -> void:
+	_close_quick_menu()
+	_restart_solo()
+
+
+func _on_quick_quit() -> void:
+	_close_quick_menu(false)
+	get_tree().quit()
+
+
+func _restart_solo() -> void:
+	var local := get_node_or_null("Player") as PlayerController
+	if local == null:
+		return
+	var spawn := get_node_or_null("Arena/Spawn01") as Marker3D
+	var position := spawn.global_position + Vector3.UP * 0.1 if spawn else Vector3(0.0, 0.2, 0.0)
+	var yaw := spawn.global_rotation.y if spawn else 0.0
+	local.respawn_at(position, yaw)
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _on_match_state_changed(state: StringName, _seconds_left: float) -> void:
+	_match_over = state == &"over"
+	if _quick_menu and _quick_menu.is_open():
+		_update_quick_menu()
+
+
 func _on_leave_pressed() -> void:
 	_leave_to_menu("Left match.", "info")
 
 
 func _leave_to_menu(status: String, tone: String) -> void:
+	_close_quick_menu(false)
 	var gm := get_node_or_null("/root/GameManager")
 	if gm:
 		if gm.is_net_client():

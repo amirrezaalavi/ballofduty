@@ -22,6 +22,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S54 | Quick menu (all phases) | Esc overlay for menu / connecting / match / respawning / solo / match over; resume, cancel, leave, restart solo, settings placeholder, quit; pauses solo only | done | CP5 |
 | S53 | First-load auto-join | `?join=1` now waits 3 rendered frames before opening the socket; the quarry's first software-WebGL frame was eating the 6 s connect budget (manual Join always worked) | done | CP5 |
 | S52 | Damage/scope pass | Head hitbox + headshot multiplier removed; bleed/spread/effect/armour_pierce/gravity removed; flat rounds inherit shooter velocity (experimental); Knight 34, Mage 18 + 8 splash (mag 12), bow 60, crossbow 12, Barbarian 34 → 3-hit kills; Knight reload 1.4 s | done | CP5 |
 | S51 | Class balance pass | Projectiles −30 % speed; Mage cycle +40 %, damage −20 %; crossbow 18/36; heavy gravity 12/10; pierce second-hurtbox fix | done | CP5 |
@@ -69,7 +70,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 
 | # | Item | Why / notes | Status |
 |---|---|---|---|
-| L1 | Proper jump physics pass | Derive height/airtime from `v²/2g` and `2v/g`; evaluate higher gravity + higher jump velocity, asymmetric fall, terminal velocity, coyote/buffer curves; aim for a snappy platformer-shooter feel without changing the +10 % height target | todo |
+| L1 | Proper jump physics pass | **Done:** `v=9.03`, rise `g=34`, fall `g×1.35=45.9`, terminal 30; apex stays 1.35 m, full airtime 0.67 → **0.50 s**; coyote 0.12 s, buffer 0.15 s, air accel 18. Analytic `v²/2g` / `2v/g` helpers + tests | done |
 | L2 | Character scale system | Move capsule/mesh/hurtbox/camera dimensions into a `PlayerStats`/`CharacterBody` resource so size is data-driven and shared with the server | todo |
 | L3 | Camera framing pass | Current framing accepted; later add ADS shoulder offset, collision smoothing and wide/tight presets | done |
 | L4 | Larger map performance | Current map is 35 draw calls / 31k tris. A larger final map needs occlusion/LOD/fog decisions and a new budget measurement | todo |

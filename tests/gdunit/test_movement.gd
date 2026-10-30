@@ -86,7 +86,57 @@ func test_jump_apex() -> void:
 		peak = maxf(peak, height)
 		vy = maxf(vy - _stats.gravity * DT, -_stats.max_fall_speed)
 	print("  jump_apex=%.2f m" % peak)
-	expect(peak > 1.25 and peak < 1.45, "jump apex is ~1.35 m (got %.2f)" % peak)
+	expect(peak > 1.30 and peak < 1.40, "L1 jump apex stays ~1.35 m (got %.2f)" % peak)
+
+
+func test_jump_curve_derivation() -> void:
+	var analytic := LocomotionComponent.jump_apex(_stats.jump_velocity, _stats.gravity)
+	var rise := LocomotionComponent.jump_rise_time(_stats.jump_velocity, _stats.gravity)
+	var fall := LocomotionComponent.fall_time(
+		1.35, _stats.gravity * _stats.fall_gravity_multiplier
+	)
+	print("  jump_analytic=%.2f m rise=%.3f s fall=%.3f s" % [analytic, rise, fall])
+	expect(analytic > 1.15 and analytic < 1.25, "v^2/2g gives the ~1.20 m analytic apex")
+	expect(rise > 0.24 and rise < 0.29, "v/g gives a ~0.27 s rise")
+	expect(fall < rise, "asymmetric fall is faster than the rise (%.3f < %.3f)" % [fall, rise])
+	expect(fall + rise < 0.60, "full jump is snappier than the old 0.67 s arc")
+
+
+func test_asymmetric_fall_and_terminal_velocity() -> void:
+	# Sample finely so the discrete peak is not lost between 30 Hz ticks.
+	const FINE_DT := 1.0 / 240.0
+	var loco := auto_free(LocomotionComponent.new()) as LocomotionComponent
+	loco.stats = _stats
+	var takeoff := loco.vertical_velocity(0.0, true, true, FINE_DT)
+	var height := 0.0
+	var vy := takeoff
+	var elapsed := 0.0
+	var peak := 0.0
+	var peak_at := 0.0
+	var lowest := 0.0
+	while elapsed < 2.0:
+		height += vy * FINE_DT
+		if height > peak:
+			peak = height
+			peak_at = elapsed
+		vy = loco.vertical_velocity(vy, false, false, FINE_DT)
+		elapsed += FINE_DT
+		lowest = minf(lowest, vy)
+		if elapsed > 0.05 and height <= 0.0:
+			break
+	print("  airtime=%.3f s rise=%.3f s fall=%.3f s" % [
+		elapsed, peak_at, elapsed - peak_at,
+	])
+	expect(elapsed - peak_at < peak_at, "descent is shorter than the rise")
+	expect(elapsed < 0.60, "full jump is snappier than the old 0.67 s arc")
+	expect(lowest >= -_stats.max_fall_speed - 0.001, "terminal velocity is respected")
+
+	# Falling from height reaches terminal velocity and never exceeds it.
+	var terminal_vy := 0.0
+	for _i in 240:
+		terminal_vy = loco.vertical_velocity(terminal_vy, false, false, FINE_DT)
+	expect(is_equal_approx(terminal_vy, -_stats.max_fall_speed),
+		"a long fall settles at -max_fall_speed (%.2f)" % terminal_vy)
 
 
 func test_jump_assists() -> void:

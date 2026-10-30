@@ -58,7 +58,7 @@ GODOT_BIN=/path/to/godot tools/godot --version
 | `Shift` | Sprint (from CP1) |
 | `R` | Reload (from CP3) |
 | `Tab` | Scoreboard (from CP5) |
-| `Esc` | Release mouse |
+| `Esc` | Quick menu (resume / leave / restart solo) · releases mouse |
 | Click canvas | Capture mouse |
 | `F3` | Debug overlay (FPS, tick, speed, camera) |
 

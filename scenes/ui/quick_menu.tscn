@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/quick_menu.gd" id="1_quick"]
+
+[node name="QuickMenu" type="CanvasLayer"]
+layer = 25
+script = ExtResource("1_quick")

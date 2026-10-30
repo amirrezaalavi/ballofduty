@@ -122,4 +122,29 @@ func vertical_velocity(current_y: float, jump_pressed: bool, on_floor: bool, del
 
 	if on_floor and current_y <= 0.0:
 		return 0.0
-	return maxf(current_y - stats.gravity * delta, -stats.max_fall_speed)
+	# Asymmetric fall: the rise uses base gravity, the descent uses the
+	# multiplier so jumps feel snappy without changing the apex.
+	var gravity := stats.gravity
+	if current_y <= 0.0:
+		gravity *= maxf(stats.fall_gravity_multiplier, 1.0)
+	return maxf(current_y - gravity * delta, -stats.max_fall_speed)
+
+
+## Analytic helpers used by the tuning tests and the editor notes.
+## Apex = v^2 / (2g); full symmetric airtime = 2v / g.
+static func jump_apex(velocity: float, gravity: float) -> float:
+	if gravity <= 0.0:
+		return 0.0
+	return velocity * velocity / (2.0 * gravity)
+
+
+static func jump_rise_time(velocity: float, gravity: float) -> float:
+	if gravity <= 0.0:
+		return 0.0
+	return velocity / gravity
+
+
+static func fall_time(height: float, gravity: float) -> float:
+	if gravity <= 0.0 or height <= 0.0:
+		return 0.0
+	return sqrt(2.0 * height / gravity)

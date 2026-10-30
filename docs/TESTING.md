@@ -31,7 +31,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | File | Test cases | Assertions | Covers |
 |---|---|---|---|
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
-| `tests/gdunit/test_movement.gd` | 6 | 15 | travel distance, diagonal parity, sprint, jump apex, coyote/buffer, settings persistence |
+| `tests/gdunit/test_movement.gd` | 8 | 21 | travel, diagonal parity, sprint, L1 jump apex/derivation/asymmetric fall/terminal, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 164 | weapon data, 20/20 body hits at 5/15/30 m, fire rate, reload |
 | `tests/gdunit/test_net_protocol.gd` | 9 | 52 | roundtrips, quantization, 182 B snapshot budget, velocity/ground roundtrip, malformed rejection |
 | `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
@@ -46,6 +46,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_bots.gd` | 1 | 7 | four bots move, fire, damage each other, stay in the roster |
 | `tests/gdunit/test_kaykit.gd` | 5 | 0 | five variants, one shadowless skinned surface, scale/yaw, clip set, gun/muzzle, budget |
 | `tests/gdunit/test_menu.gd` | 8 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection |
+| `tests/gdunit/test_quick_menu.gd` | 3 | 0 | phase-aware actions, signals, Esc close, settings placeholder |
 | `tests/gdunit/test_menu_network.gd` | 4 | 0 | initial timeout, bounded backoff, dropped-socket grace, real drop/rejoin |
 | `tests/gdunit/test_proxy.gd` | 5 | 0 | shell placeholders, static serving/injection, WS handshake/tunnel, real client through proxy |
 | `tests/gdunit/test_bullet_pool.gd` | 4 | 0 | 500-round no-growth, shared materials, muzzle-grown streak, impact pool |
@@ -57,8 +58,8 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_class_weapon_visual.gd` | 4 | 0 | class→variant, five weapon/muzzle attachments, animation map, HUD state |
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
-**113 test cases · ~940 assertions**, plus **35 walkthrough sections** and the 4-bot match.
-Quarry budget: 49 draw calls, 192,842 triangles; web export 44,756 KB raw / 14,224 KB gzip.
+**118 test cases · ~960 assertions**, plus **35 walkthrough sections** and the 4-bot match.
+Quarry budget: 49 draw calls, 192,842 triangles; web export 44,768 KB raw / 14,244 KB gzip.
 Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
 
 `test_net_loopback` stays one integration test: the value is the real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
