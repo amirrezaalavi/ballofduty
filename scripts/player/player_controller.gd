@@ -252,25 +252,34 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	match net_role:
 		NetRole.LOCAL:
-			if dead:
-				return
-			if input_backlog_blocked():
-				# The server is behind (stall, loss burst, slow client). Hold the
-				# body with a neutral frame instead of running further ahead; the
-				# next snapshot lets the normal correction path catch up.
-				stalled_ticks += 1
-				locomotion.simulate(self, _neutral_frame(), delta, -1, view_yaw)
-				return
-			stalled_ticks = 0
-			var frame := input_handler.sample(view_yaw, camera_rig.pitch)
-			_shape_combat_intent(frame)
-			simulate_tick(frame, delta)
-			weapon.tick(delta, frame)
-			_forward_input(frame)
+			local_tick(delta)
 		NetRole.REMOTE:
 			pass # posed from _process at render rate
 		NetRole.SERVER:
 			pass # GameManager drives server_step once per tick for all actors.
+
+
+## One local tick: consume a pending correction, respect the backlog clamp, then
+## sample, simulate and forward input. Extracted so tests drive it directly.
+func local_tick(delta: float) -> void:
+	if dead:
+		return
+	# The correction must run even while clamped: the ack it carries is the only
+	# thing that can clear the clamp. Skipping it deadlocks a slow client.
+	if prediction_enabled and not _pending_correction.is_empty():
+		_apply_correction()
+	if input_backlog_blocked():
+		# The server is still behind (stall, loss burst, slow client). Hold the
+		# body with a neutral frame instead of running further ahead.
+		stalled_ticks += 1
+		locomotion.simulate(self, _neutral_frame(), delta, -1, view_yaw)
+		return
+	stalled_ticks = 0
+	var frame := input_handler.sample(view_yaw, camera_rig.pitch)
+	_shape_combat_intent(frame)
+	simulate_tick(frame, delta)
+	weapon.tick(delta, frame)
+	_forward_input(frame)
 
 
 ## Server-side step with an already-validated network frame. `frame.yaw` is the

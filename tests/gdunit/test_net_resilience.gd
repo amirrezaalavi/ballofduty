@@ -163,6 +163,31 @@ func test_reset_prediction_drops_history_and_snaps_next_state() -> void:
 	expect(_player.prediction_stats()["unacked"] == 0, "backlog reads zero after the reset")
 
 
+func test_clamp_still_applies_the_pending_ack() -> void:
+	# Regression: the clamp used to return before the correction path, so the ack
+	# that clears the clamp was never consumed (a slow client stayed stuck).
+	await _setup_player()
+	for i in 40:
+		var frame := PlayerInputFrame.new()
+		frame.seq = i + 1
+		frame.move = Vector2(1.0, 0.0)
+		_player.simulate_tick(frame, DT)
+		await get_tree().physics_frame
+	_player.last_acked_seq = 1
+	expect(_player.input_backlog_blocked(), "client is past the backlog limit")
+	_player.accept_server_state({
+		"ack": 40,
+		"pos": _player.global_position,
+		"yaw": 0.0,
+		"vel": Vector3.ZERO,
+		"on_floor": true,
+	})
+	_player.local_tick(DT)
+	expect(not _player.input_backlog_blocked(), "one tick consumes the ack and clears the clamp")
+	expect(int(_player.prediction_stats()["unacked"]) <= 1, "backlog drained")
+	expect(_player.stalled_ticks == 0, "input generation resumed instead of holding")
+
+
 func test_ack_latency_is_measured() -> void:
 	await _setup_player()
 	var frame := PlayerInputFrame.new()
