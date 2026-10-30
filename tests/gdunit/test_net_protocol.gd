@@ -8,20 +8,35 @@ func test_join_request_is_sanitized() -> void:
 	var join := NetProtocol.encode_join_request("  Alice_99!@#  ")
 	var decoded := NetProtocol.decode_join_request(join)
 	expect(decoded.get("name") == "Alice_99", "join request sanitizes the name (got '%s')" % decoded.get("name"))
+	expect(int(decoded.get("version", 0)) == NetProtocol.PROTOCOL_VERSION,
+		"join request carries protocol version %d (got %d)" % [NetProtocol.PROTOCOL_VERSION, int(decoded.get("version", 0))])
 	expect(NetProtocol.decode_join_request(PackedByteArray([1, 99])) == {}, "oversized name length rejected")
 	expect(NetProtocol.decode_join_request(PackedByteArray([9, 0])) == {}, "wrong message id rejected")
+	expect(NetProtocol.decode_join_request(PackedByteArray([1, 2, 3])) == {}, "short join request rejected")
+	expect(NetProtocol.decode_join_request(PackedByteArray([1, 2, 5, 0, 65])) == {}, "name length past the end rejected")
+
+	# v1 requests still parse structurally, but the version byte is visibly
+	# different so the server can refuse them at the door.
+	var legacy := NetProtocol.decode_join_request(NetProtocol.encode_join_request("Alice", 0, 1))
+	expect(int(legacy.get("version", -1)) == 1, "v1 join request decodes with version 1")
+	expect(int(legacy.get("version", -1)) != NetProtocol.PROTOCOL_VERSION, "v1 version differs from current")
+	expect(legacy.get("name") == "Alice", "v1 join request still carries the name")
 
 
 func test_join_ok_carries_spawn() -> void:
 	# Regression for the 22 m spawn mismatch: spawn pose must survive the wire.
-	var join_ok := NetProtocol.decode_join_ok(
-		NetProtocol.encode_join_ok(3, 4242, Vector3(22.0, 0.3, -15.556), -1.2)
-	)
+	var pkt := NetProtocol.encode_join_ok(3, 4242, Vector3(22.0, 0.3, -15.556), -1.2)
+	var join_ok := NetProtocol.decode_join_ok(pkt)
 	expect(join_ok.get("id") == 3 and join_ok.get("tick") == 4242, "join ok id/tick roundtrip")
+	expect(pkt.size() == 16, "join ok is 16 B (got %d)" % pkt.size())
+	expect(int(join_ok.get("version", 0)) == NetProtocol.PROTOCOL_VERSION, "join ok carries the protocol version")
 	var spawn: Vector3 = join_ok.get("spawn", Vector3.ZERO)
 	expect(spawn.distance_to(Vector3(22.0, 0.3, -15.556)) < 0.005, "join ok spawn roundtrips within 5 mm")
 	expect(absf(float(join_ok.get("yaw", 0.0)) - -1.2) < 0.001, "join ok yaw roundtrips")
 	expect(NetProtocol.decode_join_ok(PackedByteArray([2, 1, 0, 0, 0, 0])) == {}, "truncated join ok rejected")
+	expect(NetProtocol.decode_join_ok(pkt.slice(0, 15)) == {}, "15 B join ok rejected")
+	expect(NetProtocol.decode_join_ok(NetProtocol.encode_join_ok(3, 4242, Vector3.ZERO, 0.0, 0, 1)).get("version", 0) == 1,
+		"v1 join ok decodes with version 1")
 
 
 func test_roster_roundtrip() -> void:
@@ -32,7 +47,13 @@ func test_roster_roundtrip() -> void:
 		many.append({"id": i + 1, "name": "P%d" % i})
 	var full := NetProtocol.decode_roster(NetProtocol.encode_roster(many))
 	expect(full.get("entries", []).size() == 8, "8-player roster roundtrips")
-	expect(NetProtocol.decode_roster(PackedByteArray([4, 9])) == {}, "roster over capacity rejected")
+	var sixteen: Array = []
+	for i in 16:
+		sixteen.append({"id": i + 1, "name": "P%d" % i})
+	var capped := NetProtocol.decode_roster(NetProtocol.encode_roster(sixteen))
+	expect(capped.get("entries", []).size() == 16, "16-player roster roundtrips")
+	expect(int(capped["entries"][15]["id"]) == 16, "last 16-player roster entry survives")
+	expect(NetProtocol.decode_roster(PackedByteArray([4, 17])) == {}, "roster over capacity rejected")
 
 
 func test_input_quantization() -> void:
@@ -63,7 +84,7 @@ func test_snapshot_budget_and_rejection() -> void:
 	var snap := NetProtocol.encode_snapshot(123456, entries)
 	_budget_bytes = snap.size()
 	print("  snapshot 8-player bytes=%d" % _budget_bytes)
-	expect(_budget_bytes == 182, "8-player snapshot is %d B (expected 182 B)" % _budget_bytes)
+	expect(_budget_bytes == 150, "8-player snapshot is %d B (expected 150 B)" % _budget_bytes)
 	expect(_budget_bytes <= 300, "8-player snapshot within the 300 B budget")
 
 	var back := NetProtocol.decode_snapshot(snap)
@@ -72,7 +93,7 @@ func test_snapshot_budget_and_rejection() -> void:
 	var rpos: Vector3 = first["pos"]
 	var epos: Vector3 = entries[0]["pos"]
 	expect(rpos.distance_to(epos) < 0.01, "position quantization < 1 cm")
-	expect(absf(float(first["yaw"]) - wrapf(float(entries[0]["yaw"]), -PI, PI)) < 0.001, "snapshot yaw < 1 mrad")
+	expect(absf(float(first["yaw"]) - wrapf(float(entries[0]["yaw"]), -PI, PI)) < 0.002, "snapshot yaw < 12-bit step (0.002 rad)")
 	expect(first["state"] == 0 and first["hp"] == 100 and first["ack"] == 5000, "snapshot state/hp/ack roundtrip")
 	var rvel: Vector3 = first["vel"]
 	expect(rvel.distance_to(Vector3(1.25, -2.5, 7.5)) < 0.02, "velocity roundtrips within 2 cm/s")
@@ -83,6 +104,38 @@ func test_snapshot_budget_and_rejection() -> void:
 	var tampered := snap.duplicate()
 	tampered.append(0)
 	expect(NetProtocol.decode_snapshot(tampered) == {}, "trailing-byte snapshot rejected")
+
+
+func test_sixteen_actor_snapshot_roundtrip() -> void:
+	var entries: Array = []
+	for i in 16:
+		entries.append({
+			"id": i + 1, "pos": Vector3(-60.0 + i * 7.5, 0.25 + i * 0.05, 80.0 - i * 9.0),
+			"yaw": -PI + i * (2.0 * PI / 16.0), "state": i % 4,
+			"vel": Vector3(1.5 - i * 0.2, -3.0 + i * 0.1, 6.0),
+			"on_floor": i % 2 == 0,
+			"hp": 127 - i, "ack": 60000 + i,
+		})
+	var snap := NetProtocol.encode_snapshot(987654, entries)
+	print("  snapshot 16-player bytes=%d" % snap.size())
+	expect(snap.size() == 294, "16-player snapshot is %d B (expected 294 B)" % snap.size())
+	expect(snap.size() <= 300, "16-player snapshot within the 300 B budget")
+	var back := NetProtocol.decode_snapshot(snap)
+	expect(not back.is_empty(), "16-player snapshot decodes")
+	expect(int(back.get("tick", 0)) == 987654, "16-player tick roundtrips")
+	var rows: Array = back.get("entries", [])
+	expect(rows.size() == 16, "all 16 rows decode")
+	for i in 16:
+		var got: Dictionary = rows[i]
+		var want: Dictionary = entries[i]
+		expect(int(got["id"]) == int(want["id"]), "row %d id roundtrips" % i)
+		expect((got["pos"] as Vector3).distance_to(want["pos"]) < 0.01, "row %d position < 1 cm" % i)
+		expect(absf(float(got["yaw"]) - wrapf(float(want["yaw"]), -PI, PI)) < 0.002, "row %d yaw < 12-bit step" % i)
+		expect(int(got["state"]) == int(want["state"]), "row %d state roundtrips" % i)
+		expect(bool(got["on_floor"]) == bool(want["on_floor"]), "row %d on-floor roundtrips" % i)
+		expect(int(got["hp"]) == int(want["hp"]), "row %d hp roundtrips" % i)
+		expect((got["vel"] as Vector3).distance_to(want["vel"]) < 0.02, "row %d velocity < 2 cm/s" % i)
+		expect(int(got["ack"]) == int(want["ack"]), "row %d ack roundtrips" % i)
 
 
 func test_ping_pong_and_transport_cap() -> void:
@@ -173,7 +226,7 @@ func test_long_range_positions_roundtrip() -> void:
 		var got: Vector3 = back["entries"][0]["pos"]
 		expect(got.distance_to(point) < 0.01,
 			"position %s roundtrips within 1 cm (got %s)" % [point, got])
-		expect(snap.size() == 28, "one actor stays 28 B at long range")
+		expect(snap.size() == 24, "one actor stays 24 B at long range")
 
 	var far := NetProtocol.encode_snapshot(7, [{
 		"id": 1, "pos": Vector3(400.0, 0.0, -400.0), "yaw": 0.0, "state": 0,
@@ -185,7 +238,7 @@ func test_long_range_positions_roundtrip() -> void:
 
 
 func test_snapshot_golden_bytes() -> void:
-	# Locks the wire layout: header 6 B + one 22 B row. If this hex changes, the
+	# Locks the wire layout: header 6 B + one 18 B row. If this hex changes, the
 	# protocol changed and every client/server build must move together.
 	var entry := {
 		"id": 7, "pos": Vector3(1.23, -4.56, 7.89), "yaw": 1.0,
@@ -193,8 +246,8 @@ func test_snapshot_golden_bytes() -> void:
 		"hp": 87, "ack": 0x0A0B0C0D,
 	}
 	var snap := NetProtocol.encode_snapshot(0x01020304, [entry])
-	var expected := "060403020101077b0038fe1503be28024101ceff000001570d0c0b0a"
-	expect(snap.size() == 28, "golden snapshot is 28 B (got %d)" % snap.size())
+	var expected := "060403020101077b0038fe15038bea2b4101ceff00000d0c"
+	expect(snap.size() == 24, "golden snapshot is 24 B (got %d)" % snap.size())
 	expect(snap.hex_encode() == expected,
 		"golden snapshot bytes match (got %s)" % snap.hex_encode())
 
@@ -204,32 +257,58 @@ func test_snapshot_golden_bytes() -> void:
 	expect(int(row.get("id", 0)) == 7, "golden id roundtrips")
 	expect((row.get("pos", Vector3.ZERO) as Vector3).distance_to(Vector3(1.23, -4.56, 7.89)) < 0.01,
 		"golden position roundtrips within 1 cm")
-	expect(absf(float(row.get("yaw", 0.0)) - 1.0) < 0.001, "golden yaw roundtrips")
+	expect(absf(float(row.get("yaw", 0.0)) - 1.0) < 0.002, "golden yaw roundtrips within a 12-bit step")
 	expect(int(row.get("state", -1)) == 2, "golden state roundtrips")
 	expect((row.get("vel", Vector3.ZERO) as Vector3).distance_to(Vector3(3.21, -0.5, 0.0)) < 0.02,
 		"golden velocity roundtrips within 2 cm/s")
 	expect(bool(row.get("on_floor", false)), "golden on-floor flag roundtrips")
 	expect(int(row.get("hp", -1)) == 87, "golden hp roundtrips")
-	expect(int(row.get("ack", 0)) == 0x0A0B0C0D, "golden ack roundtrips")
+	expect(int(row.get("ack", 0)) == 0x0C0D, "golden ack roundtrips as its low u16")
+
+
+func test_snapshot_ack_is_u16() -> void:
+	var base := {
+		"id": 1, "pos": Vector3.ZERO, "yaw": 0.0, "state": 0,
+		"vel": Vector3.ZERO, "on_floor": true, "hp": 100,
+	}
+	var small := base.duplicate()
+	small["ack"] = 5000
+	var decoded_small := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(1, [small]))
+	expect(int(decoded_small["entries"][0]["ack"]) == 5000, "ack 5000 roundtrips as u16")
+
+	# 5 minutes at 30 Hz is 9000 frames, but the field is 16 bits: high bits are
+	# explicitly truncated so both ends agree on the wrap.
+	var large := base.duplicate()
+	large["ack"] = 0x12345
+	var decoded_large := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(1, [large]))
+	expect(int(decoded_large["entries"][0]["ack"]) == 0x2345,
+		"ack 0x12345 decodes to its low 16 bits (got %d)" % int(decoded_large["entries"][0]["ack"]))
+	var wrapped := base.duplicate()
+	wrapped["ack"] = 65535
+	var decoded_wrapped := NetProtocol.decode_snapshot(NetProtocol.encode_snapshot(1, [wrapped]))
+	expect(int(decoded_wrapped["entries"][0]["ack"]) == 65535, "ack 65535 roundtrips as u16")
 
 
 func test_oversized_roster_truncates_instead_of_malforming() -> void:
-	# NET-02 guard: the count byte and the row loop must agree. Passing more
-	# entries than MAX_PLAYERS used to write count=8 but 16 rows, producing a
-	# packet the decoder rejects. It now truncates to the cap; raising the cap
-	# is a separate layout/budget decision.
+	# The count byte and the row loop must agree. Passing more entries than
+	# MAX_PLAYERS writes a valid 16-actor packet instead of a malformed one.
 	var entries: Array = []
-	for i in 9:
+	for i in 17:
 		entries.append({
 			"id": i + 1, "pos": Vector3(float(i), 0.0, 0.0), "yaw": 0.0,
 			"state": 0, "vel": Vector3.ZERO, "on_floor": true,
 			"hp": 100, "ack": i,
 		})
 	var snap := NetProtocol.encode_snapshot(9, entries)
-	expect(snap.size() == 6 + NetProtocol.MAX_PLAYERS * 22,
-		"oversized snapshot stays at the 8-actor size (%d B)" % snap.size())
+	expect(snap.size() == 6 + NetProtocol.MAX_PLAYERS * 18,
+		"oversized snapshot stays at the 16-actor size (%d B)" % snap.size())
+	expect(snap.size() == 294, "16-actor packet is 294 B")
 	expect(int(snap[5]) == NetProtocol.MAX_PLAYERS, "count byte matches the row cap")
 	var back := NetProtocol.decode_snapshot(snap)
 	expect(not back.is_empty(), "truncated snapshot is valid")
 	expect(back["entries"].size() == NetProtocol.MAX_PLAYERS, "only the cap is encoded")
-	expect(int(back["entries"][7]["id"]) == 8, "the ninth actor is not written")
+	expect(int(back["entries"][15]["id"]) == 16, "the sixteenth actor is written")
+	var ids: Array = []
+	for row in back["entries"]:
+		ids.append(int(row["id"]))
+	expect(not ids.has(17), "the seventeenth actor is absent")

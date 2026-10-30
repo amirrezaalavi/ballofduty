@@ -958,8 +958,11 @@ func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 		_remotes.erase(local_id)
 
 
-func _on_join_denied(_reason: int) -> void:
-	_client_error = "server is full"
+func _on_join_denied(reason: int) -> void:
+	if reason == NetProtocol.DenyReason.VERSION:
+		_client_error = "server protocol mismatch — update the game"
+	else:
+		_client_error = "server is full"
 	stop_all()
 
 

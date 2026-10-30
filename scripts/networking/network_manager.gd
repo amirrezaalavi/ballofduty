@@ -498,6 +498,18 @@ func _route_server(sender: int, msg: int, pkt: PackedByteArray) -> void:
 			if req.is_empty():
 				packets_rejected += 1
 				return
+			if int(req.get("version", 0)) != NetProtocol.PROTOCOL_VERSION:
+				# Deny before the roster sees the peer, then give the deny packet
+				# a tick to flush (same pattern as the full-server deny).
+				_send_to(sender, NetProtocol.encode_deny(NetProtocol.DenyReason.VERSION))
+				_pending_joins.erase(sender)
+				packets_rejected += 1
+				get_tree().create_timer(0.3).timeout.connect(
+					func() -> void:
+						if mode == Mode.SERVER:
+							server_disconnect(sender)
+				)
+				return
 			_pending_joins.erase(sender)
 			peer_joined.emit(sender, req["name"], int(req.get("class_id", 0)))
 		NetProtocol.Msg.INPUT:
@@ -524,6 +536,12 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			var ok := NetProtocol.decode_join_ok(pkt)
 			if ok.is_empty():
 				packets_rejected += 1
+				return
+			if int(ok.get("version", 0)) != NetProtocol.PROTOCOL_VERSION:
+				# A v1/v3 server would feed us rows we cannot parse; refuse the
+				# join instead of silently desyncing the match.
+				_pending_joins.erase(1)
+				join_denied.emit(NetProtocol.DenyReason.VERSION)
 				return
 			_pending_joins.erase(1)
 			last_error = ""
