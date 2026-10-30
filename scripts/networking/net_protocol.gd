@@ -172,29 +172,38 @@ static func decode_input(pkt: PackedByteArray) -> Dictionary:
 
 static func encode_snapshot(tick: int, entries: Array) -> PackedByteArray:
 	# entries: Array of {id, pos, yaw, state, vel, on_floor, hp, ack}
+	# One allocation at the final size, then fixed-offset writes: the offsets
+	# below are the wire contract (mirrored by decode_snapshot) and are locked
+	# by the golden-byte test. The bytes must stay identical to the old
+	# append-per-field encoder.
 	# The count byte and the row loop must agree. Truncating here turns an
 	# oversized roster into a valid packet instead of a 6 + 22 * count mismatch
 	# that the decoder rejects as malformed. Raising MAX_PLAYERS is a separate
 	# layout decision (NET-02), not something this guard does.
 	var count := mini(entries.size(), MAX_PLAYERS)
-	var pkt := PackedByteArray([Msg.SNAPSHOT]) + _u32(tick)
-	pkt.append(count & 0xFF)
+	var pkt := PackedByteArray()
+	pkt.resize(6 + count * 22)
+	pkt.encode_u8(0, Msg.SNAPSHOT)
+	pkt.encode_u32(1, tick & 0xFFFFFFFF)
+	pkt.encode_u8(5, count & 0xFF)
+	var offset := 6
 	for i in count:
 		var entry: Dictionary = entries[i]
 		var pos: Vector3 = entry["pos"]
 		var vel: Vector3 = entry.get("vel", Vector3.ZERO)
-		pkt.append(entry["id"] & 0xFF)
-		pkt.append_array(_i16(_quant_pos(pos.x)))
-		pkt.append_array(_i16(_quant_pos(pos.y)))
-		pkt.append_array(_i16(_quant_pos(pos.z)))
-		pkt.append_array(_i16(int(roundf(clampf(wrapf(float(entry["yaw"]), -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
-		pkt.append(int(entry["state"]) & 0xFF)
-		pkt.append_array(_i16(_quant_vel(vel.x)))
-		pkt.append_array(_i16(_quant_vel(vel.y)))
-		pkt.append_array(_i16(_quant_vel(vel.z)))
-		pkt.append(1 if bool(entry.get("on_floor", true)) else 0)
-		pkt.append(clampi(int(entry["hp"]), 0, 255) & 0xFF)
-		pkt.append_array(_u32(int(entry["ack"])))
+		pkt.encode_u8(offset, entry["id"] & 0xFF)
+		pkt.encode_s16(offset + 1, _quant_pos(pos.x))
+		pkt.encode_s16(offset + 3, _quant_pos(pos.y))
+		pkt.encode_s16(offset + 5, _quant_pos(pos.z))
+		pkt.encode_s16(offset + 7, int(roundf(clampf(wrapf(float(entry["yaw"]), -PI, PI) / PI, -1.0, 1.0) * 32767.0)))
+		pkt.encode_u8(offset + 9, int(entry["state"]) & 0xFF)
+		pkt.encode_s16(offset + 10, _quant_vel(vel.x))
+		pkt.encode_s16(offset + 12, _quant_vel(vel.y))
+		pkt.encode_s16(offset + 14, _quant_vel(vel.z))
+		pkt.encode_u8(offset + 16, 1 if bool(entry.get("on_floor", true)) else 0)
+		pkt.encode_u8(offset + 17, clampi(int(entry["hp"]), 0, 255) & 0xFF)
+		pkt.encode_u32(offset + 18, int(entry["ack"]) & 0xFFFFFFFF)
+		offset += 22
 	return pkt
 
 

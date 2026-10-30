@@ -388,6 +388,7 @@ func _new_entry(
 		"protected_until": Time.get_ticks_msec() + SPAWN_PROTECTION_MSEC,
 		"dead_until": 0, "is_bot": peer_id < 0, "bot_seq": 0,
 		"bot_strafe": 1.0, "bot_strafe_ticks": 0, "kills": 0, "deaths": 0,
+		"health": _health(node),
 	}
 	if _combat:
 		_combat.reset_player(entry)
@@ -406,8 +407,21 @@ func _health(node: Node) -> HealthComponent:
 	return node.get_node_or_null("HealthComponent") as HealthComponent if node else null
 
 
+## Snapshot hot path: the roster entry caches its HealthComponent so the 30 Hz
+## encode does not walk the actor's children for every player. Freed nodes fall
+## back to a lookup (and re-cache) instead of returning a stale reference.
+func _entry_health(entry: Dictionary) -> HealthComponent:
+	var cached: Variant = entry.get("health")
+	if cached is HealthComponent and is_instance_valid(cached):
+		return cached as HealthComponent
+	var node_ref: Variant = entry.get("node")
+	var health := _health(node_ref as Node) if node_ref is Node else null
+	entry["health"] = health
+	return health
+
+
 func _snapshot_entry(entry: Dictionary, actor: PlayerController, dead: bool = false) -> Dictionary:
-	var health := _health(actor)
+	var health := _entry_health(entry)
 	return {
 		"id": int(entry["id"]),
 		"pos": actor.global_position,

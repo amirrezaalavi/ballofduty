@@ -184,6 +184,35 @@ func test_long_range_positions_roundtrip() -> void:
 		"positions beyond the range clamp to the new limit (got %s)" % clamped)
 
 
+func test_snapshot_golden_bytes() -> void:
+	# Locks the wire layout: header 6 B + one 22 B row. If this hex changes, the
+	# protocol changed and every client/server build must move together.
+	var entry := {
+		"id": 7, "pos": Vector3(1.23, -4.56, 7.89), "yaw": 1.0,
+		"state": 2, "vel": Vector3(3.21, -0.5, 0.0), "on_floor": true,
+		"hp": 87, "ack": 0x0A0B0C0D,
+	}
+	var snap := NetProtocol.encode_snapshot(0x01020304, [entry])
+	var expected := "060403020101077b0038fe1503be28024101ceff000001570d0c0b0a"
+	expect(snap.size() == 28, "golden snapshot is 28 B (got %d)" % snap.size())
+	expect(snap.hex_encode() == expected,
+		"golden snapshot bytes match (got %s)" % snap.hex_encode())
+
+	var back := NetProtocol.decode_snapshot(snap)
+	expect(int(back.get("tick", 0)) == 0x01020304, "golden tick roundtrips")
+	var row: Dictionary = back.get("entries", [])[0]
+	expect(int(row.get("id", 0)) == 7, "golden id roundtrips")
+	expect((row.get("pos", Vector3.ZERO) as Vector3).distance_to(Vector3(1.23, -4.56, 7.89)) < 0.01,
+		"golden position roundtrips within 1 cm")
+	expect(absf(float(row.get("yaw", 0.0)) - 1.0) < 0.001, "golden yaw roundtrips")
+	expect(int(row.get("state", -1)) == 2, "golden state roundtrips")
+	expect((row.get("vel", Vector3.ZERO) as Vector3).distance_to(Vector3(3.21, -0.5, 0.0)) < 0.02,
+		"golden velocity roundtrips within 2 cm/s")
+	expect(bool(row.get("on_floor", false)), "golden on-floor flag roundtrips")
+	expect(int(row.get("hp", -1)) == 87, "golden hp roundtrips")
+	expect(int(row.get("ack", 0)) == 0x0A0B0C0D, "golden ack roundtrips")
+
+
 func test_oversized_roster_truncates_instead_of_malforming() -> void:
 	# NET-02 guard: the count byte and the row loop must agree. Passing more
 	# entries than MAX_PLAYERS used to write count=8 but 16 rows, producing a
