@@ -137,8 +137,11 @@ Not yet proven:
 | `feature/l6` | settings UI | merged |
 | `feature/l9` | browser matrix | research only, awaiting answers |
 
-Old phase worktrees `ballofduty-wt-a`…`-e` were removed; their branches remain
-for history. Generated `build/` and `reports/` directories are disposable.
+Old phase worktrees `ballofduty-wt-a`…`-e` and their merged branches were removed.
+The L6 worktree/branch was removed after merge. Generated `build/` and `reports/`
+directories were deleted; `tools/check.sh` recreates them. Active worktrees:
+`ballofduty` (maps-candidates), `ballofduty-wt-develop`, `ballofduty-wt-l2l8`,
+`ballofduty-wt-l9`.
 
 ---
 
