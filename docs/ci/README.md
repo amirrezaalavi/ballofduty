@@ -64,6 +64,14 @@ xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
   --browser firefox --headed --out artifacts/browser-smoke-firefox
 ```
 
+## Serving the build
+
+Godot 4 refuses to start outside a **secure context**: `http://127.0.0.1` and
+`http://localhost` work, but a plain-HTTP LAN or public IP shows
+"Secure Context - Check web server configuration (use HTTPS)". Use an SSH tunnel
+(`ssh -L 8099:127.0.0.1:8099 host`) for remote testing, or terminate TLS in front
+of `tools/serve.py` / `tools/dev.sh`.
+
 ## Release evidence
 
 A release qualification run archives, per cell:

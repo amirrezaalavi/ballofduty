@@ -12,14 +12,16 @@ No new downloads: Kenney Nature CC0 models + runtime-generated geometry.
 
 ## Candidates
 
-| Map | File | Theme | Signature places |
-|---|---|---|---|
-| DUNE CANYON | `scenes/maps/arena_dunes.tscn` | desert dunes, hot sky | slot canyon + timber bridge, ruined fort, oasis pond, 2 rock arches |
-| STARFALL CRATER | `scenes/maps/arena_crater.tscn` | night basalt + frost, emissive crystals | impact bowl + 4 rim ramps, relay platform ring, ice bridge |
-| JUNGLE RUINS | `scenes/maps/arena_jungle.tscn` | humid green jungle | stepped temple + 4 ramps, vine tunnel bore, vine bridge, river cut |
+| Map | `?map=` / `--map` id | File | Theme | Signature places |
+|---|---|---|---|---|
+| SUNKEN QUARRY (default) | `quarry` | `scenes/maps/arena_quarry.tscn` | sunken bowl, terraces, cave | 150 x 150 m, 61 m cave |
+| DUNE CANYON | `dunes` | `scenes/maps/arena_dunes.tscn` | desert dunes, hot sky | slot canyon + timber bridge, ruined fort, oasis pond, 2 rock arches |
+| STARFALL CRATER | `crater` | `scenes/maps/arena_crater.tscn` | night basalt + frost, emissive crystals | impact bowl + 4 rim ramps, relay platform ring, ice bridge |
+| JUNGLE RUINS | `jungle` | `scenes/maps/arena_jungle.tscn` | humid green jungle | stepped temple + 4 ramps, vine tunnel bore, vine bridge, river cut |
 
-All three are in the menu MAP picker, `?map=` URLs, `--map` CLI, and headless
-`--server --map`. Quarry stays the default.
+All four are in the menu MAP picker and work through `?map=<id>` URLs,
+`--map <id>` CLI and headless `--server --map <id>`. Unknown ids fall back to
+`quarry` (`MapRegistry.sanitize`).
 
 ## Evidence
 

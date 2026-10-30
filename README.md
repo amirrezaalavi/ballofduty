@@ -36,7 +36,7 @@ tools/check.sh --skip-export         # faster loop, no web/server export
 
 # serve server + web build, then capture a screenshot
 tools/dev.sh up
-tools/capture.sh "http://127.0.0.1:8099/?solo=1" docs/development/evidence/shot.png
+tools/capture.sh "http://127.0.0.1:8099/?join=1&name=You" docs/development/evidence/shot.png
 tools/dev.sh down
 
 # version-exact API lookup and a fast parse gate

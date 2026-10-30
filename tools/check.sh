@@ -59,6 +59,16 @@ log "Arena walkthrough"
 grep -q "result=PASS" /tmp/bod_walk.log
 ! grep -q "QUARRY_WALK_FAIL" /tmp/bod_walk.log
 
+log "Map smoke (all maps)"
+"$GODOT" --headless --path . --script tests/headless/map_smoke.gd 2>&1 | tee /tmp/bod_map_smoke.log
+grep -q "MAP_SMOKE maps=4 failures=0 result=PASS" /tmp/bod_map_smoke.log
+
+log "Map walkthroughs (crater, dunes, jungle)"
+for map in crater dunes jungle; do
+  "$GODOT" --headless --path . --script "tests/headless/${map}_walk.gd" 2>&1 | tee "/tmp/bod_walk_${map}.log"
+  grep -q "result=PASS" "/tmp/bod_walk_${map}.log"
+done
+
 log "Arena 4-bot match"
 "$GODOT" --headless --path . --script tests/headless/quarry_match.gd 2>&1 | tee /tmp/bod_match.log
 grep -q "QUARRY_MATCH result=PASS" /tmp/bod_match.log
