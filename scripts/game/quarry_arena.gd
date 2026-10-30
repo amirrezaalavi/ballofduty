@@ -82,6 +82,28 @@ const SPAWN_LAYOUT := [
 	Vector3(0.0, 2.0, 54.0),     # south terrace
 ]
 
+# Sixteen deterministic rock outcrops on the upper ring. They are height-field
+# bumps (not props), so they are part of the terrain collision and cannot float.
+const RING_BUMPS := [
+	Vector4(70.5, -45.0, 4.2, 5.5), Vector4(71.5, -15.0, 3.4, 4.5),
+	Vector4(70.8, 15.0, 4.8, 5.0), Vector4(71.8, 45.0, 3.8, 5.2),
+	Vector4(-70.5, -40.0, 4.0, 5.0), Vector4(-71.5, -10.0, 4.6, 5.4),
+	Vector4(-70.8, 20.0, 3.5, 4.6), Vector4(-71.8, 50.0, 4.4, 5.2),
+	Vector4(-45.0, 70.5, 4.6, 5.4), Vector4(-15.0, 71.5, 3.6, 4.6),
+	Vector4(15.0, 70.8, 4.2, 5.0), Vector4(45.0, 71.8, 4.8, 5.4),
+	Vector4(-40.0, -70.5, 4.4, 5.2), Vector4(-10.0, -71.5, 3.8, 4.8),
+	Vector4(20.0, -70.8, 4.7, 5.2), Vector4(50.0, -71.8, 3.9, 4.8),
+]
+
+# Central hero cover clusters: (x, z, yaw). Kept clear of spawns, ramps, cave
+# approaches and the bridge lane.
+const CENTRAL_COVER := [
+	Vector3(10.0, 6.0, 0.4), Vector3(-10.0, -10.0, 1.2),
+	Vector3(18.0, 18.0, 2.0), Vector3(-16.0, 22.0, 0.8),
+	Vector3(28.0, -6.0, 2.6), Vector3(-26.0, -22.0, 1.6),
+	Vector3(-2.0, 30.0, 2.4), Vector3(34.0, 6.0, 0.2),
+]
+
 # Hand-placed cover. Only (x, z) drive the layout; y comes from the height field.
 const HERO_TREES := [
 	Vector3(-36.0, -30.0, 3.2), Vector3(-40.0, 18.0, 3.6),
@@ -208,8 +230,23 @@ static func height_at(x: float, z: float) -> float:
 	var ring := _ring_height(edge)
 	if ring > 0.001:
 		ring += ring * 0.012 * (sin(x * 0.17) + cos(z * 0.21))
+		if edge > 70.0:
+			# Break the outer crest silhouette; this is outside the playable
+			# boundary, so it does not affect movement routes.
+			ring += 1.4 * sin(x * 0.11 + z * 0.07) + 0.9 * cos(x * 0.17 - z * 0.09)
+		if edge > 69.0:
+			ring += _ring_bumps(x, z)
 		h = maxf(h, ring)
 	return h
+
+
+static func _ring_bumps(x: float, z: float) -> float:
+	var total := 0.0
+	for bump: Vector4 in RING_BUMPS:
+		var distance := Vector2(x - bump.x, z - bump.y).length()
+		if distance < bump.w:
+			total = maxf(total, bump.z * (1.0 - smoothstep(0.0, bump.w, distance)))
+	return total
 
 
 static func _ring_height(edge: float) -> float:
@@ -317,12 +354,12 @@ func _build_materials() -> void:
 	_mat_terrain.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	_mat_terrain.uv1_triplanar = true
 	_mat_terrain.uv1_world_triplanar = true
-	_mat_terrain.uv1_scale = Vector3(0.12, 0.12, 0.12)
+	_mat_terrain.uv1_scale = Vector3(0.34, 0.34, 0.34)
 	_mat_terrain.uv1_triplanar_sharpness = 2.0
 
-	_mat_stone = _flat_material("quarry_stone", Color(0.55, 0.54, 0.50))
-	_mat_wood = _flat_material("quarry_wood", Color(0.58, 0.43, 0.27))
-	_mat_cave = _flat_material("quarry_cave", Color(0.36, 0.35, 0.33))
+	_mat_stone = _flat_material("quarry_stone", Color(0.64, 0.62, 0.57))
+	_mat_wood = _flat_material("quarry_wood", Color(0.70, 0.53, 0.34))
+	_mat_cave = _flat_material("quarry_cave", Color(0.55, 0.53, 0.49))
 
 	_synthetic_meshes["stone_box"] = _unit_box(_mat_stone)
 	_synthetic_meshes["wood_box"] = _unit_box(_mat_wood)
@@ -339,22 +376,51 @@ func _flat_material(name: String, color: Color) -> StandardMaterial3D:
 	return material
 
 
-## A tiny tiling gravel/moss detail map. It is generated once from a fixed
-## seed, so every peer and the export get the same texture with no asset cost.
+## Seamless gravel/moss detail map. Three periodic value-noise octaves (8, 16
+## and 32 lattice cells) are wrapped at the texture edge, so the 256 px texture
+## tiles without seams and reads as random grain rather than a woven pattern.
 func _detail_texture() -> ImageTexture:
-	var noise := FastNoiseLite.new()
-	noise.seed = SEED
-	noise.frequency = 0.045
-	noise.fractal_octaves = 4
-	var size := 128
+	var size := 256
+	var rng := RandomNumberGenerator.new()
+	rng.seed = SEED + 17
+	var octave_sizes := [8, 16, 32]
+	var octave_weights := [0.50, 0.30, 0.20]
+	var grids: Array[PackedFloat32Array] = []
+	for octave in octave_sizes:
+		var n: int = octave
+		var values := PackedFloat32Array()
+		values.resize(n * n)
+		for i in n * n:
+			values[i] = rng.randf()
+		grids.append(values)
 	var image := Image.create(size, size, false, Image.FORMAT_RGB8)
 	for y in size:
 		for x in size:
-			var value := 0.68 + 0.32 * (0.5 + 0.5 * noise.get_noise_2d(float(x), float(y)))
-			image.set_pixel(x, y, Color(value, value * 0.98, value * 0.93))
+			var sum := 0.0
+			for o in octave_sizes.size():
+				var n: int = octave_sizes[o]
+				var gx := float(x) * float(n) / float(size)
+				var gy := float(y) * float(n) / float(size)
+				var x0 := int(floor(gx)) % n
+				var y0 := int(floor(gy)) % n
+				var x1 := (x0 + 1) % n
+				var y1 := (y0 + 1) % n
+				var tx: float = gx - floor(gx)
+				var ty: float = gy - floor(gy)
+				tx = tx * tx * (3.0 - 2.0 * tx)
+				ty = ty * ty * (3.0 - 2.0 * ty)
+				var values := grids[o]
+				var v00 := values[y0 * n + x0]
+				var v10 := values[y0 * n + x1]
+				var v01 := values[y1 * n + x0]
+				var v11 := values[y1 * n + x1]
+				var top := lerpf(v00, v10, tx)
+				var bottom := lerpf(v01, v11, tx)
+				sum += lerpf(top, bottom, ty) * float(octave_weights[o])
+			var value := 0.80 + 0.20 * clampf(sum, 0.0, 1.0)
+			image.set_pixel(x, y, Color(value, value * 0.98, value * 0.92))
 	image.generate_mipmaps()
 	return ImageTexture.create_from_image(image)
-
 
 func _unit_box(material: Material) -> BoxMesh:
 	var mesh := BoxMesh.new()
@@ -671,6 +737,7 @@ func _process(delta: float) -> void:
 
 func _place_hero_props() -> void:
 	_central_ruin()
+	_central_cover()
 	_ruined_arch(Vector3(16.0, 0.0, 34.0), 0.25)
 	_ruined_arch(Vector3(-30.0, 0.0, 30.0), -0.4)
 	_ruined_walls()
@@ -686,6 +753,25 @@ func _place_hero_props() -> void:
 		var key: String = ["tree_default", "tree_detailed", "tree_pine", "tree_fat"][
 			int(abs(spot.x + spot.y)) % 4]
 		_add_tree(key, base, spot.z)
+
+
+func _central_cover() -> void:
+	# Eight hand-placed clusters through the central band. Each is a tall boulder
+	# plus a broken wall segment and a low fallen block: enough to break sightlines
+	# without creating dead ends. Positions avoid spawns, ramps, cave and bridge.
+	for i in CENTRAL_COVER.size():
+		var spot: Vector3 = CENTRAL_COVER[i]
+		var yaw := spot.z
+		var base := Vector3(spot.x, height_at(spot.x, spot.y), spot.y)
+		var dir := Vector3(cos(yaw), 0.0, sin(yaw))
+		_add_rock("rock_tall" if i % 2 == 0 else "rock_large", base,
+			3.2 + 0.4 * float(i % 3), yaw, true)
+		_add_cliff_wall(base + dir * 2.0,
+			Vector3(1.8, 2.4 + 0.4 * float(i % 2), 3.2), yaw + 0.4)
+		_add_stone_box(base + dir * 1.1 + Vector3(0.0, 0.35, 0.0),
+			Vector3(1.4, 0.7, 1.2), yaw + 0.8)
+		_add_stone_box(base + dir * 2.0 + Vector3(0.0, 2.55, 0.0),
+			Vector3(1.0, 0.5, 1.2), yaw + 0.7)
 
 
 func _central_ruin() -> void:
@@ -1042,6 +1128,8 @@ func _random_dressing_point(max_slope: float) -> Vector3:
 			continue
 		if _in_traversal_lane(Vector3(x, 0.0, z)):
 			continue
+		if _near_central_cover(Vector3(x, 0.0, z), 3.5):
+			continue
 		if slope_at(x, z) > max_slope:
 			continue
 		var y := height_at(x, z)
@@ -1052,6 +1140,13 @@ func _random_dressing_point(max_slope: float) -> Vector3:
 			continue
 		return pos
 	return Vector3.INF
+
+
+func _near_central_cover(pos: Vector3, radius: float) -> bool:
+	for spot: Vector3 in CENTRAL_COVER:
+		if Vector2(pos.x - spot.x, pos.z - spot.y).length() < radius:
+			return true
+	return false
 
 
 func _in_traversal_lane(pos: Vector3) -> bool:
@@ -1201,10 +1296,14 @@ func _restyle_mesh(mesh: Mesh, model_key: String = "") -> void:
 		if not PALETTE.has(material_key):
 			continue
 		var color: Color = PALETTE[material_key]
-		if model_key == "cliff_wall" and material_key == "grass":
-			# Quarried retaining walls are stone, not mossy cliff tops.
-			color = Color(0.36, 0.36, 0.34)
 		if model_key == "cliff_wall":
+			# Quarried retaining walls are stone, not mossy cliff tops. Use a
+			# brighter authored value: converting a 0.40 sRGB stone to linear
+			# gave 0.13, which collapsed to near-black in shadow.
+			if material_key == "grass":
+				color = Color(0.52, 0.51, 0.47)
+			else:
+				color = Color(0.62, 0.60, 0.56)
 			color = color.srgb_to_linear()
 		var restyled := StandardMaterial3D.new()
 		restyled.resource_name = material_key

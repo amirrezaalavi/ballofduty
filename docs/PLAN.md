@@ -119,8 +119,8 @@ while the server hits is expected under lag and is better than an invisible one.
 - **Spawns/boundary:** `Spawn01`…`Spawn08`, snapped to the height field, ≥ 22 m apart, none
   blocked. Invisible 40 m boundary walls at ±69.5 m plus the mountain ring/rock faces stop the
   player and the third-person spring arm.
-- **Budget:** 49 draw calls, 190,110 triangles, 1,798 MultiMesh instances, 353 static colliders
-  (quarry); hard limits remain 150 / 250k. Web export: 44,752 KB raw, **14,219 KB gzip**.
+- **Budget:** 49 draw calls, 192,842 triangles, 1,832 MultiMesh instances, 387 static colliders
+  (quarry); hard limits remain 150 / 250k. Web export: 44,752 KB raw, **14,222 KB gzip**.
 - **Tests:** `tests/gdunit/test_quarry_arena.gd` (9 cases: load, mesh/heightmap parity, spawns,
   cave clearance, hero colliders, walkable routes, boundary, camera wall, main-scene wiring);
   `tests/headless/arena_stats.gd` now validates both maps; `tests/headless/quarry_match.gd`
@@ -128,7 +128,7 @@ while the server hits is expected under lag and is better than an invisible one.
 - **QA walkthrough:** `tests/headless/quarry_walk.gd` drives the real `PlayerController` /
   `LocomotionComponent` through 35 sections (all 9 chunks, both cave directions including the
   aprons, six ramp directions, bridge, tower, raised lookout, all 8 spawns, four edges and three
-  platform falls). Result: **PASS**, 536.1 m travelled, 0 fall-through, 0 camera clips, 0
+  platform falls). Result: **PASS**, 536.5 m travelled, 0 fall-through, 0 camera clips, 0
   stuck episodes over 1.5 s (the only long stationary periods are the expected edge pushes).
 - **Map fixes from the walkthrough:** cave mouth aprons flattened to the tunnel floor; a boulder
   and two trees removed from the west/east ramp lanes; a tree removed from the cave approach;
@@ -136,7 +136,12 @@ while the server hits is expected under lag and is better than an invisible one.
   real 1.6 m platform with a sloped ramp (vertical step boxes are not climbable by this
   controller); spawns 7/8 moved onto flat benches; cave floor z-fighting removed; cave lamps and
   wood/stone values raised for web readability.
-- **Verified:** four bots moved 47–108 m and produced 74 shots / 29 hits / 3 deaths on the new
+- **Finish pass:** raised stone/cave/wood authored albedo so `srgb_to_linear()` no longer
+  collapses shadowed stone to near-black; replaced the blurred triplanar noise with a seamless
+  256 px three-octave value-noise grain at 0.34 world scale; added eight central boulder/ruin
+  clusters; replaced floating skyline props with sixteen heightfield ring outcrops plus the
+  existing pine toe clusters; fixed the QA camera that was intersecting a tree canopy.
+- **Verified:** four bots moved 39–122 m and produced 112 shots / 27 hits / 4 deaths on the new
   map; 113 gdUnit cases green; 35 walkthrough sections green; web console clean.
 
 ## 3b. Class weapons + bigger playground (research prompt)

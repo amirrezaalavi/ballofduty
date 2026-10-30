@@ -58,9 +58,10 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_sanity.gd` | 2 | 2 | toolchain canary: runner + scene instantiation |
 
 **113 test cases · ~940 assertions**, plus **35 walkthrough sections** and the 4-bot match.
-Quarry budget: 49 draw calls, 190,110 triangles; web export 44,752 KB raw / 14,219 KB gzip.
-Walkthrough: 536.1 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s. `test_net_loopback` stays one integration test: the value is the
-real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
+Quarry budget: 49 draw calls, 192,842 triangles; web export 44,752 KB raw / 14,222 KB gzip.
+Walkthrough: 536.5 m, 0 fall-through, 0 camera clips, 0 stuck episodes over 1.5 s.
+
+`test_net_loopback` stays one integration test: the value is the real socket path and shared tick, and re-establishing three peers per assertion would triple runtime.
 Loopback tests disable the local `_physics_process` and drive `simulate_tick()` explicitly, so the
 prediction path is identical to real input without competing sequences.
 

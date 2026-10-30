@@ -24,7 +24,8 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
 | S52 | Damage/scope pass | Head hitbox + headshot multiplier removed; bleed/spread/effect/armour_pierce/gravity removed; flat rounds inherit shooter velocity (experimental); Knight 34, Mage 18 + 8 splash (mag 12), bow 60, crossbow 12, Barbarian 34 → 3-hit kills; Knight reload 1.4 s | done | CP5 |
 | S51 | Class balance pass | Projectiles −30 % speed; Mage cycle +40 %, damage −20 %; crossbow 18/36; heavy gravity 12/10; pierce second-hurtbox fix | done | CP5 |
-| S50 | Sunken Quarry arena | 150×150 m, 3×3 mesh chunks, heightmap/collision, 61 m double-wall cave, rock skirts, MultiMesh foliage, 8 spawns; 49 draw calls / 190,110 tris | done | CP5 |
+| S50 | Sunken Quarry arena | 150×150 m, 3×3 mesh chunks, heightmap/collision, 61 m double-wall cave, rock skirts, MultiMesh foliage, 8 spawns; 49 draw calls / 192,842 tris | done | CP5 |
+| S54 | Map finish pass | Stone shading fixed after linear conversion; seamless gravel grain; 8 central cover clusters; 16 heightfield ring outcrops; cave/terrace screenshots refreshed | done | CP5 |
 | S53 | Map QA walkthrough | Real-physics 35-section harness (chunks, cave, ramps, bridge, tower, lookout, spawns, edges, falls); fixed cave aprons, ramp lane blockers, bridge lip/east landing, lookout access, spawn slopes, cave floor z-fighting | done | CP5 |
 | S49 | Class weapons v1 | Five class profiles, picker (`?class=`), per-class variants/models/animations/HUD; M4 retired for now; Quaternius CC0 spear/bow models | done | CP5 |
 | S48 | Class weapons + bigger map research | Report + decisions at `docs/research/weapons-and-arena.md` / `WEAPONS-DECISIONS.md` | done | CP5 |
