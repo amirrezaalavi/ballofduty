@@ -1,7 +1,7 @@
 [gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/game/main.gd" id="1_main"]
-[ext_resource type="PackedScene" path="res://scenes/maps/arena_nature.tscn" id="2_arena"]
+[ext_resource type="PackedScene" path="res://scenes/maps/arena_quarry.tscn" id="2_arena"]
 [ext_resource type="PackedScene" path="res://scenes/characters/player.tscn" id="3_player"]
 [ext_resource type="Script" path="res://scripts/ui/debug_overlay.gd" id="4_debug"]
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="5_hud"]
@@ -12,7 +12,7 @@ script = ExtResource("1_main")
 [node name="Arena" parent="." instance=ExtResource("2_arena")]
 
 [node name="Player" parent="." instance=ExtResource("3_player")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.6, 8.5)
 
 [node name="HUD" type="CanvasLayer" parent="."]
 layer = 8

@@ -83,3 +83,12 @@ license (with a local copy of the license text), and what was modified.
   balance point; bow scaled ×0.36 to a 0.71 m recurve, yawed 90°, with the KayKit arrow nocked.
   Shadows disabled. Generated scenes: `knight_spear.scn`, `rogue_bow.scn`.
 
+
+
+## Sunken Quarry & Cavern Pass (Phase 2B)
+
+- **Author:** project code, no new third-party download.
+- **Used:** the existing Kenney Nature Kit GLBs listed above (trees, rocks, cliffs, foliage),
+  plus runtime-generated `ArrayMesh`/`BoxMesh` terrain, cave lining, ruins, bridge and a
+  128 × 128 procedural gravel detail texture (`FastNoiseLite`, fixed seed).
+- **License:** assets remain CC0 as recorded above; generated geometry/texture is project-owned.
