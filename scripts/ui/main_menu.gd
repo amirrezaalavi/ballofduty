@@ -322,10 +322,12 @@ func _build_ui() -> void:
 
 	settings_button = Button.new()
 	settings_button.name = "SettingsButton"
-	settings_button.text = "SETTINGS · COMING SOON"
+	settings_button.text = "SETTINGS"
 	settings_button.flat = true
 	settings_button.add_theme_font_size_override("font_size", 11)
 	settings_button.add_theme_color_override("font_color", MUTED)
+	settings_button.add_theme_color_override("font_hover_color", ACCENT)
+	settings_button.add_theme_color_override("font_pressed_color", ACCENT)
 	settings_button.pressed.connect(_on_settings_pressed)
 	box.add_child(settings_button)
 
@@ -420,5 +422,4 @@ func _on_join_pressed() -> void:
 
 
 func _on_settings_pressed() -> void:
-	set_status("Settings panel is coming soon — sensitivity and audio keep their saved values.", "info")
 	settings_requested.emit()
