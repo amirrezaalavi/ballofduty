@@ -188,6 +188,45 @@ func test_network_manager_builds_one_origin_url() -> void:
 	)
 
 
+func test_menu_map_picker_defaults_and_selection() -> void:
+	var menu := _make_menu()
+	menu.configure({
+		"host": "127.0.0.1",
+		"port": 9080,
+		"name": "Maple",
+		"map_id": "dunes",
+		"page_host": "127.0.0.1",
+		"page_port": 9080,
+		"page_secure": false,
+		"proxy_ws": "",
+	})
+	expect(menu.selected_map() == "dunes", "menu keeps the configured map")
+	expect(menu.map_option.item_count == MapRegistry.MAPS.size(), "picker lists every map")
+	var config: Dictionary = menu.join_config()
+	expect(String(config["map_id"]) == "dunes", "join config carries the map")
+	menu.select_map("crater")
+	expect(menu.selected_map() == "crater", "map selection switches")
+	expect(menu.map_hint.text.contains("STARFALL"), "map hint names the selection")
+	menu.select_map("bogus")
+	expect(menu.selected_map() == MapRegistry.DEFAULT_MAP, "unknown map falls back to default")
+
+
+func test_endpoint_selection_carries_map() -> void:
+	var main_script := load("res://scripts/game/main.gd")
+	var page := {
+		"host": "127.0.0.1",
+		"port": 8099,
+		"secure": false,
+		"proxy": "",
+	}
+	var picked: Dictionary = main_script.resolve_endpoint({"map": "jungle"}, page)
+	expect(String(picked["map_id"]) == "jungle", "?map=jungle survives endpoint selection")
+	var bogus: Dictionary = main_script.resolve_endpoint({"map": "moon"}, page)
+	expect(String(bogus["map_id"]) == MapRegistry.DEFAULT_MAP, "unknown ?map= falls back")
+	var missing: Dictionary = main_script.resolve_endpoint({}, page)
+	expect(String(missing["map_id"]) == MapRegistry.DEFAULT_MAP, "missing ?map= is the default")
+
+
 func _make_menu() -> Node:
 	var menu = MENU_SCENE.instantiate()
 	add_child(menu)

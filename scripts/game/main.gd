@@ -32,6 +32,7 @@ var _solo: bool = false
 var _was_client: bool = false
 var _match_entered: bool = false
 var _selected_class: int = 0
+var _selected_map: String = MapRegistry.DEFAULT_MAP
 var _quick_menu_paused: bool = false
 var _match_over: bool = false
 ## Auto-join endpoint waiting for the first rendered frames (see _deferred_auto_join).
@@ -247,6 +248,7 @@ func _menu_defaults(endpoint: Dictionary) -> Dictionary:
 		"port": int(endpoint.get("port", DEFAULT_PORT)),
 		"name": String(endpoint.get("name", "Player")),
 		"class_id": _selected_class,
+		"map_id": _selected_map,
 		"page_host": String(_page.get("host", "127.0.0.1")),
 		"page_port": int(_page.get("port", DEFAULT_PORT)),
 		"page_secure": bool(_page.get("secure", false)),
@@ -254,10 +256,42 @@ func _menu_defaults(endpoint: Dictionary) -> Dictionary:
 	}
 
 
+## Swap the Arena child to the requested map. Safe to call before solo enter,
+## before client join (local visual) and before server start (authoritative
+## spawns). A missing scene keeps the current arena instead of crashing.
+func _set_map(map_id: String) -> void:
+	var clean := MapRegistry.sanitize(map_id)
+	var current := get_node_or_null("Arena")
+	if current and String(current.scene_file_path).get_file().get_basename() == "arena_" + clean:
+		_selected_map = clean
+		return
+	var packed := load(MapRegistry.scene_path(clean)) as PackedScene
+	if packed == null:
+		push_warning("BALL_OF_DUTY unknown map scene for '%s', keeping current arena" % clean)
+		return
+	var old := get_node_or_null("Arena")
+	if old:
+		remove_child(old)
+		old.queue_free()
+	var fresh := packed.instantiate() as Node3D
+	fresh.name = "Arena"
+	add_child(fresh)
+	# Keep the arena behind the player in tree order, as in main.tscn.
+	move_child(fresh, 0)
+	_selected_map = clean
+	var spawn := get_node_or_null("Arena/Spawn01") as Marker3D
+	var local := get_node_or_null("Player") as Node3D
+	if spawn and local:
+		local.global_position = spawn.global_position + Vector3.UP * 0.1
+		local.rotation.y = spawn.global_rotation.y
+
+
 func _on_menu_join(config: Dictionary) -> void:
 	var params: Dictionary = {"name": String(config.get("name", "Player"))}
 	_selected_class = NetProtocol.sanitize_class(int(config.get("class_id", 0)))
+	_selected_map = MapRegistry.sanitize(String(config.get("map_id", _selected_map)))
 	params["class"] = _selected_class
+	params["map"] = _selected_map
 	if bool(config.get("proxied", false)):
 		params["proxy"] = "1"
 		params["ws"] = String(config.get("path", ""))
@@ -270,6 +304,8 @@ func _on_menu_join(config: Dictionary) -> void:
 func _on_menu_solo() -> void:
 	if _menu:
 		_selected_class = NetProtocol.sanitize_class(_menu.selected_class())
+		_selected_map = MapRegistry.sanitize(_menu.selected_map())
+	_set_map(_selected_map)
 	_enter_solo()
 
 
@@ -291,6 +327,8 @@ func _begin_join(endpoint: Dictionary) -> void:
 	_selected_class = NetProtocol.sanitize_class(
 		int(endpoint.get("class_id", _selected_class))
 	)
+	_selected_map = MapRegistry.sanitize(String(endpoint.get("map_id", _selected_map)))
+	_set_map(_selected_map)
 	if _menu:
 		_menu.hide_menu()
 	_set_hud_visible(false)
@@ -475,9 +513,14 @@ func _try_autoconnect(args: PackedStringArray) -> void:
 	var cli := args.find("--class")
 	if cli >= 0 and cli + 1 < args.size():
 		params["class"] = args[cli + 1]
+	var mi := args.find("--map")
+	if mi >= 0 and mi + 1 < args.size():
+		params["map"] = args[mi + 1]
 
 	var endpoint := resolve_endpoint(params, _page)
 	_selected_class = NetProtocol.sanitize_class(int(endpoint.get("class_id", 0)))
+	_selected_map = MapRegistry.sanitize(String(endpoint.get("map_id", MapRegistry.DEFAULT_MAP)))
+	_set_map(_selected_map)
 	if _menu:
 		_menu.configure(_menu_defaults(endpoint))
 		_menu.show_menu()
@@ -546,6 +589,7 @@ static func resolve_endpoint(params: Dictionary, page: Dictionary) -> Dictionary
 	if display_name == "":
 		display_name = "Player"
 	var class_id := NetProtocol.sanitize_class(int(str(params.get("class", "0")).to_int()))
+	var map_id := MapRegistry.sanitize(String(params.get("map", MapRegistry.DEFAULT_MAP)))
 	return {
 		"host": host,
 		"port": port,
@@ -554,6 +598,7 @@ static func resolve_endpoint(params: Dictionary, page: Dictionary) -> Dictionary
 		"proxied": proxied,
 		"name": display_name,
 		"class_id": class_id,
+		"map_id": map_id,
 		"url": build_ws_url(host, port, path, page_secure),
 	}
 
@@ -749,6 +794,9 @@ func _start_server(args: PackedStringArray) -> void:
 	var bots_index := args.find("--bots")
 	if bots_index >= 0 and bots_index + 1 < args.size():
 		bots = maxi(0, int(args[bots_index + 1]))
+	var map_index := args.find("--map")
+	if map_index >= 0 and map_index + 1 < args.size():
+		_set_map(String(args[map_index + 1]))
 
 	var local_player := get_node_or_null("Player")
 	if local_player:
