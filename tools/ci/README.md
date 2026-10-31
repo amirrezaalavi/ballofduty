@@ -34,12 +34,12 @@ export PLAYWRIGHT_BROWSERS_PATH=/srv/opencode/pkg/playwright
 ```bash
 # 1. build and serve the web export
 ./tools/godot --headless --path . --export-release "Web" build/web/index.html
-python3 tools/serve.py --root build/web --port 8099 --no-proxy &
+python3 tools/serve.py --root build/web --port 8080 --no-proxy &
 
 # 2. boot smoke (Chromium, software WebGL)
 cd tools/ci
 node browser_smoke.mjs \
-  --url http://127.0.0.1:8099/index.html \
+  --url http://127.0.0.1:8080/index.html \
   --browser chromium \
   --out ../../artifacts/browser-smoke
 ```
@@ -64,7 +64,7 @@ records draw calls, primitives and JS heap bytes:
 
 ```bash
 node browser_smoke.mjs \
-  --url "http://127.0.0.1:8099/index.html?perf=1" \
+  --url "http://127.0.0.1:8080/index.html?perf=1" \
   --browser chromium --out ../../artifacts/browser-smoke-perf
 ```
 
@@ -80,11 +80,11 @@ wait when the bridge is absent.
 
 ```bash
 ./tools/godot --headless --path . -- --server --port 9180 &
-python3 tools/serve.py --root build/web --port 8099 --upstream 127.0.0.1:9180 --ws-path /ws &
+python3 tools/serve.py --root build/web --port 8080 --upstream 127.0.0.1:9180 --ws-path /ws &
 
 cd tools/ci
 node browser_smoke.mjs \
-  --url "http://127.0.0.1:8099/index.html?join=1&perf=1" \
+  --url "http://127.0.0.1:8080/index.html?join=1&perf=1" \
   --browser chromium --out ../../artifacts/browser-smoke-join
 ```
 
@@ -104,7 +104,7 @@ inside Xvfb with the research doc's software-WebRender preferences (already in
 sudo apt-get update && sudo apt-get install -y xvfb
 xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
   node tools/ci/browser_smoke.mjs \
-    --url http://127.0.0.1:8099/index.html \
+    --url http://127.0.0.1:8080/index.html \
     --browser firefox --headed \
     --out artifacts/browser-smoke-firefox
 ```
@@ -117,7 +117,7 @@ The minimal feasibility probe is separate:
 
 ```bash
 xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-  node tools/ci/firefox_probe.js --url http://127.0.0.1:8099/index.html
+  node tools/ci/firefox_probe.js --url http://127.0.0.1:8080/index.html
 ```
 
 ## WebKit is not Safari

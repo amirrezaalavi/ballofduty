@@ -192,7 +192,7 @@ func start_client(host: String, port: int, path: String = "") -> int:
 
 
 ## Build the exact URL the transport uses. One-origin proxy mode appends the
-## request path (for example ws://host:8099/ws) while the legacy two-port path
+## request path (for example ws://host:8080/ws) while the legacy two-port path
 ## stays ws://host:port.
 static func build_ws_url(host: String, port: int, path: String, secure: bool) -> String:
 	var request_path := path.strip_edges()

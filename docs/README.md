@@ -44,6 +44,11 @@ Top level:
 - [`research/PERFORMANCE-AUDIT-2026-10-30.md`](research/PERFORMANCE-AUDIT-2026-10-30.md) — measured baseline
 - [`research/OPTIMIZATION-ANSWERS-REVIEW.md`](research/OPTIMIZATION-ANSWERS-REVIEW.md) — optimization decisions
 
+## License
+
+Code is under the [Apache License 2.0](../LICENSE). Third-party assets keep their own
+licenses, listed in [`../assets/CREDITS.md`](../assets/CREDITS.md).
+
 ## Rules
 
 1. A document that records a **decision** must say what was rejected and why.
