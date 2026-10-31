@@ -5,7 +5,7 @@
 #   tools/soak.sh --full           # 10-minute run (the Phase 1 gate)
 #   tools/soak.sh --clients 8 --bots 4 --seconds 600
 #
-# Always uses an ephemeral 92xx port. Never touches the live 9180/8099 server.
+# Always uses an ephemeral 92xx port. Never touches the live 9180/8080 server.
 # The server roster is capped by NetProtocol.MAX_PLAYERS (frozen). When clients
 # + bots exceed the cap the runner prints SOAK_CAP and soaks the largest feasible
 # mixed match; --require-full turns that into a failure once the cap is raised.

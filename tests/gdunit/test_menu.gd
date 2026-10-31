@@ -155,9 +155,9 @@ func test_endpoint_selection_one_origin_vs_direct() -> void:
 		"?proxy=1 forces the page origin")
 
 	var no_proxy: Dictionary = main_script.resolve_endpoint(
-		{}, {"host": "127.0.0.1", "port": 8099, "secure": false, "proxy": ""}
+		{}, {"host": "127.0.0.1", "port": 8080, "secure": false, "proxy": ""}
 	)
-	expect(String(no_proxy["url"]) == "ws://127.0.0.1:9080",
+	expect(String(no_proxy["url"]) == "ws://127.0.0.1:8080",
 		"plain static server keeps the direct default port (got %s)" % no_proxy["url"])
 
 	var secure: Dictionary = main_script.resolve_endpoint(

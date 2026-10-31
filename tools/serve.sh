@@ -4,7 +4,7 @@
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-PORT="${1:-8099}"
+PORT="${1:-8080}"
 DIR="$PWD/build/web"
 
 if [[ ! -f "$DIR/index.html" ]]; then

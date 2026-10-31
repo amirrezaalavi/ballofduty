@@ -2,7 +2,7 @@
 # Local server + web build supervisor with pidfiles, so tests never kill the
 # wrong process again.
 #
-#   tools/dev.sh up        # server :9180 + one-origin web proxy :8099
+#   tools/dev.sh up        # server :9180 + one-origin web proxy :8080
 #   tools/dev.sh down      # stop both
 #   tools/dev.sh status    # show listeners and log tails
 #
@@ -14,7 +14,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SERVER_PORT="${SERVER_PORT:-9180}"
-WEB_PORT="${WEB_PORT:-8099}"
+WEB_PORT="${WEB_PORT:-8080}"
 WEB_BIND="${WEB_BIND:-127.0.0.1}"
 WS_PATH="${WS_PATH:-/ws}"
 PID_DIR=".cache/pids"
@@ -102,10 +102,15 @@ start_server() {
 }
 
 start_web() {
-  [[ -f build/web/index.html ]] || {
-    echo "web build missing: run tools/check.sh first" >&2
-    return 1
-  }
+  if [[ ! -f build/web/index.html ]]; then
+    echo "web build missing: exporting (first run only, takes a minute)..."
+    mkdir -p build/web
+    if ! ./tools/godot --headless --path . --export-release "Web" build/web/index.html >/dev/null 2>&1; then
+      echo "web export failed. Is Godot 4.7.2 installed with export templates?" >&2
+      echo "See docs/development/SETUP.md" >&2
+      return 1
+    fi
+  fi
   check_port web "$WEB_PORT" "$WEB_PID"
   if running "$WEB_PID"; then
     echo "web already running (pid $(cat "$WEB_PID"))"

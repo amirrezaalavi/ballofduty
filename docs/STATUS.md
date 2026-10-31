@@ -131,7 +131,7 @@ Not yet proven:
 ```bash
 cd ballofduty
 ./tools/check.sh --skip-export
-./tools/dev.sh up            # server :9180, web :8099
-# open http://127.0.0.1:8099/?join=1&name=You
+./tools/dev.sh up            # server :9180, web :8080
+# open http://127.0.0.1:8080/?join=1&name=You
 ./tools/dev.sh down
 ```

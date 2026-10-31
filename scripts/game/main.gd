@@ -8,7 +8,7 @@ extends Node3D
 ## only the web port needs forwarding. An explicit `?host=`/`?port=` link keeps
 ## the legacy direct ws://host:port mode.
 
-const DEFAULT_PORT := 9080
+const DEFAULT_PORT := 8080
 const MAIN_MENU_SCENE: PackedScene = preload("res://scenes/ui/main_menu.tscn")
 const LOADING_SCENE: PackedScene = preload("res://scenes/ui/loading_screen.tscn")
 const QUICK_MENU_SCENE: PackedScene = preload("res://scenes/ui/quick_menu.tscn")

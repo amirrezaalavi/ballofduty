@@ -7,7 +7,7 @@
 // software-WebRender overrides.
 //
 //   xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-//     node tools/ci/firefox_probe.js --url http://127.0.0.1:8099/index.html
+//     node tools/ci/firefox_probe.js --url http://127.0.0.1:8080/index.html
 //
 // This script only prints observations. It is intentionally separate from
 // browser_smoke.mjs so a failed feasibility run cannot be mistaken for a
@@ -16,7 +16,7 @@
 import { firefox } from 'playwright';
 
 const args = process.argv.slice(2);
-let url = 'http://127.0.0.1:8099/index.html';
+let url = 'http://127.0.0.1:8080/index.html';
 for (let index = 0; index < args.length; index += 1) {
   if (args[index] === '--url' && args[index + 1]) {
     url = args[index + 1];

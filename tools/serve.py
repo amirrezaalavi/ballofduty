@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One-origin static + WebSocket proxy for the exported Ball of Duty web build.
 
-    python3 tools/serve.py --root build/web --port 8099 \
+    python3 tools/serve.py --root build/web --port 8080 \
         --upstream 127.0.0.1:9180 --ws-path /ws
 
 Only the web port has to be exposed. Static files come from --root; a WebSocket
@@ -356,7 +356,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Serve build/web and tunnel /ws to the game server")
     parser.add_argument("--root", default="build/web", help="static build directory")
     parser.add_argument("--bind", default="127.0.0.1", help="listen address")
-    parser.add_argument("--port", type=int, default=8099, help="listen port (0 = ephemeral)")
+    parser.add_argument("--port", type=int, default=8080, help="listen port (0 = ephemeral)")
     parser.add_argument("--upstream", default="127.0.0.1:9180", help="game server host:port")
     parser.add_argument("--ws-path", default="/ws", help="WebSocket upgrade path")
     parser.add_argument("--no-proxy", action="store_true", help="serve static files only")

@@ -41,10 +41,10 @@ Typical runtime: 2–3 minutes. `GODOT_BIN` is not set: `tools/godot` resolves
 mkdir -p build/web
 ./tools/godot --headless --path . --export-release "Web" build/web/index.html
 
-python3 tools/serve.py --root build/web --port 8099 --no-proxy &
+python3 tools/serve.py --root build/web --port 8080 --no-proxy &
 cd tools/ci && npm ci
 PLAYWRIGHT_BROWSERS_PATH=/srv/opencode/pkg/playwright \
-  node browser_smoke.mjs --url http://127.0.0.1:8099/index.html \
+  node browser_smoke.mjs --url http://127.0.0.1:8080/index.html \
   --browser chromium --out ../../artifacts/browser-smoke
 ```
 
@@ -60,7 +60,7 @@ Not enabled in CI. Validate once by hand, then uncomment the step:
 ```bash
 sudo apt-get install -y xvfb
 xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-  node tools/ci/browser_smoke.mjs --url http://127.0.0.1:8099/index.html \
+  node tools/ci/browser_smoke.mjs --url http://127.0.0.1:8080/index.html \
   --browser firefox --headed --out artifacts/browser-smoke-firefox
 ```
 
@@ -69,7 +69,7 @@ xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
 Godot 4 refuses to start outside a **secure context**: `http://127.0.0.1` and
 `http://localhost` work, but a plain-HTTP LAN or public IP shows
 "Secure Context - Check web server configuration (use HTTPS)". Use an SSH tunnel
-(`ssh -L 8099:127.0.0.1:8099 host`) for remote testing, or terminate TLS in front
+(`ssh -L 8080:127.0.0.1:8080 host`) for remote testing, or terminate TLS in front
 of `tools/serve.py` / `tools/dev.sh`.
 
 ## Release evidence
