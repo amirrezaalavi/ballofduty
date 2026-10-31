@@ -1,98 +1,110 @@
 # Ball of Duty
 
-A lightweight, cute, web-first 3D third-person arena shooter. Up to 16 players,
-five classes, five minutes, bragging rights.
+A small 3D shooter that runs in the browser. Five classes, four maps, five-minute matches.
 
-**Status:** playable vertical slice — five classes, three arena maps (Sunken
-Quarry, Starfall Crater, Dune Canyon, Jungle Ruins), protocol v2 (8 default /
-16-actor capability), quick menu, settings UI, data-driven content standard,
-opt-in performance probe and a browser smoke gate.
-**172 tests green** on `develop`; `tools/check.sh` passes. Remaining work is
-tracked in [`docs/STATUS.md`](docs/STATUS.md).
+[فارسی](#فارسی) · [Docs](docs/README.md) · [GitHub](https://github.com/amirrezaalavi/ballofduty)
 
-```bash
-tools/godot --headless --path . -- --server --port 9180   # authority
-tools/check.sh && tools/serve.sh 8099                     # web build
-# open http://127.0.0.1:8099/?join=1&host=127.0.0.1&port=9180&name=You
-```
+## Run it
 
-**Engine:** Godot 4.7.2 (GDScript) · **Renderer:** Compatibility (WebGL 2) ·
-**Netcode:** WebSocket, headless authoritative server, 30 Hz fixed tick ·
-**Platform:** web first, desktop supported.
-
-## Quick start
+You need Linux or macOS, and Godot 4.7.2 with its export templates. The download links are in
+[docs/development/SETUP.md](docs/development/SETUP.md).
 
 ```bash
-# desktop run
-tools/godot --path . --editor        # open in the editor
-tools/godot --path .                 # run the project
-
-# headless server
-tools/godot --headless --path . -- --server --port 9080
-
-# full pipeline check (import, content, gdUnit4, walkthroughs, probes, exports)
-tools/check.sh
-tools/check.sh --skip-export         # faster loop, no web/server export
-
-# serve server + web build, then capture a screenshot
-tools/dev.sh up
-tools/capture.sh "http://127.0.0.1:8099/?join=1&name=You" docs/development/evidence/shot.png
-tools/dev.sh down
-
-# version-exact API lookup and a fast parse gate
-tools/api.sh WebSocketMultiplayerPeer get_peer
-tools/gdcheck.sh
+git clone https://github.com/amirrezaalavi/ballofduty.git
+cd ballofduty
+./tools/dev.sh up
 ```
 
-Requirements: Godot **4.7.2** with matching export templates. If the engine lives
-elsewhere, set `GODOT_BIN` (a path or a command name on `PATH`):
+Open <http://127.0.0.1:8099>. Pick a class and a map, then press SOLO to play offline or JOIN MATCH
+to play against bots on the local server. Click the canvas once, otherwise the browser keeps the
+mouse.
+
+The first start builds the web files, so give it a minute or two. Later starts are quick.
+
+To stop everything:
 
 ```bash
-GODOT_BIN=/path/to/godot tools/godot --version
+./tools/dev.sh down
 ```
 
-## Controls
+If port 8099 is taken, use another one:
 
-| Input | Action |
-|---|---|
-| `WASD` | Move |
-| Mouse | Look |
-| `RMB` (hold) | Scope (FOV 75 → 55) |
-| `LMB` | Fire |
-| `Space` | Jump |
-| `Shift` | Sprint (ground only) |
-| `R` | Reload |
-| `Esc` | Quick menu (resume / settings / leave / restart) · releases mouse |
-| Click canvas | Capture mouse |
-| `F3` | Debug overlay (FPS, tick, speed, camera) |
-
-## Layout
-
-```text
-res://
-├── scenes/{characters,weapons,ui,maps}
-├── scripts/{autoload,components,networking,player,game,ui,content}
-├── resources/{weapons,players,content}
-├── assets/            # third-party low-poly assets + CREDITS.md
-├── server/            # headless entry points
-├── web/               # custom HTML shell
-├── tests/             # gdUnit4 suites + headless probes
-├── docs/              # see docs/README.md
-└── tools/             # godot wrapper, pipeline check, browser smoke
+```bash
+WEB_PORT=8080 ./tools/dev.sh up
 ```
+
+The game server runs on port 9180 and the web port forwards to it, so the browser only needs one
+address.
+
+### Put it online
+
+Browsers only unlock some features over HTTPS, so a public server needs a domain with TLS. The
+deployment notes show a reverse proxy setup: [docs/ci/DEPLOY.md](docs/ci/DEPLOY.md).
+
+### Playing
+
+WASD to move, mouse to look, left click to shoot, Space to jump, Shift to sprint, R to reload, Esc
+for the menu.
+
+---
+
+## فارسی
+
+یک بازی تیراندازی سه‌بعدی کوچک که داخل مرورگر اجرا می‌شود. پنج کلاس، چهار نقشه، هر مسابقه پنج دقیقه.
+
+[مستندات](docs/README.md) · [گیت‌هاب](https://github.com/amirrezaalavi/ballofduty)
+
+### اجرا
+
+به لینوکس یا مک و Godot نسخه ۴.۷.۲ همراه با export templates نیاز دارید. لینک دانلود در
+[مستندات نصب](docs/development/SETUP.md) هست.
+
+```bash
+git clone https://github.com/amirrezaalavi/ballofduty.git
+cd ballofduty
+./tools/dev.sh up
+```
+
+آدرس <http://127.0.0.1:8099> را باز کنید. یک کلاس و یک نقشه انتخاب کنید، بعد SOLO را برای بازی
+آفلاین بزنید یا JOIN MATCH را برای بازی با بات‌ها روی سرور محلی. یک بار روی صفحه کلیک کنید تا
+مرورگر کنترل ماوس را به بازی بدهد.
+
+بار اول فایل‌های بازی ساخته می‌شوند و یکی دو دقیقه طول می‌کشد. دفعه‌های بعد سریع بالا می‌آید.
+
+برای خاموش کردن:
+
+```bash
+./tools/dev.sh down
+```
+
+اگر پورت 8099 اشغال بود، پورت دیگری بدهید:
+
+```bash
+WEB_PORT=8080 ./tools/dev.sh up
+```
+
+سرور بازی روی پورت 9180 کار می‌کند و پورت وب به آن وصل می‌شود، پس مرورگر فقط یک آدرس لازم دارد.
+
+### اجرا روی سرور اینترنتی
+
+مرورگرها بعضی قابلیت‌ها را فقط روی HTTPS باز می‌کنند، پس سرور عمومی به دامنه و گواهی TLS نیاز
+دارد. نمونه تنظیم reverse proxy در [مستندات استقرار](docs/ci/DEPLOY.md) هست.
+
+### کنترل‌ها
+
+WASD برای حرکت، ماوس برای چرخش دید، کلیک چپ برای شلیک، Space برای پرش، Shift برای دویدن، R برای
+پر کردن خشاب، Esc برای منو.
+
+---
 
 ## Docs
 
-Start at [`docs/README.md`](docs/README.md). The short version:
-
-- [`docs/STATUS.md`](docs/STATUS.md) — where the project is, how stable, what is left
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — sequencing and acceptance criteria
-- [`docs/BACKLOG.md`](docs/BACKLOG.md) — open items and decisions
-- [`docs/development/`](docs/development/) — setup, architecture, testing, checkpoints
-- [`docs/data/`](docs/data/) — content standard, weapons, bodies, maps
-- [`docs/ci/`](docs/ci/) — pipeline, browser matrix, deployment
-- [`docs/research/`](docs/research/) — source research reports and decision summaries
+- [docs/README.md](docs/README.md) starts here.
+- [docs/STATUS.md](docs/STATUS.md) is where the project is right now.
+- [docs/development/SETUP.md](docs/development/SETUP.md) covers the engine install.
+- [docs/ci/README.md](docs/ci/README.md) covers the pipeline and the browser checks.
 
 ## License
 
-Code: TBD. Third-party assets: see [`assets/CREDITS.md`](assets/CREDITS.md).
+Code license is not chosen yet. All current art and audio assets are CC0; the list is in
+[assets/CREDITS.md](assets/CREDITS.md).
