@@ -3,7 +3,7 @@
 // pointer lock and (optionally) the in-match bridge, then writes metrics,
 // the raw console stream and a screenshot.
 //
-//   node browser_smoke.mjs --url http://127.0.0.1:8099/index.html \
+//   node browser_smoke.mjs --url http://127.0.0.1:8080/index.html \
 //     --browser chromium --out ../../artifacts/browser-smoke
 //
 // Exit code is non-zero only for: boot timeout, missing WebGL 2, or a
@@ -42,7 +42,7 @@ const FIREFOX_PREFS = {
 
 function parseArgs(argv) {
   const options = {
-    url: 'http://127.0.0.1:8099/index.html',
+    url: 'http://127.0.0.1:8080/index.html',
     browser: 'chromium',
     out: 'artifacts/browser-smoke',
     headed: false,

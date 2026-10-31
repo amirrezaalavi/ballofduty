@@ -39,7 +39,7 @@ var class_hint: Label
 var selected_class_id: int = 0
 
 var _page_host: String = "127.0.0.1"
-var _page_port: int = 9080
+var _page_port: int = 8080
 var _page_secure: bool = false
 var _proxy_ws: String = ""
 
@@ -51,7 +51,7 @@ func _ready() -> void:
 
 func configure(defaults: Dictionary) -> void:
 	_page_host = String(defaults.get("page_host", "127.0.0.1"))
-	_page_port = int(defaults.get("page_port", 9080))
+	_page_port = int(defaults.get("page_port", 8080))
 	_page_secure = bool(defaults.get("page_secure", false))
 	_proxy_ws = String(defaults.get("proxy_ws", ""))
 	if name_field:
@@ -60,7 +60,7 @@ func configure(defaults: Dictionary) -> void:
 	if host_field:
 		host_field.text = String(defaults.get("host", _page_host))
 	if port_field:
-		port_field.text = str(int(defaults.get("port", 9080)))
+		port_field.text = str(int(defaults.get("port", 8080)))
 	select_class(int(defaults.get("class_id", selected_class_id)))
 	_update_mode_hint()
 
@@ -98,7 +98,7 @@ func join_config() -> Dictionary:
 		host = "127.0.0.1"
 	var port := port_field.text.strip_edges().to_int() if port_field else 0
 	if port <= 0:
-		port = 9080
+		port = 8080
 	var display_name := name_field.text.strip_edges() if name_field else ""
 	if display_name == "":
 		display_name = "Player"
@@ -312,8 +312,8 @@ func _build_ui() -> void:
 	port_box.add_child(_small_label("PORT"))
 	port_field = LineEdit.new()
 	port_field.name = "PortField"
-	port_field.placeholder_text = "9080"
-	port_field.text = "9080"
+	port_field.placeholder_text = "8080"
+	port_field.text = "8080"
 	port_field.max_length = 5
 	_style_field(port_field)
 	port_field.text_submitted.connect(func(_text: String) -> void: _on_join_pressed())

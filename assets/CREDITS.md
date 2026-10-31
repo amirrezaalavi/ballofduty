@@ -1,5 +1,8 @@
 # Third-party assets
 
+The game code is licensed under the Apache License 2.0 (see `LICENSE` and `NOTICE`). The assets
+below keep their own licenses.
+
 ## Kenney Nature Kit 2.1
 
 - **Author:** Kenney (https://kenney.nl)

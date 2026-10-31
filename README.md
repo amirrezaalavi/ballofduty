@@ -15,7 +15,7 @@ cd ballofduty
 ./tools/dev.sh up
 ```
 
-Open <http://127.0.0.1:8099>. Pick a class and a map, then press SOLO to play offline or JOIN MATCH
+Open <http://127.0.0.1:8080>. Pick a class and a map, then press SOLO to play offline or JOIN MATCH
 to play against bots on the local server. Click the canvas once, otherwise the browser keeps the
 mouse.
 
@@ -27,14 +27,15 @@ To stop everything:
 ./tools/dev.sh down
 ```
 
-If port 8099 is taken, use another one:
+If port 8080 is taken, pick another one:
 
 ```bash
-WEB_PORT=8080 ./tools/dev.sh up
+WEB_PORT=8081 ./tools/dev.sh up
 ```
 
 The game server runs on port 9180 and the web port forwards to it, so the browser only needs one
-address.
+address. The address you open is also the port the game connects to, so changing `WEB_PORT` is
+enough.
 
 ### Put it online
 
@@ -65,7 +66,7 @@ cd ballofduty
 ./tools/dev.sh up
 ```
 
-آدرس <http://127.0.0.1:8099> را باز کنید. یک کلاس و یک نقشه انتخاب کنید، بعد SOLO را برای بازی
+آدرس <http://127.0.0.1:8080> را باز کنید. یک کلاس و یک نقشه انتخاب کنید، بعد SOLO را برای بازی
 آفلاین بزنید یا JOIN MATCH را برای بازی با بات‌ها روی سرور محلی. یک بار روی صفحه کلیک کنید تا
 مرورگر کنترل ماوس را به بازی بدهد.
 
@@ -77,13 +78,14 @@ cd ballofduty
 ./tools/dev.sh down
 ```
 
-اگر پورت 8099 اشغال بود، پورت دیگری بدهید:
+اگر پورت 8080 اشغال بود، پورت دیگری بدهید:
 
 ```bash
-WEB_PORT=8080 ./tools/dev.sh up
+WEB_PORT=8081 ./tools/dev.sh up
 ```
 
 سرور بازی روی پورت 9180 کار می‌کند و پورت وب به آن وصل می‌شود، پس مرورگر فقط یک آدرس لازم دارد.
+همان آدرسی که باز می‌کنید پورت اتصال بازی هم هست، پس تغییر `WEB_PORT` کافی است.
 
 ### اجرا روی سرور اینترنتی
 
@@ -106,5 +108,5 @@ WASD برای حرکت، ماوس برای چرخش دید، کلیک چپ بر�
 
 ## License
 
-Code license is not chosen yet. All current art and audio assets are CC0; the list is in
-[assets/CREDITS.md](assets/CREDITS.md).
+Code is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for attribution.
+All current art and audio assets are CC0; the list is in [assets/CREDITS.md](assets/CREDITS.md).
