@@ -45,9 +45,10 @@ var _perf_probe: Node = null
 
 func _ready() -> void:
 	# Background tabs deliver second-long frame gaps; uncapped catch-up runs many
-	# physics steps and bursts inputs at the server. Cap at 4: a 30 Hz client can
-	# still feed the server down to ~7.5 FPS, while a hidden tab cannot burst.
-	Engine.max_physics_steps_per_frame = 4
+	# physics steps and bursts inputs at the server. Cap at 8: a 30 Hz client
+	# still feeds the server down to ~3.75 FPS, and the server-side idle policy
+	# covers anything slower. A hidden tab still cannot burst.
+	Engine.max_physics_steps_per_frame = 8
 	Engine.physics_jitter_fix = 0.0
 	var user_args := OS.get_cmdline_user_args()
 	if OS.has_feature("dedicated_server") or user_args.has("--server"):

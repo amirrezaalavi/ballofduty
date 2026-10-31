@@ -10,6 +10,14 @@ enum NetRole { LOCAL, REMOTE, SERVER }
 
 const MAX_PREDICTION_FRAMES := 64
 const CORRECTION_EPSILON_M := 0.01
+## A client must not simulate far ahead of the last state the server acknowledged.
+## 30 inputs = 1 s at 30 Hz: far above the 2-6 frames in flight on a normal
+## 50-150 ms link, but small enough that a stalled client cannot run away and
+## build a correction it can never replay.
+const MAX_UNACKED_INPUTS := 30
+## A tab that was hidden longer than this drops its prediction history and snaps
+## to the next authoritative state instead of replaying seconds of stale input.
+const FOCUS_RESET_AFTER_MSEC := 250
 const VISUAL_OFFSET_DECAY := 14.0
 const VISUAL_OFFSET_MAX := 2.0
 const AIM_ALIGN_DEG := 8.0
@@ -48,6 +56,14 @@ var view_yaw: float = 0.0
 # state; a snapshot ack rewinds to the authoritative pose and replays the tail.
 var prediction_enabled: bool = false
 var last_acked_seq: int = 0
+## Input-to-ack time in ms, smoothed. A round-trip proxy: input send -> snapshot
+## that acks it. Includes the server's one-tick consume and the snapshot cadence.
+var ack_latency_ms: float = 0.0
+## Ticks spent holding because the server was more than MAX_UNACKED_INPUTS behind.
+var stalled_ticks: int = 0
+var _last_focus_out_msec: int = 0
+## Set by reset_prediction(): the next accepted snapshot snaps instead of easing.
+var _snap_next: bool = false
 var last_ack_error_m: float = -1.0
 var last_position_error_m: float = 0.0
 var corrections_total: int = 0
@@ -202,8 +218,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and DisplayServer.get_name() != "headless":
-		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_last_focus_out_msec = Time.get_ticks_msec()
+		if DisplayServer.get_name() != "headless":
+			Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		# Browsers pause rAF in a background tab, so the client comes back with
+		# seconds of unacked input and a stale prediction history. Replaying it
+		# produces one enormous correction; snapping once is cheaper and honest.
+		if _last_focus_out_msec > 0 \
+				and Time.get_ticks_msec() - _last_focus_out_msec >= FOCUS_RESET_AFTER_MSEC:
+			reset_prediction()
+		_last_focus_out_msec = 0
 
 
 func _process(delta: float) -> void:
@@ -226,17 +252,34 @@ func _process(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	match net_role:
 		NetRole.LOCAL:
-			if dead:
-				return
-			var frame := input_handler.sample(view_yaw, camera_rig.pitch)
-			_shape_combat_intent(frame)
-			simulate_tick(frame, delta)
-			weapon.tick(delta, frame)
-			_forward_input(frame)
+			local_tick(delta)
 		NetRole.REMOTE:
 			pass # posed from _process at render rate
 		NetRole.SERVER:
 			pass # GameManager drives server_step once per tick for all actors.
+
+
+## One local tick: consume a pending correction, respect the backlog clamp, then
+## sample, simulate and forward input. Extracted so tests drive it directly.
+func local_tick(delta: float) -> void:
+	if dead:
+		return
+	# The correction must run even while clamped: the ack it carries is the only
+	# thing that can clear the clamp. Skipping it deadlocks a slow client.
+	if prediction_enabled and not _pending_correction.is_empty():
+		_apply_correction()
+	if input_backlog_blocked():
+		# The server is still behind (stall, loss burst, slow client). Hold the
+		# body with a neutral frame instead of running further ahead.
+		stalled_ticks += 1
+		locomotion.simulate(self, _neutral_frame(), delta, -1, view_yaw)
+		return
+	stalled_ticks = 0
+	var frame := input_handler.sample(view_yaw, camera_rig.pitch)
+	_shape_combat_intent(frame)
+	simulate_tick(frame, delta)
+	weapon.tick(delta, frame)
+	_forward_input(frame)
 
 
 ## Server-side step with an already-validated network frame. `frame.yaw` is the
@@ -271,6 +314,7 @@ func enable_prediction() -> void:
 	replay_depth = 0
 	_prediction.clear()
 	_pending_correction.clear()
+	_snap_next = false
 	_correction_events.clear()
 	_ack_error_events.clear()
 	_visual_offset = Vector3.ZERO
@@ -341,10 +385,50 @@ func set_view_yaw(yaw: float) -> void:
 	camera_rig.rotation.y = wrapf(view_yaw - rotation.y, -PI, PI)
 
 
+## True while the local client is too far ahead of the server to keep predicting.
+func input_backlog_blocked() -> bool:
+	if not prediction_enabled:
+		return false
+	# Before the first ack there is nothing to measure against; blocking here
+	# would deadlock a slow join (the client stops sending, so the ack never moves).
+	if last_acked_seq <= 0:
+		return false
+	return last_seq - last_acked_seq > MAX_UNACKED_INPUTS
+
+
+## Drop prediction history and adopt the next snapshot as the baseline. Used when
+## the page was hidden, the socket stalled, or the backlog clamp fired hard.
+func reset_prediction() -> void:
+	if not prediction_enabled:
+		return
+	_prediction.clear()
+	_pending_correction.clear()
+	# Adopt the current seq as the baseline so the backlog clamp cannot fire, and
+	# snap on the next accepted snapshot instead of smoothing a large error.
+	last_acked_seq = last_seq
+	_snap_next = true
+	replay_depth = 0
+	stalled_ticks = 0
+	_visual_offset = Vector3.ZERO
+	_offset_active = false
+	visual.position = _visual_base
+	camera_rig.position = _camera_base
+
+
+## Neutral frame for the backlog clamp: no movement, no fire, current view.
+func _neutral_frame() -> PlayerInputFrame:
+	var frame := PlayerInputFrame.new()
+	frame.seq = last_seq
+	frame.yaw = view_yaw
+	frame.pitch = camera_rig.pitch
+	return frame
+
+
 func disable_prediction() -> void:
 	prediction_enabled = false
 	_prediction.clear()
 	_pending_correction.clear()
+	_snap_next = false
 	_correction_events.clear()
 	_ack_error_events.clear()
 	_visual_offset = Vector3.ZERO
@@ -391,6 +475,9 @@ func prediction_stats() -> Dictionary:
 		"corrections": corrections_total,
 		"corrections_per_sec": _correction_events.size(),
 		"replay_depth": replay_depth,
+		"unacked": maxi(0, last_seq - last_acked_seq),
+		"ack_latency_ms": ack_latency_ms,
+		"stalled_ticks": stalled_ticks,
 	}
 
 
@@ -414,6 +501,7 @@ func _record_prediction(frame: PlayerInputFrame) -> void:
 		"yaw": rotation.y,
 		"vel": velocity,
 		"on_floor": is_on_floor(),
+		"sent_msec": Time.get_ticks_msec(),
 	})
 	while _prediction.size() > MAX_PREDICTION_FRAMES:
 		_prediction.pop_front()
@@ -426,7 +514,7 @@ func _apply_correction() -> void:
 		return
 
 	var ack := int(entry["ack"])
-	var first_authority := last_acked_seq == 0
+	var first_authority := last_acked_seq == 0 or _snap_next
 	# Drop history up to and including the acked input, keeping its state for
 	# the authoritative-error metric (server pose vs our prediction for that seq).
 	var stored: Dictionary = {}
@@ -436,6 +524,9 @@ func _apply_correction() -> void:
 	last_ack_error_m = (
 		(stored["pos"] as Vector3).distance_to(server_pos) if stored.has("pos") else -1.0
 	)
+	if stored.has("sent_msec"):
+		var sample := float(Time.get_ticks_msec() - int(stored["sent_msec"]))
+		ack_latency_ms = sample if ack_latency_ms <= 0.0 else lerpf(ack_latency_ms, sample, 0.2)
 
 	var before := global_position
 	global_position = server_pos
@@ -459,6 +550,7 @@ func _apply_correction() -> void:
 		first = false
 
 	last_acked_seq = ack
+	_snap_next = false
 	# Hide the visible jump by offsetting the render children, then letting the
 	# offset decay over ~100 ms. The collision body is already authoritative.
 	var visual_delta := before - global_position

@@ -22,6 +22,7 @@ Status: `todo` · `doing` · `done` · `deferred`
 | S35 | First-shot hitch | Materials/nodes pooled (no per-shot allocation). Firefox audio/resume profile still pending | doing | CP4c-fix |
 | S34 | Loading + quick menu | Animated `web/shell.html`, in-engine menu (name/host/port/join/solo/settings), one-origin `/ws` proxy, reconnect grace | done | CP5 |
 | S33 | Firefox compatibility | Deprecated `try`, depth-filter/attrib-0/viewport WebGL warnings, `file://` security error, audio autoplay, background-tab throttle | deferred | CP5 |
+| S60 | Net resilience | Server extrapolates 2 ticks then idles (never hard-freezes), ack stays pinned, client clamps prediction at 30 unacked inputs, focus return snaps instead of replaying, HUD shows unacked/latency/stalled; 10 tests | done | CP5 |
 | S59 | L2/L8 Step 1 | `CharacterBodyStats` + registry, five identical profiles, LOCAL/REMOTE/SERVER application, server camera/muzzle de-duplication, 10 parity tests; no headshots, 18 B snapshot unchanged | done | CP5 |
 | S58 | L6 settings UI | Reusable panel, sensitivity/invert/scope/volume/quality, persistence/reset, both menu entry points; 7 tests | done | CP5 |
 | S57 | Protocol v2 / 16 actors | 18 B row, 150 B @8 / 294 B @16, version handshake, 16-bot probe (p95 ~2–3 ms), 8-marker overflow rings, ring-aware respawn; 148 tests green | done | CP5 |
