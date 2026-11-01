@@ -23,12 +23,14 @@ const CLASS_STAT_FILES := [
 	"knight_javelin", "mage_staff", "rogue_bow",
 	"rogue_hooded_crossbow", "barbarian_axes",
 ]
+## Last-resort labels only: WeaponStats.display_name (via WeaponRegistry) is the
+## source of truth. Keep these identical to the class_*.tres resources.
 const CLASS_WEAPON_NAMES := [
 	"Heavy Javelin",
 	"Arcane Staff",
 	"Recurve Longbow",
 	"Repeating Crossbow",
-	"Heavy Throwing Axes",
+	"Twin Throwing Axes",
 ]
 const CLASS_WEAPON_ROLES := [
 	"Frontline anchor · thrown pierce",
