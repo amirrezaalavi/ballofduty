@@ -118,8 +118,10 @@ var _scores: Dictionary = {}
 var _match_state: int = 0
 var _match_seconds_left: float = -1.0
 var _match_stamp_msec: int = 0
-## Solo practice has no server, so the only kills that can happen are ours.
-var _solo_kills: int = 0
+## Solo practice has no server and no bots, so the only death that can happen is
+## the local player's. Counting it as a kill (the first version did) made the
+## scoreboard credit you for dying.
+var _solo_deaths: int = 0
 
 
 func _net() -> Node:
@@ -1323,7 +1325,7 @@ func client_scores() -> Array:
 	if net_mode == NetMode.OFFLINE:
 		return [{
 			"id": 0, "name": "YOU", "class_id": _offline_class(),
-			"kills": _solo_kills, "deaths": 0,
+			"kills": 0, "deaths": _solo_deaths,
 		}]
 	var out: Array = []
 	for rid in _scores:
@@ -1364,7 +1366,8 @@ func match_is_over() -> bool:
 func _on_bus_player_died(_entity_id: int, _source_id: int, _position: Vector3) -> void:
 	if net_mode != NetMode.OFFLINE:
 		return
-	_solo_kills += 1
+	# No other entities exist offline, so this is always the local player.
+	_solo_deaths += 1
 	score_revision += 1
 
 
@@ -1449,4 +1452,4 @@ func _reset() -> void:
 	_match_state = 0
 	_match_seconds_left = -1.0
 	_match_stamp_msec = 0
-	_solo_kills = 0
+	_solo_deaths = 0

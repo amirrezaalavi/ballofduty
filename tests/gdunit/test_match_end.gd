@@ -171,6 +171,24 @@ func test_client_scores_sort_and_merge() -> void:
 	expect(int(credited.get("kills", -1)) == 3, "death event credits the killer")
 
 
+func test_solo_death_is_not_a_kill() -> void:
+	# Solo has no bots, so a death is always the local player's. The first
+	# implementation incremented kills here and the scoreboard credited you for
+	# dying.
+	_new_world()
+	var gm := GM_SCRIPT.new()
+	add_child(gm)
+	_gms.append(gm)
+	gm.net_mode = GM_SCRIPT.NetMode.OFFLINE
+	var rows: Array = gm.client_scores()
+	expect(rows.size() == 1, "solo has one YOU row")
+	expect(int(rows[0]["kills"]) == 0 and int(rows[0]["deaths"]) == 0, "solo starts 0-0")
+	gm._on_bus_player_died(1, 2, Vector3.ZERO)
+	rows = gm.client_scores()
+	expect(int(rows[0]["kills"]) == 0, "dying never counts as a kill (got %d)" % int(rows[0]["kills"]))
+	expect(int(rows[0]["deaths"]) == 1, "dying counts as a death (got %d)" % int(rows[0]["deaths"]))
+
+
 func test_client_match_edges_and_countdown() -> void:
 	_new_world()
 	var gm := _client_gm()

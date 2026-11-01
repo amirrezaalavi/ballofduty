@@ -1,9 +1,9 @@
 # Project Status
 
-**Date:** 2026-10-30
+**Date:** 2026-11-01
 **Branch:** `develop` (single clone at `ballofduty/`, GitHub is the head)
 **Engine:** Godot 4.7.2, GDScript, Compatibility/WebGL 2, single-threaded WASM
-**Tests:** **208 green, 0 failures**; `tools/check.sh --skip-export` green
+**Tests:** **209 green, 0 failures**; `tools/check.sh --skip-export` green
 
 ---
 
@@ -33,7 +33,7 @@ Shipped:
 
 ### Verification
 
-`tools/check.sh --skip-export`: content manifest, 208 gdUnit tests, arena
+`tools/check.sh --skip-export`: content manifest, 209 gdUnit tests, arena
 budget, 35-section quarry walkthrough, 4-bot match, 16-actor probe, headless
 client/server boot.
 

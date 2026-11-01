@@ -65,6 +65,8 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 | `INPUT` | 12 | seq u32, move x/y i8, flags, yaw i16, pitch i16 |
 | `SNAPSHOT` | 6 + 18n | tick u32, count, then (id u8, pos xyz i16 cm, packed24, vel xyz i16 cm/s, ack u16) |
 | `PING`/`PONG` | 5 / 9 | client msec; pong adds server tick |
+| `SCORE` | 2 + 5n | count, then (id u8, kills u16, deaths u16); full table on deaths and joins |
+| `MATCH` | 4 | state (`RUNNING`/`OVER`), seconds left u16; 1 Hz heartbeat plus transitions |
 
 - Position quantization is centimetres over ±327.68 m (≤1 cm round-trip error in tests, enough for 250 m maps); velocity is
   centimetres per second. The packed24 field holds 12-bit yaw (≈1.53 mrad/step), 2-bit animation state,
@@ -72,6 +74,9 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   30 Hz is 9000 frames, well inside the 36.4-minute wrap window.
 - `PROTOCOL_VERSION = 2`. A JOIN_REQ with a different version is denied with `DENY(VERSION)`; old
   clients cannot misread the 18 B rows as the old 22 B rows.
+- `SCORE` and `MATCH` are **additive**: an older client ignores unknown message types and keeps the
+  DEATH-event fallback for scores, so the version was not bumped. Bump it when a message changes an
+  existing layout, not when one is added.
 - **Movement model (CP4b):** `view_yaw` is client-owned and independent of the body. WASD is
   camera-relative; the body turns toward the movement direction (14 rad/s) and only translates as its
   facing aligns, so turns read as turns. Aiming locks the body to the view and allows strafing. The
