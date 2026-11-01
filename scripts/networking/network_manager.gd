@@ -30,18 +30,44 @@ signal reconnected
 enum Mode { OFFLINE, SERVER, CLIENT }
 
 const JOIN_TIMEOUT_SEC := 5.0
+## A client JOIN_REQ/JOIN_OK round trip needs a couple of rendered frames: the
+## ack can only be drained in _process. At 1-2 FPS (software WebGL) a flat 5 s
+## expires before that happens, so the client deadline is extended by this many
+## frames' worth of the current frame gap.
+const JOIN_MIN_FRAMES := 3
+## ...but a genuinely dead join must still fail the UI. Hard ceiling for the
+## client join ack, regardless of how slow the frames are.
+const JOIN_HARD_TIMEOUT_MSEC := 20000
 const PING_INTERVAL_TICKS := 30
 const MAX_DRAIN_PER_FRAME := 64
 ## Total time an initial connection may spend retrying before the UI gets a
 ## hard failure. Keeping this at 6 s preserves the Phase 0 timeout contract.
 const CONNECT_BUDGET_MSEC := 6000
 ## One socket attempt is abandoned after this long, then retried with backoff.
+## A handshake that is still CONNECTION_CONNECTING is exempt (see
+## should_abandon_attempt): it only advances when polled, so wall-clock retries
+## used to close sockets that were still opening on slow devices.
 const ATTEMPT_TIMEOUT_MSEC := 3000
+## A socket that reports CONNECTION_DISCONNECTED this early is a real failure
+## (refused/dropped), so retry without waiting for the attempt timeout.
+const ATTEMPT_DISCONNECT_GRACE_MSEC := 500
 const RETRY_BASE_DELAY_MSEC := 350
 const RETRY_MAX_DELAY_MSEC := 2400
 ## After a socket drops mid-match we keep retrying for this window (showing
 ## "reconnecting…") before falling back to offline with a clear error.
 const RECONNECT_GRACE_MSEC := 8000
+## A connecting handshake gets up to this many poll() calls per frame so it can
+## finish without waiting for the next rendered frame (1 FPS at 720p software
+## GL would otherwise need seconds per handshake step).
+const CONNECT_POLLS_PER_FRAME := 8
+## ...but never more than this much wall clock per frame, so a slow frame cannot
+## turn the extra polls into a stall of its own.
+const CONNECT_POLL_BUDGET_MSEC := 15
+## A pong that is only read after a frame gap this long measures the client's own
+## stall, not the network round trip.
+const RTT_STALE_FRAME_GAP_MSEC := 250
+## Absurd round trips are clamped before they reach the HUD.
+const RTT_MAX_MSEC := 2000
 
 var mode: Mode = Mode.OFFLINE
 var latency_ms: int = 0
@@ -57,6 +83,9 @@ var snapshots_dropped: int = 0
 var packets_rejected: int = 0
 var last_snapshot_bytes: int = 0
 var rtt_ms: int = -1
+## True when the last pong was unusable because the client itself stalled. The
+## last good `rtt_ms` is kept so the HUD never shows a frame hitch as latency.
+var rtt_stale: bool = false
 var server_tick_estimate: int = -1
 ## Last client-side failure reason. Kept after stop() so the UI can explain why
 ## the socket died; cleared by the next start_client().
@@ -88,6 +117,8 @@ var _join_class: int = 0
 var _grace_deadline_msec: int = 0
 var _reconnecting: bool = false
 var _closing_peer: bool = false
+var _last_frame_msec: int = 0
+var _frame_gap_msec: int = 0
 
 
 func _ready() -> void:
@@ -318,8 +349,13 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _process(_delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	# Frame gap feeds the RTT filter: a pong read after a long frame measures
+	# our own stall, not the network.
+	_frame_gap_msec = now - _last_frame_msec if _last_frame_msec > 0 else 0
+	_last_frame_msec = now
 	if _peer != null:
-		_peer.poll()
+		_poll_peer()
 		_flush_delayed()
 		_drain()
 		_expire_pending_joins()
@@ -332,6 +368,46 @@ func _process(_delta: float) -> void:
 			_schedule_retry("connection refused — check host and port")
 
 
+## Poll the transport. A WebSocket handshake only advances inside poll(), so at
+## 1 FPS one poll per frame needs seconds per handshake step and the wall-clock
+## retry timers close sockets that were still opening. While the peer is
+## CONNECTION_CONNECTING, spend a bounded slice of this frame polling it.
+func _poll_peer() -> void:
+	_peer.poll()
+	var polls := 1
+	var started_msec := Time.get_ticks_msec()
+	while _peer != null and should_poll_again(
+			_peer.get_connection_status(), polls, Time.get_ticks_msec() - started_msec):
+		_peer.poll()
+		polls += 1
+
+
+## True while a connecting handshake still has poll budget left this frame.
+## Pure so both caps are testable without a real socket.
+static func should_poll_again(status: int, polls_done: int, elapsed_msec: int) -> bool:
+	if status != MultiplayerPeer.CONNECTION_CONNECTING:
+		return false
+	if polls_done >= CONNECT_POLLS_PER_FRAME:
+		return false
+	return elapsed_msec < CONNECT_POLL_BUDGET_MSEC
+
+
+## Decide whether the current socket attempt is dead and must be retried.
+## A CONNECTION_CONNECTING handshake is never abandoned on the per-attempt
+## timer: it may still be opening, and CONNECT_BUDGET_MSEC (initial connect) or
+## the reconnect grace window (mid-match) is the hard stop. A
+## CONNECTION_DISCONNECTED socket is a real failure and is retried quickly.
+static func should_abandon_attempt(status: int, attempt_elapsed_msec: int) -> bool:
+	if status == MultiplayerPeer.CONNECTION_CONNECTING:
+		return false
+	if attempt_elapsed_msec > ATTEMPT_TIMEOUT_MSEC:
+		return true
+	if status == MultiplayerPeer.CONNECTION_DISCONNECTED \
+			and attempt_elapsed_msec > ATTEMPT_DISCONNECT_GRACE_MSEC:
+		return true
+	return false
+
+
 ## A WebSocket that never opens has no JOIN_REQ pending, so the existing join
 ## timeout cannot see it. Detect dead sockets here and retry with backoff inside
 ## a bounded budget. Only after that budget expires do we emit a hard failure
@@ -341,9 +417,11 @@ func _check_client_connection() -> void:
 		return
 	var now := Time.get_ticks_msec()
 	var status := _peer.get_connection_status()
+	var total_elapsed := now - _client_started_msec
 	# Initial-connect budget applies while the socket is not yet open. This is
-	# also the field the Phase 0 timeout test fast-forwards.
-	if not _had_connection and now - _client_started_msec >= CONNECT_BUDGET_MSEC:
+	# also the field the Phase 0 timeout test fast-forwards. It is a hard stop
+	# even when a retry backoff is already pending.
+	if not _had_connection and total_elapsed >= CONNECT_BUDGET_MSEC:
 		_fail_connection(_failure_reason(status))
 		return
 	if status == MultiplayerPeer.CONNECTION_CONNECTED:
@@ -363,14 +441,13 @@ func _check_client_connection() -> void:
 		return
 	if _retry_scheduled:
 		return
-	if now - _attempt_started_msec > ATTEMPT_TIMEOUT_MSEC:
+	# A mid-match reconnect is bounded by its grace window, never by the
+	# per-attempt timer, so a slow handshake is allowed to finish.
+	if _had_connection and _grace_deadline_msec != 0 and now >= _grace_deadline_msec:
+		_schedule_retry("connection lost")
+		return
+	if should_abandon_attempt(status, now - _attempt_started_msec):
 		_schedule_retry("connection lost" if _had_connection else _failure_reason(status))
-	elif status == MultiplayerPeer.CONNECTION_DISCONNECTED \
-			and now - _attempt_started_msec > 500:
-		_schedule_retry(
-			"connection lost" if _had_connection
-			else "connection refused — check host and port"
-		)
 
 
 func _failure_reason(status: int) -> String:
@@ -578,7 +655,14 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			if pong.is_empty():
 				packets_rejected += 1
 				return
-			rtt_ms = Time.get_ticks_msec() - int(pong["client_msec"])
+			var sample := Time.get_ticks_msec() - int(pong["client_msec"])
+			var clean := sanitize_rtt(sample, _frame_gap_msec)
+			if clean < 0:
+				# Our own frame stall, not the network: keep the last good value.
+				rtt_stale = true
+			else:
+				rtt_ms = clean
+				rtt_stale = false
 			var ticks_elapsed := int(roundf(float(maxi(rtt_ms, 0)) / 1000.0 * 30.0))
 			server_tick_estimate = int(pong["server_tick"]) + ticks_elapsed / 2
 			ping_updated.emit(rtt_ms)
@@ -586,13 +670,42 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			packets_rejected += 1
 
 
+## A pong that was only read after a long frame is measuring the client's own
+## stall, not the round trip: return -1 so the caller keeps the last good sample.
+## Otherwise clamp to a sane ceiling so a wild value never reaches the HUD.
+static func sanitize_rtt(sample_ms: int, frame_gap_ms: int) -> int:
+	if sample_ms < 0:
+		return -1
+	if frame_gap_ms >= RTT_STALE_FRAME_GAP_MSEC:
+		return -1
+	return mini(sample_ms, RTT_MAX_MSEC)
+
+
+## Deadline for a pending client join ack: the JOIN_TIMEOUT_SEC baseline plus
+## JOIN_MIN_FRAMES of the current frame gap, capped at JOIN_HARD_TIMEOUT_MSEC so
+## a dead join still fails. The server never uses this: its flat
+## JOIN_TIMEOUT_SEC is what stops silent peers from holding slots.
+static func join_deadline_msec(frame_gap_ms: int) -> int:
+	var baseline := int(JOIN_TIMEOUT_SEC * 1000.0)
+	return mini(
+		baseline + JOIN_MIN_FRAMES * maxi(frame_gap_ms, 0),
+		JOIN_HARD_TIMEOUT_MSEC
+	)
+
+
 func _expire_pending_joins() -> void:
 	if mode == Mode.OFFLINE or _pending_joins.is_empty():
 		return
 	var now := Time.get_ticks_msec()
+	# The client's own join ack is frame-gated like the socket handshake: at
+	# 1-2 FPS a flat 5 s expires before the JOIN_OK can be drained. The server
+	# keeps the flat deadline so a silent peer cannot hold a slot.
+	var timeout := int(JOIN_TIMEOUT_SEC * 1000.0)
+	if mode == Mode.CLIENT:
+		timeout = join_deadline_msec(_frame_gap_msec)
 	var stale: Array = []
 	for pid in _pending_joins:
-		if now - int(_pending_joins[pid]) > int(JOIN_TIMEOUT_SEC * 1000.0):
+		if now - int(_pending_joins[pid]) > timeout:
 			stale.append(pid)
 	for pid in stale:
 		_pending_joins.erase(pid)

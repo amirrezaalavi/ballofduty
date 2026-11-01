@@ -13,13 +13,16 @@ const MUTED := Color(0.490196, 0.533333, 0.65098)
 const ERROR := Color(1.0, 0.482353, 0.533333)
 const WARN := Color(1.0, 0.768627, 0.419608)
 
-## Locked Phase 2A class map. Order is the wire class_id.
+## Locked Phase 2A class map. Order is the wire class_id. `weapon` is only the
+## fallback: WeaponRegistry's WeaponStats.display_name is the single source of
+## truth (see class_weapon_name). Keep these strings identical to the resources
+## so a missing catalog still shows the same name as the in-match HUD.
 const CLASSES := [
 	{"name": "KNIGHT", "weapon": "Heavy Javelin", "role": "Frontline anchor"},
 	{"name": "MAGE", "weapon": "Arcane Staff", "role": "Splash artillery"},
 	{"name": "ROGUE", "weapon": "Recurve Longbow", "role": "Charge skirmisher"},
 	{"name": "ROGUE HOODED", "weapon": "Repeating Crossbow", "role": "Burst flanker"},
-	{"name": "BARBARIAN", "weapon": "Heavy Throwing Axes", "role": "Arcing bruiser"},
+	{"name": "BARBARIAN", "weapon": "Twin Throwing Axes", "role": "Arcing bruiser"},
 ]
 
 var title_label: Label
@@ -70,6 +73,7 @@ func show_menu() -> void:
 
 
 func hide_menu() -> void:
+	_release_field_focus()
 	visible = false
 
 
@@ -138,18 +142,43 @@ func select_class(class_id: int) -> void:
 	if class_hint:
 		var info: Dictionary = CLASSES[selected_class_id]
 		class_hint.text = "SELECTED · %s — %s" % [
-			String(info["name"]), String(info["weapon"]).to_upper()
+			String(info["name"]), class_weapon_name(selected_class_id).to_upper()
 		]
 
 
+## Catalog-backed weapon name for a class. The hardcoded CLASSES table is only a
+## fallback when the registry/catalog is unavailable or the name is empty.
+func class_weapon_name(class_id: int) -> String:
+	var index := clampi(class_id, 0, CLASSES.size() - 1)
+	var stats := WeaponRegistry.stats_for(index)
+	if stats != null:
+		var shown := String(stats.display_name).strip_edges()
+		if shown != "":
+			return shown
+	return String(CLASSES[index]["weapon"])
+
+
 func class_summary(class_id: int) -> Dictionary:
-	return CLASSES[clampi(class_id, 0, CLASSES.size() - 1)]
+	var index := clampi(class_id, 0, CLASSES.size() - 1)
+	var summary: Dictionary = CLASSES[index].duplicate()
+	summary["weapon"] = class_weapon_name(index)
+	return summary
 
 
+## Explicit focus request only (a click focuses the LineEdit natively; tests and
+## tooling can call this). The menu never grabs the callsign on show: after a
+## failed auto-join the focused field used to eat WASD/R keystrokes meant for
+## the game (QA bug 5). Tab traversal between fields is left to Godot.
 func grab_name_focus() -> void:
 	if name_field:
 		name_field.grab_focus()
 		name_field.select_all()
+
+
+func _release_field_focus() -> void:
+	for field: LineEdit in [name_field, host_field, port_field]:
+		if field and field.has_focus():
+			field.release_focus()
 
 
 func _update_mode_hint() -> void:
@@ -237,7 +266,7 @@ func _build_ui() -> void:
 		var class_card := Button.new()
 		class_card.name = "ClassCard%d" % index
 		class_card.text = "%s\n%s\n%s" % [
-			String(info["name"]), String(info["weapon"]), String(info["role"]),
+			String(info["name"]), class_weapon_name(index).to_upper(), String(info["role"]),
 		]
 		class_card.custom_minimum_size = Vector2(0.0, 74.0)
 		class_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -463,6 +492,7 @@ func _style_class_card(index: int) -> void:
 
 
 func _on_join_pressed() -> void:
+	_release_field_focus()
 	join_requested.emit(join_config())
 
 

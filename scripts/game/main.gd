@@ -131,6 +131,7 @@ func _open_menu(status: String = "", tone: String = "info") -> void:
 	if _loading:
 		_loading.hide_loading()
 	_set_hud_visible(false)
+	_set_local_input_suspended(true)
 	if _menu:
 		_menu.configure(_menu_defaults(_last_or_page_endpoint()))
 		_menu.show_menu()
@@ -141,9 +142,9 @@ func _open_menu(status: String = "", tone: String = "info") -> void:
 
 
 func _enter_menu(status: String, tone: String) -> void:
+	# Never focus the callsign automatically: a failed auto-join used to leave
+	# the field focused, so WASD/R typed into it instead of the game.
 	_open_menu(status, tone)
-	if _menu:
-		_menu.grab_name_focus()
 
 
 func _enter_match() -> void:
@@ -159,6 +160,7 @@ func _enter_match() -> void:
 	if _loading:
 		_loading.hide_loading()
 	_set_hud_visible(true)
+	_set_local_input_suspended(false)
 
 
 func _enter_solo() -> void:
@@ -177,6 +179,7 @@ func _enter_solo() -> void:
 	if _loading:
 		_loading.hide_loading()
 	_set_hud_visible(true)
+	_set_local_input_suspended(false)
 
 
 ## Solo has no GameManager spawn packet, so set the local class directly before
@@ -196,6 +199,15 @@ func _set_hud_visible(value: bool) -> void:
 		_hud_layer.visible = value
 	if _debug_layer:
 		_debug_layer.visible = value
+
+
+## The local Player exists behind the entry menu and loading overlay, so gate
+## its InputHandler: gameplay keys must not drive movement/fire while a modal
+## surface owns the screen. Match/solo input resumes on entry.
+func _set_local_input_suspended(value: bool) -> void:
+	var handler := get_node_or_null("Player/InputHandler") as InputHandler
+	if handler:
+		handler.set_suspended(value)
 
 
 func _update_ui_state() -> void:
