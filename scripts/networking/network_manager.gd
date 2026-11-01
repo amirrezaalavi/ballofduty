@@ -55,6 +55,11 @@ const CONNECT_POLLS_PER_FRAME := 8
 ## ...but never more than this much wall clock per frame, so a slow frame cannot
 ## turn the extra polls into a stall of its own.
 const CONNECT_POLL_BUDGET_MSEC := 15
+## A pong that is only read after a frame gap this long measures the client's own
+## stall, not the network round trip.
+const RTT_STALE_FRAME_GAP_MSEC := 250
+## Absurd round trips are clamped before they reach the HUD.
+const RTT_MAX_MSEC := 2000
 
 var mode: Mode = Mode.OFFLINE
 var latency_ms: int = 0
@@ -70,6 +75,9 @@ var snapshots_dropped: int = 0
 var packets_rejected: int = 0
 var last_snapshot_bytes: int = 0
 var rtt_ms: int = -1
+## True when the last pong was unusable because the client itself stalled. The
+## last good `rtt_ms` is kept so the HUD never shows a frame hitch as latency.
+var rtt_stale: bool = false
 var server_tick_estimate: int = -1
 ## Last client-side failure reason. Kept after stop() so the UI can explain why
 ## the socket died; cleared by the next start_client().
@@ -101,6 +109,8 @@ var _join_class: int = 0
 var _grace_deadline_msec: int = 0
 var _reconnecting: bool = false
 var _closing_peer: bool = false
+var _last_frame_msec: int = 0
+var _frame_gap_msec: int = 0
 
 
 func _ready() -> void:
@@ -331,6 +341,11 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 
 func _process(_delta: float) -> void:
+	var now := Time.get_ticks_msec()
+	# Frame gap feeds the RTT filter: a pong read after a long frame measures
+	# our own stall, not the network.
+	_frame_gap_msec = now - _last_frame_msec if _last_frame_msec > 0 else 0
+	_last_frame_msec = now
 	if _peer != null:
 		_poll_peer()
 		_flush_delayed()
@@ -632,12 +647,30 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			if pong.is_empty():
 				packets_rejected += 1
 				return
-			rtt_ms = Time.get_ticks_msec() - int(pong["client_msec"])
+			var sample := Time.get_ticks_msec() - int(pong["client_msec"])
+			var clean := sanitize_rtt(sample, _frame_gap_msec)
+			if clean < 0:
+				# Our own frame stall, not the network: keep the last good value.
+				rtt_stale = true
+			else:
+				rtt_ms = clean
+				rtt_stale = false
 			var ticks_elapsed := int(roundf(float(maxi(rtt_ms, 0)) / 1000.0 * 30.0))
 			server_tick_estimate = int(pong["server_tick"]) + ticks_elapsed / 2
 			ping_updated.emit(rtt_ms)
 		_:
 			packets_rejected += 1
+
+
+## A pong that was only read after a long frame is measuring the client's own
+## stall, not the round trip: return -1 so the caller keeps the last good sample.
+## Otherwise clamp to a sane ceiling so a wild value never reaches the HUD.
+static func sanitize_rtt(sample_ms: int, frame_gap_ms: int) -> int:
+	if sample_ms < 0:
+		return -1
+	if frame_gap_ms >= RTT_STALE_FRAME_GAP_MSEC:
+		return -1
+	return mini(sample_ms, RTT_MAX_MSEC)
 
 
 func _expire_pending_joins() -> void:

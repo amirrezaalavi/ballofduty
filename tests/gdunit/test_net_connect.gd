@@ -1,7 +1,7 @@
 extends BodTestSuite
-## Browser QA Bug 1: the connect path must not let wall-clock retry timers close
-## a WebSocket handshake that only advances when polled (1 FPS on software
-## WebGL), and the extra polling must stay bounded per frame.
+## Browser QA Bug 1 + Bug 4: the connect path must not let wall-clock retry
+## timers close a WebSocket handshake that only advances when polled (1 FPS on
+## software WebGL), and RTT samples must not include the client's own stalls.
 
 const NET_SCRIPT := preload("res://scripts/networking/network_manager.gd")
 
@@ -156,3 +156,45 @@ func test_connect_poll_budget_is_bounded() -> void:
 		"the loop stops on the poll cap even if the clock never advances"
 	)
 
+
+# --- Bug 4: RTT must not include the client's own frame stalls -----------
+
+func test_sanitize_rtt_rejects_stalls_and_clamps() -> void:
+	expect(NET_SCRIPT.sanitize_rtt(120, 16) == 120, "a prompt pong is a real sample")
+	expect(
+		NET_SCRIPT.sanitize_rtt(120, NET_SCRIPT.RTT_STALE_FRAME_GAP_MSEC - 1) == 120,
+		"just under the frame-gap threshold is kept"
+	)
+	expect(
+		NET_SCRIPT.sanitize_rtt(120, NET_SCRIPT.RTT_STALE_FRAME_GAP_MSEC) == -1,
+		"a pong read after a long frame is not a sample"
+	)
+	expect(
+		NET_SCRIPT.sanitize_rtt(99999, 16) == NET_SCRIPT.RTT_MAX_MSEC,
+		"an absurd round trip is clamped"
+	)
+	expect(NET_SCRIPT.sanitize_rtt(-5, 16) == -1, "a negative sample is dropped")
+
+
+func test_pong_after_frame_stall_keeps_last_good_rtt() -> void:
+	var net := _new_net()
+	net.mode = net.Mode.CLIENT
+	net.rtt_ms = 42
+	var pings: Array = []
+	net.ping_updated.connect(func(rtt: int) -> void: pings.append(rtt))
+	# A 1 s frame: the pong is seconds old by the time it is read.
+	net._frame_gap_msec = 1000
+	net._route_client(
+		NetProtocol.Msg.PONG, NetProtocol.encode_pong(Time.get_ticks_msec() - 3000, 10))
+	expect(net.rtt_ms == 42, "a stalled frame does not overwrite the RTT")
+	expect(net.rtt_stale, "the sample is flagged stale")
+	expect(not pings.is_empty() and int(pings[-1]) == 42, "the UI keeps the last good value")
+	# A normal frame clears the flag and stores the fresh sample.
+	net._frame_gap_msec = 16
+	net._route_client(
+		NetProtocol.Msg.PONG, NetProtocol.encode_pong(Time.get_ticks_msec() - 30, 10))
+	expect(not net.rtt_stale, "a prompt sample clears the stale flag")
+	expect(
+		net.rtt_ms >= 0 and net.rtt_ms <= NET_SCRIPT.RTT_MAX_MSEC,
+		"a prompt sample is stored and clamped"
+	)
