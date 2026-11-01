@@ -30,6 +30,14 @@ signal reconnected
 enum Mode { OFFLINE, SERVER, CLIENT }
 
 const JOIN_TIMEOUT_SEC := 5.0
+## A client JOIN_REQ/JOIN_OK round trip needs a couple of rendered frames: the
+## ack can only be drained in _process. At 1-2 FPS (software WebGL) a flat 5 s
+## expires before that happens, so the client deadline is extended by this many
+## frames' worth of the current frame gap.
+const JOIN_MIN_FRAMES := 3
+## ...but a genuinely dead join must still fail the UI. Hard ceiling for the
+## client join ack, regardless of how slow the frames are.
+const JOIN_HARD_TIMEOUT_MSEC := 20000
 const PING_INTERVAL_TICKS := 30
 const MAX_DRAIN_PER_FRAME := 64
 ## Total time an initial connection may spend retrying before the UI gets a
@@ -673,13 +681,31 @@ static func sanitize_rtt(sample_ms: int, frame_gap_ms: int) -> int:
 	return mini(sample_ms, RTT_MAX_MSEC)
 
 
+## Deadline for a pending client join ack: the JOIN_TIMEOUT_SEC baseline plus
+## JOIN_MIN_FRAMES of the current frame gap, capped at JOIN_HARD_TIMEOUT_MSEC so
+## a dead join still fails. The server never uses this: its flat
+## JOIN_TIMEOUT_SEC is what stops silent peers from holding slots.
+static func join_deadline_msec(frame_gap_ms: int) -> int:
+	var baseline := int(JOIN_TIMEOUT_SEC * 1000.0)
+	return mini(
+		baseline + JOIN_MIN_FRAMES * maxi(frame_gap_ms, 0),
+		JOIN_HARD_TIMEOUT_MSEC
+	)
+
+
 func _expire_pending_joins() -> void:
 	if mode == Mode.OFFLINE or _pending_joins.is_empty():
 		return
 	var now := Time.get_ticks_msec()
+	# The client's own join ack is frame-gated like the socket handshake: at
+	# 1-2 FPS a flat 5 s expires before the JOIN_OK can be drained. The server
+	# keeps the flat deadline so a silent peer cannot hold a slot.
+	var timeout := int(JOIN_TIMEOUT_SEC * 1000.0)
+	if mode == Mode.CLIENT:
+		timeout = join_deadline_msec(_frame_gap_msec)
 	var stale: Array = []
 	for pid in _pending_joins:
-		if now - int(_pending_joins[pid]) > int(JOIN_TIMEOUT_SEC * 1000.0):
+		if now - int(_pending_joins[pid]) > timeout:
 			stale.append(pid)
 	for pid in stale:
 		_pending_joins.erase(pid)

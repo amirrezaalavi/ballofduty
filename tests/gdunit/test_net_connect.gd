@@ -1,7 +1,8 @@
 extends BodTestSuite
 ## Browser QA Bug 1 + Bug 4: the connect path must not let wall-clock retry
 ## timers close a WebSocket handshake that only advances when polled (1 FPS on
-## software WebGL), and RTT samples must not include the client's own stalls.
+## software WebGL), the join ack wait must scale with the frame rate, and RTT
+## samples must not include the client's own stalls.
 
 const NET_SCRIPT := preload("res://scripts/networking/network_manager.gd")
 
@@ -155,6 +156,70 @@ func test_connect_poll_budget_is_bounded() -> void:
 		polls == NET_SCRIPT.CONNECT_POLLS_PER_FRAME,
 		"the loop stops on the poll cap even if the clock never advances"
 	)
+
+
+# --- Bug 1 follow-up: the join-ack wait is frame-gated too ----------------
+
+func test_client_join_deadline_extends_with_slow_frames() -> void:
+	expect(
+		NET_SCRIPT.join_deadline_msec(0) == 5000,
+		"at full speed the join deadline is the 5 s baseline"
+	)
+	expect(
+		NET_SCRIPT.join_deadline_msec(-5) == 5000,
+		"a bogus frame gap never shortens the baseline"
+	)
+	expect(
+		NET_SCRIPT.join_deadline_msec(1000) == 8000,
+		"at 1 FPS the join gets three extra frames (8 s)"
+	)
+	var slow: int = NET_SCRIPT.join_deadline_msec(2000)
+	expect(slow > 8000, "a 2 s frame buys even more join time (got %d ms)" % slow)
+	expect(
+		NET_SCRIPT.join_deadline_msec(100000) == NET_SCRIPT.JOIN_HARD_TIMEOUT_MSEC,
+		"the join deadline never passes the hard ceiling"
+	)
+
+
+func test_client_join_pending_past_the_baseline_survives_a_slow_frame() -> void:
+	var net := _new_net()
+	net.mode = net.Mode.CLIENT
+	net._client_started_msec = Time.get_ticks_msec()
+	net._pending_joins[1] = Time.get_ticks_msec() - 6000
+	net._frame_gap_msec = 2000
+	net._expire_pending_joins()
+	expect(net._pending_joins.has(1), "a 6 s join is kept after a 2 s frame")
+	expect(net.retry_attempt() == 0, "no retry while the ack can still arrive")
+	# Once frames are fast again the same age is a real timeout.
+	net._frame_gap_msec = 16
+	net._expire_pending_joins()
+	expect(not net._pending_joins.has(1), "a 6 s join on fast frames is expired")
+	expect(net.retry_attempt() == 1, "the client retries instead of hanging")
+
+
+func test_client_join_past_the_hard_ceiling_expires_despite_slow_frames() -> void:
+	var net := _new_net()
+	net.mode = net.Mode.CLIENT
+	net._client_started_msec = Time.get_ticks_msec()
+	net._frame_gap_msec = 10000
+	net._pending_joins[1] = (
+		Time.get_ticks_msec() - (NET_SCRIPT.JOIN_HARD_TIMEOUT_MSEC + 1000)
+	)
+	net._expire_pending_joins()
+	expect(not net._pending_joins.has(1), "the hard ceiling still expires a dead join")
+	expect(net.retry_attempt() == 1, "the UI is told to retry")
+
+
+func test_server_pending_join_expiry_is_unchanged() -> void:
+	var net := _new_net()
+	net.mode = net.Mode.SERVER
+	# A huge client-style frame gap must not extend the server's slot deadline.
+	net._frame_gap_msec = 10000
+	net._pending_joins[7] = Time.get_ticks_msec() - 6000
+	net._pending_joins[8] = Time.get_ticks_msec() - 1000
+	net._expire_pending_joins()
+	expect(not net._pending_joins.has(7), "a silent server peer is dropped after 5 s")
+	expect(net._pending_joins.has(8), "a fresh server peer keeps its slot")
 
 
 # --- Bug 4: RTT must not include the client's own frame stalls -----------
