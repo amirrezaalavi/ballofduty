@@ -16,6 +16,8 @@ signal join_denied(reason: int)
 signal roster_updated(entries: Array)
 signal snapshot_received(tick: int, entries: Array)
 signal event_received(event: Dictionary)
+signal score_received(entries: Array)
+signal match_received(state: Dictionary)
 signal remote_input(peer_id: int, frame: Dictionary)
 signal peer_joined(peer_id: int, player_name: String, class_id: int)
 signal peer_left(peer_id: int)
@@ -650,6 +652,18 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 				packets_rejected += 1
 				return
 			event_received.emit(event)
+		NetProtocol.Msg.SCORE:
+			var scores := NetProtocol.decode_score(pkt)
+			if scores.is_empty():
+				packets_rejected += 1
+				return
+			score_received.emit(scores["entries"])
+		NetProtocol.Msg.MATCH:
+			var match := NetProtocol.decode_match(pkt)
+			if match.is_empty():
+				packets_rejected += 1
+				return
+			match_received.emit(match)
 		NetProtocol.Msg.PONG:
 			var pong := NetProtocol.decode_pong(pkt)
 			if pong.is_empty():

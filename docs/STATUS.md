@@ -3,7 +3,7 @@
 **Date:** 2026-10-30
 **Branch:** `develop` (single clone at `ballofduty/`, GitHub is the head)
 **Engine:** Godot 4.7.2, GDScript, Compatibility/WebGL 2, single-threaded WASM
-**Tests:** **172 green, 0 failures**; `tools/check.sh --skip-export` green
+**Tests:** **208 green, 0 failures**; `tools/check.sh --skip-export` green
 
 ---
 
@@ -33,7 +33,7 @@ Shipped:
 
 ### Verification
 
-`tools/check.sh --skip-export`: content manifest, 172 gdUnit tests, arena
+`tools/check.sh --skip-export`: content manifest, 208 gdUnit tests, arena
 budget, 35-section quarry walkthrough, 4-bot match, 16-actor probe, headless
 client/server boot.
 
@@ -69,8 +69,9 @@ Not yet proven:
 - **Camera/muzzle parity is partial.** The client hand muzzle and server
   canonical muzzle differ (~0.67 m Knight idle); the client spring arm compresses
   against walls while the server aim origin is fixed.
-- **No match-end flow.** The quick menu has a match-over phase, but nothing
-  emits it yet.
+- **Match flow is in.** 5-minute server clock (`Msg.MATCH` 1 Hz + transitions),
+  hold-Tab scoreboard (`Msg.SCORE` on deaths/joins), match-over panel with
+  standings, 10 s intermission then a fresh round. Solo stays untimed practice.
 - **Loss recovery is TCP-bound.** A lost segment stalls the stream for at least
   one RTO; the 67 ms interpolation buffer hides most of it, but a 300 ms stall is
   visible.
@@ -109,7 +110,8 @@ Not yet proven:
 
 1. **Maps:** final rotation, default map, 16-spawn layout, quarry retirement.
 2. **Actors:** confirm 8 default and 16-player release target.
-3. **Match:** confirm 5-minute length / 3-second respawn and the scoreboard flow.
+3. **Match:** 5-minute length, 3-second respawn and the scoreboard flow are
+   shipped as stated above.
 4. **L2/L8 Step 2:** approve per-class sizes; camera-compression policy; canonical
    vs animated-hand muzzle; training dummy adoption.
 5. **Deployment:** first host, domain, TLS, precompressed assets.

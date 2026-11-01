@@ -11,6 +11,7 @@ const MUTED := Color(0.55, 0.64, 0.8)
 var player: PlayerController
 var weapon: WeaponController
 var health: HealthComponent
+var _gm: Node
 
 var _health_current: int = 100
 var _health_max: int = 100
@@ -23,6 +24,13 @@ var _damage_flash: float = 0.0
 var _crosshair_kick: float = 0.0
 var _dead: bool = false
 var _font: Font
+
+# Hold-Tab scoreboard + match clock. Repaints ride the same dirty flag: the
+# clock dirties on second changes, the table on GameManager.score_revision.
+var _scoreboard_visible: bool = false
+var _seen_revision: int = -1
+var _seen_second: int = -1
+var _clock_on: bool = false
 
 # Phase 2A class weapon state.
 var _weapon_name: String = "Heavy Javelin"
@@ -87,6 +95,7 @@ func bind_player(target: PlayerController) -> void:
 		_on_charge(weapon.charge)
 	var gm := get_node_or_null("/root/GameManager")
 	if gm:
+		_gm = gm
 		if gm.has_signal("server_hit"):
 			_connect(gm, "server_hit", _on_hit)
 		if gm.has_signal("server_death"):
@@ -95,6 +104,9 @@ func bind_player(target: PlayerController) -> void:
 			_connect(gm, "server_respawn", _on_respawn)
 		if gm.has_signal("server_shot"):
 			_connect(gm, "server_shot", _on_server_shot)
+	_seen_revision = -1
+	_seen_second = -1
+	_scoreboard_visible = false
 	visible = true
 	_mark_dirty()
 
@@ -139,6 +151,45 @@ func _process(delta: float) -> void:
 			refreshed_debug = true
 	if animating or refreshed_debug:
 		_mark_dirty()
+	_track_match_clock()
+	_track_scoreboard()
+
+
+## Match clock: repaint on second boundaries and on clock on/off edges, never
+## per frame.
+func _track_match_clock() -> void:
+	var secs := _match_seconds()
+	var on := secs >= 0
+	if on != _clock_on:
+		_clock_on = on
+		_mark_dirty()
+	if on and secs != _seen_second:
+		_seen_second = secs
+		_mark_dirty()
+
+
+func _track_scoreboard() -> void:
+	# Hold-Tab, polled like every other gameplay key: Tab is focus navigation
+	# for the browser and never reliably reaches _unhandled_input.
+	var held := Input.is_action_pressed("scoreboard")
+	if held != _scoreboard_visible:
+		_scoreboard_visible = held
+		_mark_dirty()
+		return
+	if not _scoreboard_visible or _gm == null:
+		return
+	var revision := _gm_property("score_revision", -1)
+	if revision != _seen_revision:
+		_seen_revision = revision
+		_mark_dirty()
+
+
+## Single-arg Object.get with a fallback (Object.get takes no default).
+func _gm_property(prop: StringName, fallback: int) -> int:
+	if _gm == null:
+		return fallback
+	var value: Variant = _gm.get(prop)
+	return int(value) if value != null else fallback
 
 
 # --- testable state -------------------------------------------------------
@@ -177,6 +228,31 @@ func heat_ratio() -> float:
 
 func charge_ratio() -> float:
 	return clampf(_charge, 0.0, 1.0)
+
+
+## Whole seconds left on the match clock, or -1 when there is no clock (solo,
+## old server, match over).
+func _match_seconds() -> int:
+	if _gm == null or not _gm.has_method("client_match_seconds_left"):
+		return -1
+	return int(_gm.client_match_seconds_left())
+
+
+func clock_text() -> String:
+	var secs := _match_seconds()
+	if secs < 0:
+		return ""
+	return "%d:%02d" % [secs / 60, secs % 60]
+
+
+func scoreboard_visible() -> bool:
+	return _scoreboard_visible
+
+
+func score_rows() -> Array:
+	if _gm == null or not _gm.has_method("client_scores"):
+		return []
+	return _gm.client_scores()
 
 
 func _refresh_debug_text() -> void:
@@ -266,6 +342,18 @@ func _draw() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.2, 0.85, 0.75, 0.85)
 	)
 
+	var clock := clock_text()
+	if clock != "":
+		var secs := _match_seconds()
+		var tone := ACCENT if secs >= 30 else HEAT_COLOR
+		draw_string(
+			_font, Vector2(center.x - 60.0, 34.0), clock,
+			HORIZONTAL_ALIGNMENT_CENTER, 120.0, 20, tone
+		)
+
+	if _scoreboard_visible:
+		_draw_scoreboard(center)
+
 	if _debug:
 		var debug_color := Color(0.55, 0.9, 1.0, 0.8)
 		draw_string(
@@ -311,6 +399,50 @@ func _draw_weapon_meter(right: float) -> void:
 		for i in count:
 			var pip := Rect2(Vector2(meter_x + float(i) * 14.0, meter_y), Vector2(10.0, 5.0))
 			draw_rect(pip, MUTED)
+
+
+## Hold-Tab standings. One draw pass, no allocations that matter: rows come
+## from the client's sorted table, the local row paints in accent.
+func _draw_scoreboard(center: Vector2) -> void:
+	var rows: Array = score_rows()
+	var shown := mini(rows.size(), 16)
+	var width := 400.0
+	var row_h := 20.0
+	var height := 64.0 + float(maxi(shown, 1)) * row_h
+	var origin := Vector2(center.x - width * 0.5, center.y - height * 0.5)
+	draw_rect(Rect2(origin, Vector2(width, height)), Color(0.02, 0.03, 0.06, 0.88))
+	draw_rect(Rect2(origin, Vector2(width, height)), ACCENT, false, 1.0)
+	var clock := clock_text()
+	var title := "SCOREBOARD" if clock == "" else "SCOREBOARD · %s LEFT" % clock
+	draw_string(
+		_font, origin + Vector2(0.0, 24.0), title,
+		HORIZONTAL_ALIGNMENT_CENTER, width, 15, ACCENT
+	)
+	draw_string(
+		_font, origin + Vector2(16.0, 46.0), "PLAYER",
+		HORIZONTAL_ALIGNMENT_LEFT, 240.0, 10, MUTED
+	)
+	draw_string(
+		_font, origin + Vector2(width - 132.0, 46.0), "K",
+		HORIZONTAL_ALIGNMENT_CENTER, 40.0, 10, MUTED
+	)
+	draw_string(
+		_font, origin + Vector2(width - 76.0, 46.0), "D",
+		HORIZONTAL_ALIGNMENT_CENTER, 40.0, 10, MUTED
+	)
+	var gm := _gm
+	var local_id := _gm_property("local_id", -1) if gm else -1
+	for i in shown:
+		var row: Dictionary = rows[i]
+		var y := origin.y + 46.0 + float(i + 1) * row_h
+		var tone := ACCENT if int(row.get("id", -1)) == local_id else Color(0.9, 0.96, 1.0)
+		var label := "%d. %s" % [i + 1, String(row.get("name", "?"))]
+		draw_string(_font, Vector2(origin.x + 16.0, y), label,
+			HORIZONTAL_ALIGNMENT_LEFT, 240.0, 12, tone)
+		draw_string(_font, Vector2(origin.x + width - 132.0, y), str(int(row.get("kills", 0))),
+			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 12, tone)
+		draw_string(_font, Vector2(origin.x + width - 76.0, y), str(int(row.get("deaths", 0))),
+			HORIZONTAL_ALIGNMENT_CENTER, 40.0, 12, tone)
 
 
 func _draw_crosshair(center: Vector2) -> void:

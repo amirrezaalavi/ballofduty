@@ -12,9 +12,12 @@ extends RefCounted
 ## replay from authoritative motion state instead of guessing it.
 ## Input packet: 12 B at 30 Hz upstream (~360 B/s).
 
-enum Msg { JOIN_REQ = 1, JOIN_OK = 2, DENY = 3, ROSTER = 4, INPUT = 5, SNAPSHOT = 6, LEAVE = 7, PING = 8, PONG = 9, EVENT = 10 }
+enum Msg { JOIN_REQ = 1, JOIN_OK = 2, DENY = 3, ROSTER = 4, INPUT = 5, SNAPSHOT = 6, LEAVE = 7, PING = 8, PONG = 9, EVENT = 10, SCORE = 11, MATCH = 12 }
 enum DenyReason { FULL = 1, VERSION = 2 }
 enum EventType { SHOT = 1, HIT = 2, DEATH = 3, RESPAWN = 4 }
+## Match lifecycle states (Msg.MATCH). 0 is never sent; clients use it for
+## "no match info yet" (old servers, solo practice).
+enum MatchState { RUNNING = 1, OVER = 2 }
 enum AnimState { STILL = 0, WALK = 1, SPRINT = 2, AIR = 3 }
 
 ## Wire version. JOIN_REQ/JOIN_OK carry it so a v1 peer is rejected at the door
@@ -357,6 +360,66 @@ static func decode_event(pkt: PackedByteArray) -> Dictionary:
 
 static func msg_type(pkt: PackedByteArray) -> int:
 	return pkt[0] if pkt.size() >= 1 else -1
+
+
+## Match scores. Server -> client, lossless TCP: the full table on every death
+## and to every new join, so late joiners and reconnects converge without
+## replaying the kill feed. Row (5 B): id u8 | kills u16 | deaths u16.
+## 2 + 5n bytes: 82 B at 16 actors, far inside MAX_PACKET_BYTES.
+static func encode_score(entries: Array) -> PackedByteArray:
+	# entries: Array of {id: int, kills: int, deaths: int}
+	var count := mini(entries.size(), MAX_PLAYERS)
+	var pkt := PackedByteArray()
+	pkt.resize(2 + count * 5)
+	pkt.encode_u8(0, Msg.SCORE)
+	pkt.encode_u8(1, count & 0xFF)
+	var offset := 2
+	for i in count:
+		var entry: Dictionary = entries[i]
+		pkt.encode_u8(offset, int(entry["id"]) & 0xFF)
+		pkt.encode_u16(offset + 1, clampi(int(entry.get("kills", 0)), 0, 65535))
+		pkt.encode_u16(offset + 3, clampi(int(entry.get("deaths", 0)), 0, 65535))
+		offset += 5
+	return pkt
+
+
+static func decode_score(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() < 2 or pkt[0] != Msg.SCORE:
+		return {}
+	var count := pkt[1]
+	if count > MAX_PLAYERS or pkt.size() != 2 + count * 5:
+		return {}
+	var entries: Array = []
+	var offset := 2
+	for _i in count:
+		entries.append({
+			"id": pkt[offset],
+			"kills": pkt[offset + 1] | (pkt[offset + 2] << 8),
+			"deaths": pkt[offset + 3] | (pkt[offset + 4] << 8),
+		})
+		offset += 5
+	return {"entries": entries}
+
+
+## Match clock/state. Server -> client at 1 Hz plus on every transition, so a
+## 1 s heartbeat keeps client countdowns fresh without touching the 30 Hz
+## snapshot budget. 4 B: [MATCH, state u8, seconds_left u16].
+static func encode_match(state: int, seconds_left: int) -> PackedByteArray:
+	var pkt := PackedByteArray()
+	pkt.resize(4)
+	pkt.encode_u8(0, Msg.MATCH)
+	pkt.encode_u8(1, state & 0xFF)
+	pkt.encode_u16(2, clampi(seconds_left, 0, 65535))
+	return pkt
+
+
+static func decode_match(pkt: PackedByteArray) -> Dictionary:
+	if pkt.size() != 4 or pkt[0] != Msg.MATCH:
+		return {}
+	return {
+		"state": pkt[1],
+		"seconds_left": pkt[2] | (pkt[3] << 8),
+	}
 
 
 static func _quant_pos(v: float) -> int:
