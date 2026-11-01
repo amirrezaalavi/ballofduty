@@ -73,6 +73,7 @@ func show_menu() -> void:
 
 
 func hide_menu() -> void:
+	_release_field_focus()
 	visible = false
 
 
@@ -164,10 +165,20 @@ func class_summary(class_id: int) -> Dictionary:
 	return summary
 
 
+## Explicit focus request only (a click focuses the LineEdit natively; tests and
+## tooling can call this). The menu never grabs the callsign on show: after a
+## failed auto-join the focused field used to eat WASD/R keystrokes meant for
+## the game (QA bug 5). Tab traversal between fields is left to Godot.
 func grab_name_focus() -> void:
 	if name_field:
 		name_field.grab_focus()
 		name_field.select_all()
+
+
+func _release_field_focus() -> void:
+	for field: LineEdit in [name_field, host_field, port_field]:
+		if field and field.has_focus():
+			field.release_focus()
 
 
 func _update_mode_hint() -> void:
@@ -481,6 +492,7 @@ func _style_class_card(index: int) -> void:
 
 
 func _on_join_pressed() -> void:
+	_release_field_focus()
 	join_requested.emit(join_config())
 
 
