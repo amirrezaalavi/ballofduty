@@ -45,7 +45,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_loopback_combat.gd` | 1 | 22 | fire intent through the socket, hit/death/respawn, spoofed damage rejection |
 | `tests/gdunit/test_bots.gd` | 2 | 14 | four bots play, id index, 16 bots on 8 spawns do not stack |
 | `tests/gdunit/test_kaykit.gd` | 5 | 0 | five variants, one shadowless skinned surface, scale/yaw, clip set, gun/muzzle, budget |
-| `tests/gdunit/test_menu.gd` | 8 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection |
+| `tests/gdunit/test_menu.gd` | 14 | 0 | menu fields/state, direct vs one-origin config, loading overlay, endpoint/URL selection, callsign focus on failure, suspended input |
 | `tests/gdunit/test_quick_menu.gd` | 3 | 0 | phase-aware actions, signals, Esc close, real settings entry |
 | `tests/gdunit/test_hud.gd` | 9 | 0 | dirty-flag redraws, transient timers, state setters, death/respawn, debug refresh |
 | `tests/gdunit/test_content_catalog.gd` | 8 | 0 | core manifest, catalog-backed weapons, ids/paths/types, wire ids, budgets, dependency cycles, disabled entries |
@@ -64,11 +64,13 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_character_body_parity.gd` | 10 | 0 | profile validation, root/shape scale, LOCAL/REMOTE/SERVER parity, camera/muzzle, 18 B snapshot, no headshot path |
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 | `tests/gdunit/test_perf_probe.gd` | 7 | 0 | percentile empty/single/known, p95/p99, warm-up exclusion, long-frame counters, report shape, headless safety, disabled by default |
+| `tests/gdunit/test_net_connect.gd` | 10 | 0 | connecting handshake survives the attempt timer, total budget, poll caps, join deadline scales with frame gap, RTT sanitizer |
+| `tests/gdunit/test_weapon_names.gd` | 2 | 0 | menu cards/hints/summaries match WeaponRegistry display names, fallback table matches |
 | `tests/gdunit/test_net_resilience.gd` | 11 | 0 | server extrapolate-then-idle, ack stays pinned, resume on input, idle frame reuse, client backlog clamp, prediction reset on focus, ack latency, stats fields |
-| `tests/gdunit/test_menu.gd` | +2 | 0 | map picker cards, default map selection |
+| `tests/gdunit/test_menu.gd` | (incl.) | 0 | map picker cards, default map selection |
 
-**183 test cases · 35 suites** on `develop` (163 protocol-v2 baseline + 7 L9
-probe + 2 map picker + 11 net resilience), plus **35 walkthrough sections**, the
+**199 test cases · 37 suites** on `develop` (163 protocol-v2 baseline + 7 L9
+probe + 2 map picker + 11 net resilience + 10 net connect + 2 weapon names + 4 menu focus), plus **35 walkthrough sections**, the
 4-bot match and the 16-actor probe.
 Quarry budget: 49 draw calls, 192,842 triangles; protocol v2 snapshot: 150 B at 8
 actors, 294 B at 16; web export ~44.8 MB raw / ~14.3 MB gzip.

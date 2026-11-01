@@ -29,3 +29,6 @@ reports/
 # Browser smoke harness deps + local artifacts
 tools/ci/node_modules/
 artifacts/
+
+# Local browser-QA evidence (screenshots + transcripts)
+bod_qa/
