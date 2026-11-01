@@ -36,12 +36,25 @@ const MAX_DRAIN_PER_FRAME := 64
 ## hard failure. Keeping this at 6 s preserves the Phase 0 timeout contract.
 const CONNECT_BUDGET_MSEC := 6000
 ## One socket attempt is abandoned after this long, then retried with backoff.
+## A handshake that is still CONNECTION_CONNECTING is exempt (see
+## should_abandon_attempt): it only advances when polled, so wall-clock retries
+## used to close sockets that were still opening on slow devices.
 const ATTEMPT_TIMEOUT_MSEC := 3000
+## A socket that reports CONNECTION_DISCONNECTED this early is a real failure
+## (refused/dropped), so retry without waiting for the attempt timeout.
+const ATTEMPT_DISCONNECT_GRACE_MSEC := 500
 const RETRY_BASE_DELAY_MSEC := 350
 const RETRY_MAX_DELAY_MSEC := 2400
 ## After a socket drops mid-match we keep retrying for this window (showing
 ## "reconnecting…") before falling back to offline with a clear error.
 const RECONNECT_GRACE_MSEC := 8000
+## A connecting handshake gets up to this many poll() calls per frame so it can
+## finish without waiting for the next rendered frame (1 FPS at 720p software
+## GL would otherwise need seconds per handshake step).
+const CONNECT_POLLS_PER_FRAME := 8
+## ...but never more than this much wall clock per frame, so a slow frame cannot
+## turn the extra polls into a stall of its own.
+const CONNECT_POLL_BUDGET_MSEC := 15
 
 var mode: Mode = Mode.OFFLINE
 var latency_ms: int = 0
@@ -319,7 +332,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 
 func _process(_delta: float) -> void:
 	if _peer != null:
-		_peer.poll()
+		_poll_peer()
 		_flush_delayed()
 		_drain()
 		_expire_pending_joins()
@@ -332,6 +345,46 @@ func _process(_delta: float) -> void:
 			_schedule_retry("connection refused — check host and port")
 
 
+## Poll the transport. A WebSocket handshake only advances inside poll(), so at
+## 1 FPS one poll per frame needs seconds per handshake step and the wall-clock
+## retry timers close sockets that were still opening. While the peer is
+## CONNECTION_CONNECTING, spend a bounded slice of this frame polling it.
+func _poll_peer() -> void:
+	_peer.poll()
+	var polls := 1
+	var started_msec := Time.get_ticks_msec()
+	while _peer != null and should_poll_again(
+			_peer.get_connection_status(), polls, Time.get_ticks_msec() - started_msec):
+		_peer.poll()
+		polls += 1
+
+
+## True while a connecting handshake still has poll budget left this frame.
+## Pure so both caps are testable without a real socket.
+static func should_poll_again(status: int, polls_done: int, elapsed_msec: int) -> bool:
+	if status != MultiplayerPeer.CONNECTION_CONNECTING:
+		return false
+	if polls_done >= CONNECT_POLLS_PER_FRAME:
+		return false
+	return elapsed_msec < CONNECT_POLL_BUDGET_MSEC
+
+
+## Decide whether the current socket attempt is dead and must be retried.
+## A CONNECTION_CONNECTING handshake is never abandoned on the per-attempt
+## timer: it may still be opening, and CONNECT_BUDGET_MSEC (initial connect) or
+## the reconnect grace window (mid-match) is the hard stop. A
+## CONNECTION_DISCONNECTED socket is a real failure and is retried quickly.
+static func should_abandon_attempt(status: int, attempt_elapsed_msec: int) -> bool:
+	if status == MultiplayerPeer.CONNECTION_CONNECTING:
+		return false
+	if attempt_elapsed_msec > ATTEMPT_TIMEOUT_MSEC:
+		return true
+	if status == MultiplayerPeer.CONNECTION_DISCONNECTED \
+			and attempt_elapsed_msec > ATTEMPT_DISCONNECT_GRACE_MSEC:
+		return true
+	return false
+
+
 ## A WebSocket that never opens has no JOIN_REQ pending, so the existing join
 ## timeout cannot see it. Detect dead sockets here and retry with backoff inside
 ## a bounded budget. Only after that budget expires do we emit a hard failure
@@ -341,9 +394,11 @@ func _check_client_connection() -> void:
 		return
 	var now := Time.get_ticks_msec()
 	var status := _peer.get_connection_status()
+	var total_elapsed := now - _client_started_msec
 	# Initial-connect budget applies while the socket is not yet open. This is
-	# also the field the Phase 0 timeout test fast-forwards.
-	if not _had_connection and now - _client_started_msec >= CONNECT_BUDGET_MSEC:
+	# also the field the Phase 0 timeout test fast-forwards. It is a hard stop
+	# even when a retry backoff is already pending.
+	if not _had_connection and total_elapsed >= CONNECT_BUDGET_MSEC:
 		_fail_connection(_failure_reason(status))
 		return
 	if status == MultiplayerPeer.CONNECTION_CONNECTED:
@@ -363,14 +418,13 @@ func _check_client_connection() -> void:
 		return
 	if _retry_scheduled:
 		return
-	if now - _attempt_started_msec > ATTEMPT_TIMEOUT_MSEC:
+	# A mid-match reconnect is bounded by its grace window, never by the
+	# per-attempt timer, so a slow handshake is allowed to finish.
+	if _had_connection and _grace_deadline_msec != 0 and now >= _grace_deadline_msec:
+		_schedule_retry("connection lost")
+		return
+	if should_abandon_attempt(status, now - _attempt_started_msec):
 		_schedule_retry("connection lost" if _had_connection else _failure_reason(status))
-	elif status == MultiplayerPeer.CONNECTION_DISCONNECTED \
-			and now - _attempt_started_msec > 500:
-		_schedule_retry(
-			"connection lost" if _had_connection
-			else "connection refused — check host and port"
-		)
 
 
 func _failure_reason(status: int) -> String:
