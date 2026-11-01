@@ -5,6 +5,10 @@ extends Node
 ## LocomotionComponent instead.
 
 var sequence: int = 0
+## Set by main.gd while the entry menu or loading overlay owns the screen.
+## The local actor still ticks, but gameplay keys must not move or fire it
+## behind a modal surface (QA bug 5).
+var suspended: bool = false
 var _fire_buffered: bool = false
 ## Cached `document.hidden`; polled at 4 Hz so a background tab cannot queue
 ## seconds of movement into the next snapshot. No protocol resync exists.
@@ -12,9 +16,16 @@ var _hidden_checked_msec: int = -1000
 var _page_hidden: bool = false
 
 
+func set_suspended(value: bool) -> void:
+	suspended = value
+	if suspended:
+		_fire_buffered = false
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if (
-		event is InputEventMouseButton
+		not suspended
+		and event is InputEventMouseButton
 		and event.pressed
 		and event.button_index == MOUSE_BUTTON_LEFT
 		and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
@@ -24,7 +35,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func sample(yaw: float, pitch: float) -> PlayerInputFrame:
 	sequence += 1
-	if _is_page_hidden():
+	if suspended or _is_page_hidden():
 		_fire_buffered = false
 		var idle := PlayerInputFrame.new()
 		idle.seq = sequence

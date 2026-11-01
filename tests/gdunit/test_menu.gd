@@ -9,6 +9,7 @@ var _menus: Array[Node] = []
 
 
 func after_test() -> void:
+	Input.action_release("move_forward")
 	for menu in _menus:
 		if is_instance_valid(menu):
 			menu.queue_free()
@@ -225,6 +226,88 @@ func test_endpoint_selection_carries_map() -> void:
 	expect(String(bogus["map_id"]) == MapRegistry.DEFAULT_MAP, "unknown ?map= falls back")
 	var missing: Dictionary = main_script.resolve_endpoint({}, page)
 	expect(String(missing["map_id"]) == MapRegistry.DEFAULT_MAP, "missing ?map= is the default")
+
+
+func test_status_and_menu_reentry_do_not_focus_callsign() -> void:
+	var menu := _make_menu()
+	menu.configure({
+		"host": "127.0.0.1", "port": 9080, "name": "Pip",
+		"page_host": "127.0.0.1", "page_port": 9080, "proxy_ws": "",
+	})
+	menu.show_menu()
+	menu.set_status("Connection failed", "error")
+	expect(not menu.name_field.has_focus(), "a status update does not focus the callsign")
+	var before: String = menu.name_field.text
+	_tap_key(KEY_W)
+	_tap_key(KEY_A)
+	_tap_key(KEY_R)
+	await get_tree().process_frame
+	expect(menu.name_field.text == before,
+		"gameplay keys do not type into an unfocused callsign (got '%s')" % menu.name_field.text)
+	expect(menu.name_field.text == "Pip", "callsign is unchanged")
+
+	# Re-entry after a failure must not focus the field either.
+	menu.grab_name_focus()
+	expect(menu.name_field.has_focus(), "explicit focus works before re-entry")
+	menu.hide_menu()
+	expect(not menu.name_field.has_focus(), "hiding the menu releases the callsign")
+	menu.show_menu()
+	menu.set_status("Connection failed", "error")
+	expect(not menu.name_field.has_focus(), "menu re-entry does not refocus the callsign")
+
+
+func test_explicit_name_focus_selects_all_and_join_releases() -> void:
+	var menu := _make_menu()
+	menu.configure({
+		"host": "127.0.0.1", "port": 9080, "name": "Pip",
+		"page_host": "127.0.0.1", "page_port": 9080, "proxy_ws": "",
+	})
+	menu.grab_name_focus()
+	expect(menu.name_field.has_focus(), "explicit focus request focuses the callsign")
+	expect(menu.name_field.get_selected_text() == "Pip", "explicit focus selects all")
+	menu.join_button.pressed.emit()
+	expect(not menu.name_field.has_focus(), "a join attempt releases the callsign")
+
+
+func test_explicitly_focused_callsign_still_accepts_typing() -> void:
+	var menu := _make_menu()
+	menu.configure({
+		"host": "127.0.0.1", "port": 9080, "name": "Pip",
+		"page_host": "127.0.0.1", "page_port": 9080, "proxy_ws": "",
+	})
+	menu.grab_name_focus()
+	_tap_key(KEY_W)
+	await get_tree().process_frame
+	expect(menu.name_field.text == "w",
+		"an explicitly focused callsign accepts typing (got '%s')" % menu.name_field.text)
+
+
+func test_menu_suspends_local_input_sampling() -> void:
+	var handler := InputHandler.new()
+	add_child(handler)
+	Input.action_press("move_forward")
+	var live := handler.sample(0.0, 0.0)
+	expect(live.move.y < -0.1, "unsuspended sampling sees movement")
+	handler.set_suspended(true)
+	var idle := handler.sample(0.0, 0.0)
+	expect(idle.move == Vector2.ZERO, "suspended sampling ignores movement")
+	expect(not idle.fire, "suspended sampling ignores fire")
+	Input.action_release("move_forward")
+	handler.queue_free()
+
+
+func _tap_key(keycode: Key) -> void:
+	var down := InputEventKey.new()
+	down.keycode = keycode
+	down.physical_keycode = keycode
+	down.unicode = String.chr(keycode).to_lower().unicode_at(0)
+	down.pressed = true
+	Input.parse_input_event(down)
+	var up := InputEventKey.new()
+	up.keycode = keycode
+	up.physical_keycode = keycode
+	up.pressed = false
+	Input.parse_input_event(up)
 
 
 func _make_menu() -> Node:
