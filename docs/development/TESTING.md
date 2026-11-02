@@ -33,8 +33,9 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_smoke.gd` | 7 | 100 | settings, autoloads, input map, scenes, spawn spacing, player rig, greybox ramp |
 | `tests/gdunit/test_movement.gd` | 8 | 21 | travel, diagonal parity, sprint, L1 jump apex/derivation/asymmetric fall/terminal, coyote/buffer, settings persistence |
 | `tests/gdunit/test_combat.gd` | 5 | 164 | weapon data, 20/20 body hits at 5/15/30 m, fire rate, reload |
-| `tests/gdunit/test_net_protocol.gd` | 14 | 94 | roundtrips, 1 cm / ±327.68 m positions, golden 24 B layout, 150/294 B budgets, 12-bit yaw, u16 ack, malformed/oversized rejection |
-| `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, input ordering/dedupe/rate limit, bounded starvation, leave cleanup |
+| `tests/gdunit/test_net_protocol.gd` | 14 | 92 | roundtrips, 1 cm / ±327.68 m positions, golden 24 B layout, JOIN_REQ/JOIN_OK map id, 150/294 B budgets, 12-bit yaw, u16 ack, malformed/oversized rejection |
+| `tests/gdunit/test_net_loopback.gd` | 1 | 39 | two real clients, spawn parity, prediction p95, divergence recovery, latest-wins intake/dedupe/rate limit, bounded starvation, leave cleanup |
+
 | `tests/gdunit/test_prediction.gd` | 3 | 13 | deterministic replay, divergent correction + visual decay, stale ack rejection |
 | `tests/gdunit/test_turning.gd` | 4 | 12 | camera-relative movement, body facing, aim strafe, deterministic 180° |
 | `tests/gdunit/test_phase0.gd` | 5 | 18 | speed/projectile tuning, turn-then-shoot gate, virtual-clock interpolation, connection timeout, death pose + red marker |
@@ -65,6 +66,7 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_respawn.gd` | 2 | 0 | distance-first spawn ranking, top-2 raycast bound, clustered deaths, overflow-ring respawns |
 | `tests/gdunit/test_map_authority.gd` | 5 | 37 | JOIN_REQ/JOIN_OK map id roundtrip, out-of-range sanitization, scene-derived spawns, first-join arena choice with deferred bots, client adopts JOIN_OK arena |
 | `tests/gdunit/test_perf_probe.gd` | 7 | 0 | percentile empty/single/known, p95/p99, warm-up exclusion, long-frame counters, report shape, headless safety, disabled by default |
+| `tests/gdunit/test_input_latest_wins.gd` | 7 | 0 | burst applies only the newest frame, ack is newest, dedupe, sticky jump/fire/reload edges, bounded starvation, respawn clears pending/edges |
 | `tests/gdunit/test_match_end.gd` | 7 | 0 | clock expiry, round restart, score updates/sort, solo death is not a kill, client countdown, HUD scoreboard |
 | `tests/gdunit/test_match_protocol.gd` | 3 | 0 | SCORE roundtrip/budget, clamping/rejection, MATCH roundtrip |
 | `tests/gdunit/test_net_connect.gd` | 10 | 0 | connecting handshake survives the attempt timer, total budget, poll caps, join deadline scales with frame gap, RTT sanitizer |
@@ -72,8 +74,8 @@ Exit codes: `0` green, `100` test failure. `check.sh` relies on both the exit co
 | `tests/gdunit/test_net_resilience.gd` | 11 | 0 | server extrapolate-then-idle, ack stays pinned, resume on input, idle frame reuse, client backlog clamp, prediction reset on focus, ack latency, stats fields |
 | `tests/gdunit/test_menu.gd` | (incl.) | 0 | map picker cards, default map selection |
 
-**214 test cases · 40 suites** on `develop` (163 protocol baseline + 7 L9
-probe + 2 map picker + 11 net resilience + 10 net connect + 2 weapon names + 4 menu focus + 10 match end + 5 map authority), plus **35 walkthrough sections**, the
+**221 test cases · 41 suites** on `develop` (163 protocol baseline + 7 L9
+probe + 2 map picker + 11 net resilience + 7 latest-wins + 10 net connect + 2 weapon names + 4 menu focus + 10 match end + 5 map authority), plus **35 walkthrough sections**, the
 4-bot match and the 16-actor probe.
 Quarry budget: 49 draw calls, 192,842 triangles; protocol v3 snapshot: 150 B at 8
 actors, 294 B at 16; web export ~44.8 MB raw / ~14.3 MB gzip.

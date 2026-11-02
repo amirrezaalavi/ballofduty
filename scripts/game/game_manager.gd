@@ -20,9 +20,9 @@ signal join_map_received(map_index: int)
 # Preloaded so joining never hits the resource loader mid-match.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
 const RIFLE_STATS: WeaponStats = preload("res://resources/weapons/rifle_stats.tres")
-## CP4b input intake: one frame is consumed per server tick, so a jitter burst
-## queues instead of overwriting. Oldest frames are dropped past the cap.
-const MAX_INPUT_QUEUE := 16
+## CP4b input intake: the server applies the newest frame it has every tick.
+## A newer packet overwrites the one the tick has not read yet, so a jitter
+## burst cannot leave the server permanently behind the client's send rate.
 const INPUT_RATE_LIMIT := 90
 ## If a client cannot feed 30 inputs/s, extrapolate at most this many server
 ## ticks, then simulate a neutral frame until input arrives. The ack stays pinned
@@ -35,7 +35,11 @@ const INPUT_RATE_LIMIT := 90
 ## body stopped gravity too, so a player caught mid-air stayed there and every
 ## correction was huge. Simulating idle input lets them land and keeps the
 ## divergence bounded to the missed movement.
-const MAX_EXTRAPOLATION_TICKS := 2
+##
+## Six ticks is 200 ms at 30 Hz: long enough to ride out a join hitch or a
+## low-end GPU frame spike without stuttering the body, short enough that a
+## client that has gone away stops moving well under a second.
+const MAX_EXTRAPOLATION_TICKS := 6
 const RESPAWN_DELAY_MSEC := 3000
 const SPAWN_PROTECTION_MSEC := 1500
 const BOT_PEER_BASE := -1000
@@ -397,11 +401,17 @@ func _on_remote_input(peer_id: int, frame: Dictionary) -> void:
 	converted.pitch = float(frame["pitch"])
 	stored["last_seq"] = seq
 
-	var queue: Array = stored["queue"]
-	queue.append(converted)
-	if queue.size() > MAX_INPUT_QUEUE:
-		queue.pop_front()
-		stored["inputs_dropped"] = int(stored["inputs_dropped"]) + 1
+	# Latest wins: overwrite whatever the tick has not consumed yet. The server
+	# is then never more than one packet behind the client.
+	stored["pending_frame"] = converted
+	# Jump/fire/reload are one-shot actions. If a newer packet overwrites an
+	# action before the tick reads it, keep the action until it is applied once.
+	if converted.jump:
+		stored["edge_jump"] = true
+	if converted.fire:
+		stored["edge_fire"] = true
+	if converted.reload:
+		stored["edge_reload"] = true
 
 
 func _physics_process(delta: float) -> void:
@@ -462,9 +472,9 @@ func _physics_process(delta: float) -> void:
 	if net_stats and _server_tick % 30 == 0:
 		for peer_id in _roster:
 			var e: Dictionary = _roster[peer_id]
-			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d idle=%d hp=%d ammo=%d" % [
+			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d pending=%d dropped=%d starved=%d idle=%d hp=%d ammo=%d" % [
 				int(e["id"]), int(e["ack"]), int(e["last_seq"]),
-				(e["queue"] as Array).size(), int(e["inputs_dropped"]),
+				1 if e["pending_frame"] != null else 0, int(e["inputs_dropped"]),
 				int(e["starved_ticks"]), int(e["idle_ticks"]),
 				_health(e["node"]).current if _health(e["node"]) else 0,
 				int(e["ammo"]),
@@ -583,19 +593,30 @@ static func _sort_scores(a: Dictionary, b: Dictionary) -> bool:
 ## updates the entry's starve counters. Bots and local/server actors do not use
 ## this path.
 ##
-## 1-2 missed ticks: repeat the last input (short extrapolation).
+## With input pending, the newest frame wins: held state comes from that frame
+## and any sticky one-shot edges (jump/fire/reload) are ORed in exactly once.
+## 1-6 missed ticks: repeat the last input (short extrapolation).
 ## Beyond that: neutral input, so gravity and collision keep running. Never a
 ## hard freeze, and never an ack the client cannot compare against.
 func _pick_server_frame(entry: Dictionary) -> PlayerInputFrame:
-	var queue: Array = entry["queue"]
-	if not queue.is_empty():
-		var queued: PlayerInputFrame = queue.pop_front()
-		entry["last_frame"] = queued
-		entry["ack"] = queued.seq
+	var pending: Variant = entry["pending_frame"]
+	if pending != null:
+		var frame: PlayerInputFrame = pending
+		# The newest frame owns move/sprint/aim/yaw/pitch, but an action seen in
+		# an overwritten frame must still happen once.
+		frame.jump = frame.jump or bool(entry["edge_jump"])
+		frame.fire = frame.fire or bool(entry["edge_fire"])
+		frame.reload = frame.reload or bool(entry["edge_reload"])
+		entry["edge_jump"] = false
+		entry["edge_fire"] = false
+		entry["edge_reload"] = false
+		entry["pending_frame"] = null
+		entry["last_frame"] = frame
+		entry["ack"] = frame.seq
 		entry["has_input"] = true
 		entry["starved_ticks"] = 0
 		entry["idle_ticks"] = 0
-		return queued
+		return frame
 	if not bool(entry["has_input"]):
 		entry["starved_ticks"] = 0
 		return entry["last_frame"]
@@ -627,7 +648,8 @@ func _new_entry(
 	var entry := {
 		"id": player_id, "name": player_name, "node": node,
 		"class_id": node.class_id,
-		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
+		"last_frame": initial, "pending_frame": null, "last_seq": 0, "ack": 0,
+		"edge_jump": false, "edge_fire": false, "edge_reload": false,
 		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
 		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "idle_ticks": 0,
 		"idle_frame": PlayerInputFrame.new(),
@@ -742,7 +764,10 @@ func _respawn(entry: Dictionary) -> void:
 	entry["has_input"] = false
 	entry["ack"] = 0
 	entry["last_seq"] = 0
-	(entry["queue"] as Array).clear()
+	entry["pending_frame"] = null
+	entry["edge_jump"] = false
+	entry["edge_fire"] = false
+	entry["edge_reload"] = false
 	var initial := PlayerInputFrame.new()
 	initial.yaw = spawn["yaw"]
 	entry["last_frame"] = initial
@@ -1063,7 +1088,7 @@ func server_player_stats(player_id: int) -> Dictionary:
 		if int(entry["id"]) == player_id:
 			return {
 				"ack": int(entry["ack"]),
-				"queued": (entry["queue"] as Array).size(),
+				"pending": 1 if entry["pending_frame"] != null else 0,
 				"last_seq": int(entry["last_seq"]),
 				"dropped": int(entry["inputs_dropped"]),
 				"displacements": int(entry["displacements"]),
