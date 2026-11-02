@@ -58,8 +58,10 @@ fallback, `?map=` sanitization). Full `tools/check.sh` result: **OK**
 
 - Maps are 120 x 120 m, not 150 x 150 m like the quarry: same 3x3-chunk build
   cost, larger than the 90 m minimum, keeps 60 FPS headroom.
-- Server/client map agreement is by convention (same `--map` / menu pick both
-  ends); no JOIN-time map hash yet — recorded as follow-up.
+- Server/client map agreement is part of the session contract: JOIN_REQ carries
+  the requested map index and JOIN_OK echoes the server's authoritative one.
+  `--map` pins the arena; without it the first human join chooses it. Clients
+  always load the arena the server names.
 
 ## Known issues carried forward
 
