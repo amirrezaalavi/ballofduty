@@ -437,7 +437,7 @@ func _update_quick_menu() -> void:
 	var detail := ""
 	if _match_over:
 		phase = &"match_over"
-		detail = "%s · match complete" % _arena_label()
+		detail = _match_over_detail()
 	elif _loading and _loading.is_loading():
 		phase = &"connecting"
 		var host := String(_join_endpoint.get("host", "127.0.0.1"))
@@ -469,6 +469,10 @@ func _quick_detail() -> String:
 	if net:
 		parts.append("%d ms" % int(net.rtt_ms))
 	var gm := get_node_or_null("/root/GameManager")
+	if gm and gm.has_method("client_match_seconds_left"):
+		var secs := float(gm.client_match_seconds_left())
+		if secs >= 0.0:
+			parts.append("%d:%02d left" % [int(secs) / 60, int(secs) % 60])
 	if gm and gm.local_id > 0:
 		parts.append("id %d" % int(gm.local_id))
 	return " · ".join(parts)
@@ -509,6 +513,25 @@ func _net_label() -> StringName:
 	return &"offline"
 
 
+## Final standings line for the match-over panel: winner + K-D, or NO SCORE
+## on a quiet round. Falls back to the plain label when scores are unknown.
+func _match_over_detail() -> String:
+	var base := "%s · match complete" % _arena_label()
+	var gm := get_node_or_null("/root/GameManager")
+	if gm == null or not gm.has_method("client_scores"):
+		return base
+	var rows: Array = gm.client_scores()
+	if rows.is_empty():
+		return base
+	var top: Dictionary = rows[0]
+	if int(top.get("kills", 0)) <= 0:
+		return "%s · NO SCORE" % base
+	return "%s · WINNER %s %d-%d" % [
+		base, String(top.get("name", "?")),
+		int(top.get("kills", 0)), int(top.get("deaths", 0)),
+	]
+
+
 func _arena_label() -> String:
 	var arena := get_node_or_null("Arena")
 	if arena and String(arena.scene_file_path) != "":
@@ -547,7 +570,11 @@ func _restart_solo() -> void:
 
 func _on_match_state_changed(state: StringName, _seconds_left: float) -> void:
 	_match_over = state == &"over"
-	if _quick_menu and _quick_menu.is_open():
+	if _match_over and _in_game and not _solo:
+		# Drop the player onto the match-over panel: the round is decided and
+		# the mouse is needed for BACK TO MENU.
+		_open_quick_menu()
+	elif _quick_menu and _quick_menu.is_open():
 		_update_quick_menu()
 
 

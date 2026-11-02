@@ -33,6 +33,17 @@ const MAX_EXTRAPOLATION_TICKS := 2
 const RESPAWN_DELAY_MSEC := 3000
 const SPAWN_PROTECTION_MSEC := 1500
 const BOT_PEER_BASE := -1000
+## A match runs this long from server_start, then the server broadcasts the
+## final table, holds a short intermission, and starts the next round. Vars
+## (not consts) so headless tests can shrink a 5-minute match to milliseconds.
+const MATCH_LENGTH_MSEC := 300000
+const MATCH_INTERMISSION_MSEC := 10000
+var match_length_msec := MATCH_LENGTH_MSEC
+var match_intermission_msec := MATCH_INTERMISSION_MSEC
+## Bumped on every score/table change the HUD might be showing, so the
+## scoreboard repaints exactly when its data does (same dirty-flag contract as
+## the rest of the HUD).
+var score_revision := 0
 
 ## Phase 1 C bot feel. These are the only tuning knobs: reaction is a bounded
 ## delay before a newly acquired target may be shot; aim error is a persistent
@@ -96,6 +107,21 @@ var _remotes: Dictionary = {} # id -> PlayerController
 var _join_sent: bool = false
 var _wanted_name: String = "Player"
 var _wanted_class: int = 0
+# Match state (server authority, client mirror).
+var _match_start_msec: int = 0
+var _match_over: bool = false
+## Client score table: id -> {name, class_id, kills, deaths}. Authoritative
+## SCORE overwrites it; DEATH events update it incrementally so old servers
+## (which never send SCORE) still get a live table.
+var _scores: Dictionary = {}
+## Client match mirror: 0 = unknown (old server / solo), else MatchState.
+var _match_state: int = 0
+var _match_seconds_left: float = -1.0
+var _match_stamp_msec: int = 0
+## Solo practice has no server and no bots, so the only death that can happen is
+## the local player's. Counting it as a kill (the first version did) made the
+## scoreboard credit you for dying.
+var _solo_deaths: int = 0
 
 
 func _net() -> Node:
@@ -106,6 +132,10 @@ func _net() -> Node:
 
 func _ready() -> void:
 	_connect_bus(_net())
+	var bus := get_node_or_null("/root/EventBus")
+	if bus and bus.has_signal("player_died"):
+		if not bus.player_died.is_connected(_on_bus_player_died):
+			bus.player_died.connect(_on_bus_player_died)
 
 
 func _connect_bus(bus: Node) -> void:
@@ -123,6 +153,10 @@ func _connect_bus(bus: Node) -> void:
 		bus.join_denied.connect(_on_join_denied)
 	if not bus.roster_updated.is_connected(_on_roster_updated):
 		bus.roster_updated.connect(_on_roster_updated)
+	if not bus.score_received.is_connected(_on_score_received):
+		bus.score_received.connect(_on_score_received)
+	if not bus.match_received.is_connected(_on_match_received):
+		bus.match_received.connect(_on_match_received)
 	if not bus.snapshot_received.is_connected(_on_snapshot_received):
 		bus.snapshot_received.connect(_on_snapshot_received)
 	if not bus.event_received.is_connected(_on_server_event):
@@ -179,6 +213,8 @@ func server_start(world: Node, port: int, bots: int = 0) -> int:
 	_combat = ServerCombat.new(world, stats)
 	_hits_total = 0
 	_deaths_total = 0
+	_match_start_msec = Time.get_ticks_msec()
+	_match_over = false
 	var bus := get_node_or_null("/root/EventBus")
 	if bus:
 		if not bus.damage_dealt.is_connected(_on_server_damage):
@@ -238,6 +274,12 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 		assigned, _server_tick, spawn_pos, spawn_yaw, player_class
 	))
 	_broadcast_roster()
+	# Late joiners and reconnects converge immediately: current clock + table.
+	net.server_send(peer_id, NetProtocol.encode_match(
+		NetProtocol.MatchState.OVER if _match_over else NetProtocol.MatchState.RUNNING,
+		0 if _match_over else _server_seconds_left(Time.get_ticks_msec())
+	))
+	net.server_send(peer_id, NetProtocol.encode_score(server_match_scores()))
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -375,6 +417,103 @@ func _physics_process(delta: float) -> void:
 		for peer_id in _roster:
 			if int(peer_id) > 0:
 				net.server_send(peer_id, snapshot)
+	_tick_match(now)
+
+
+## Match clock. Runs on wall time like the respawn and protection timers, so a
+## slow physics host ends the match on schedule instead of stretching it.
+## A 1 Hz MATCH heartbeat keeps client countdowns fresh; transitions also
+## broadcast immediately, so the final table and the next round need no wait.
+func _tick_match(now: int) -> void:
+	if _match_over:
+		if now - _match_start_msec >= match_length_msec + match_intermission_msec:
+			_start_round(now)
+		return
+	if now - _match_start_msec >= match_length_msec:
+		_finish_match()
+		return
+	if _server_tick % 30 == 0:
+		_broadcast_match(NetProtocol.MatchState.RUNNING, _server_seconds_left(now))
+
+
+func _server_seconds_left(now: int) -> int:
+	return maxi(0, match_length_msec - (now - _match_start_msec)) / 1000
+
+
+func _finish_match() -> void:
+	_match_over = true
+	_broadcast_match(NetProtocol.MatchState.OVER, 0)
+	_broadcast_scores()
+	print("BALL_OF_DUTY match over players=%d" % _roster.size())
+	var bus := get_node_or_null("/root/EventBus")
+	if bus and bus.has_signal("match_state_changed"):
+		bus.match_state_changed.emit(&"over", 0.0)
+
+
+## Next round: scores reset, every actor respawned fresh, clock restarted.
+## Deaths during the intermission still land in the roster (harmless: the reset
+## below wipes them) but broadcast nothing, so the final table clients hold
+## stays final until the cleared one arrives with the new round.
+func _start_round(now: int) -> void:
+	for peer_id in _roster.keys():
+		var entry: Dictionary = _roster[peer_id]
+		entry["kills"] = 0
+		entry["deaths"] = 0
+		_respawn(entry)
+	_match_start_msec = now
+	_match_over = false
+	var secs := int(roundf(float(match_length_msec) / 1000.0))
+	_broadcast_match(NetProtocol.MatchState.RUNNING, secs)
+	_broadcast_scores()
+	print("BALL_OF_DUTY match start players=%d length=%ds" % [_roster.size(), secs])
+	var bus := get_node_or_null("/root/EventBus")
+	if bus and bus.has_signal("match_state_changed"):
+		bus.match_state_changed.emit(&"running", float(match_length_msec) / 1000.0)
+
+
+func _broadcast_match(state: int, seconds_left: int) -> void:
+	var net := _net()
+	if net == null:
+		return
+	var pkt := NetProtocol.encode_match(state, seconds_left)
+	for peer_id in _roster:
+		if int(peer_id) > 0:
+			net.server_send(peer_id, pkt)
+
+
+func _broadcast_scores() -> void:
+	var net := _net()
+	if net == null:
+		return
+	var pkt := NetProtocol.encode_score(server_match_scores())
+	for peer_id in _roster:
+		if int(peer_id) > 0:
+			net.server_send(peer_id, pkt)
+
+
+## Full standings, kills-first. The SCORE wire rows carry id/kills/deaths;
+## names ride the roster clients already hold.
+func server_match_scores() -> Array:
+	var out: Array = []
+	for peer_id in _roster:
+		var entry: Dictionary = _roster[peer_id]
+		out.append({
+			"id": int(entry["id"]),
+			"name": String(entry["name"]),
+			"class_id": int(entry.get("class_id", 0)),
+			"kills": int(entry.get("kills", 0)),
+			"deaths": int(entry.get("deaths", 0)),
+		})
+	out.sort_custom(_sort_scores)
+	return out
+
+
+static func _sort_scores(a: Dictionary, b: Dictionary) -> bool:
+	if int(a["kills"]) != int(b["kills"]):
+		return int(a["kills"]) > int(b["kills"])
+	if int(a["deaths"]) != int(b["deaths"]):
+		return int(a["deaths"]) < int(b["deaths"])
+	return String(a["name"]) < String(b["name"])
 
 
 ## Input intake for a remote player. Returns the frame to simulate this tick and
@@ -510,6 +649,13 @@ func _on_server_death(victim_id: int, killer_id: int, position: Vector3) -> void
 		killer["kills"] = int(killer["kills"]) + 1
 	print("BALL_OF_DUTY death victim=%d killer=%d" % [victim_id, killer_id])
 	_broadcast_event(NetProtocol.encode_event_death(victim_id, killer_id, position))
+	if not _match_over:
+		_broadcast_scores()
+	var bus := get_node_or_null("/root/EventBus")
+	if bus and bus.has_signal("score_changed"):
+		bus.score_changed.emit(victim_id, int(victim.get("kills", 0)), int(victim["deaths"]))
+		if not killer.is_empty():
+			bus.score_changed.emit(killer_id, int(killer["kills"]), int(killer.get("deaths", 0)))
 
 
 func _respawn(entry: Dictionary) -> void:
@@ -961,6 +1107,7 @@ func client_start(
 	net_mode = NetMode.CLIENT
 	_world = world
 	_wanted_name = NetProtocol.sanitize_name(display_name)
+	local_name = _wanted_name
 	_wanted_class = NetProtocol.sanitize_class(class_id)
 	_join_sent = false
 	var local := _world.get_node_or_null("Player") as PlayerController
@@ -1051,14 +1198,20 @@ func _on_roster_updated(entries: Array) -> void:
 		seen[rid] = true
 		if not _remotes.has(rid):
 			_spawn_remote(rid, String(entry["name"]), int(entry.get("class_id", 0)))
+		_ensure_score_row(rid, String(entry["name"]), int(entry.get("class_id", 0)))
 	if local_id > 0:
 		seen[local_id] = true
+		_ensure_score_row(local_id, local_name, _wanted_class)
 	for rid in _remotes.keys():
 		if not seen.has(rid):
 			var node := _remotes[rid] as Node
 			if is_instance_valid(node):
 				node.queue_free()
 			_remotes.erase(rid)
+	for rid in _scores.keys():
+		if not seen.has(rid):
+			_scores.erase(rid)
+	score_revision += 1
 
 
 func _on_server_event(event: Dictionary) -> void:
@@ -1081,6 +1234,7 @@ func _on_server_event(event: Dictionary) -> void:
 					audio.play_hit()
 		NetProtocol.EventType.DEATH:
 			server_death.emit(int(event["victim_id"]), int(event["killer_id"]))
+			_apply_death_to_scores(int(event["victim_id"]), int(event["killer_id"]))
 			var victim_id := int(event["victim_id"])
 			if victim_id == local_id:
 				var local := _world.get_node_or_null("Player") as PlayerController if _world else null
@@ -1108,6 +1262,113 @@ func _on_server_event(event: Dictionary) -> void:
 					if interp:
 						interp.reset()
 					remote.reset_remote_smoothing()
+
+
+## Score table upkeep. SCORE is authoritative and overwrites; DEATH events nudge
+## the same rows so old servers (no SCORE on the wire) still show a live table.
+func _ensure_score_row(rid: int, row_name: String, class_id: int) -> void:
+	var row: Dictionary = _scores.get(rid, {
+		"name": row_name, "class_id": class_id, "kills": 0, "deaths": 0,
+	})
+	row["name"] = row_name
+	row["class_id"] = class_id
+	_scores[rid] = row
+
+
+func _on_score_received(entries: Array) -> void:
+	if net_mode != NetMode.CLIENT:
+		return
+	for entry in entries:
+		var rid := int(entry["id"])
+		var row: Dictionary = _scores.get(rid, {
+			"name": "Player%d" % rid, "class_id": 0, "kills": 0, "deaths": 0,
+		})
+		row["kills"] = int(entry.get("kills", 0))
+		row["deaths"] = int(entry.get("deaths", 0))
+		_scores[rid] = row
+	score_revision += 1
+
+
+func _apply_death_to_scores(victim_id: int, killer_id: int) -> void:
+	_ensure_score_row(victim_id, String(_scores.get(victim_id, {}).get("name", "Player%d" % victim_id)), int(_scores.get(victim_id, {}).get("class_id", 0)))
+	_scores[victim_id]["deaths"] = int(_scores[victim_id]["deaths"]) + 1
+	if killer_id > 0 and killer_id != victim_id:
+		_ensure_score_row(killer_id, String(_scores.get(killer_id, {}).get("name", "Player%d" % killer_id)), int(_scores.get(killer_id, {}).get("class_id", 0)))
+		_scores[killer_id]["kills"] = int(_scores[killer_id]["kills"]) + 1
+	score_revision += 1
+
+
+## Match clock mirror. Edge-triggered: heartbeats refresh the countdown, only
+## transitions emit, so the UI reacts once per round, not once per second.
+func _on_match_received(state: Dictionary) -> void:
+	if net_mode != NetMode.CLIENT:
+		return
+	var incoming := int(state.get("state", 0))
+	if incoming != NetProtocol.MatchState.RUNNING and incoming != NetProtocol.MatchState.OVER:
+		return
+	_match_seconds_left = float(state.get("seconds_left", 0))
+	_match_stamp_msec = Time.get_ticks_msec()
+	if incoming == _match_state:
+		return
+	_match_state = incoming
+	var bus := get_node_or_null("/root/EventBus")
+	if bus == null or not bus.has_signal("match_state_changed"):
+		return
+	if incoming == NetProtocol.MatchState.OVER:
+		bus.match_state_changed.emit(&"over", 0.0)
+	else:
+		bus.match_state_changed.emit(&"running", _match_seconds_left)
+
+
+## Sorted standings for the scoreboard: kills desc, deaths asc, name asc.
+func client_scores() -> Array:
+	if net_mode == NetMode.OFFLINE:
+		return [{
+			"id": 0, "name": "YOU", "class_id": _offline_class(),
+			"kills": 0, "deaths": _solo_deaths,
+		}]
+	var out: Array = []
+	for rid in _scores:
+		var row: Dictionary = _scores[rid]
+		out.append({
+			"id": int(rid),
+			"name": String(row.get("name", "Player%d" % int(rid))),
+			"class_id": int(row.get("class_id", 0)),
+			"kills": int(row.get("kills", 0)),
+			"deaths": int(row.get("deaths", 0)),
+		})
+	out.sort_custom(_sort_scores)
+	return out
+
+
+func _offline_class() -> int:
+	var local := _world.get_node_or_null("Player") as PlayerController if _world else null
+	return local.class_id if local else 0
+
+
+## Seconds left on the match clock, extrapolated from the last heartbeat.
+## -1 means unknown (solo practice, old server, or no heartbeat yet).
+func client_match_seconds_left() -> float:
+	if net_mode != NetMode.CLIENT or _match_state != NetProtocol.MatchState.RUNNING:
+		return -1.0
+	if _match_seconds_left < 0.0:
+		return -1.0
+	var elapsed := float(Time.get_ticks_msec() - _match_stamp_msec) / 1000.0
+	return maxf(0.0, _match_seconds_left - elapsed)
+
+
+func match_is_over() -> bool:
+	return net_mode == NetMode.CLIENT and _match_state == NetProtocol.MatchState.OVER
+
+
+## Solo practice has no server and nothing shoots back: every death the bus
+## reports is ours.
+func _on_bus_player_died(_entity_id: int, _source_id: int, _position: Vector3) -> void:
+	if net_mode != NetMode.OFFLINE:
+		return
+	# No other entities exist offline, so this is always the local player.
+	_solo_deaths += 1
+	score_revision += 1
 
 
 func _on_snapshot_received(_tick: int, entries: Array) -> void:
@@ -1185,3 +1446,10 @@ func _reset() -> void:
 	_next_overflow = 0
 	_join_sent = false
 	spawn_raycasts = 0
+	_match_start_msec = 0
+	_match_over = false
+	_scores.clear()
+	_match_state = 0
+	_match_seconds_left = -1.0
+	_match_stamp_msec = 0
+	_solo_deaths = 0
