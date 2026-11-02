@@ -90,7 +90,8 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   Lower-body tracks stay with the main `AnimationPlayer`, so walking and shooting compose.
 - **Web loop:** `Engine.max_physics_steps_per_frame = 4` and `physics_jitter_fix = 0` prevent
   background-tab catch-up bursts while still feeding 30 Hz down to ~7.5 FPS.
-- **Starvation:** an empty input queue allows at most 2 extrapolated ticks, then freezes the actor.
+- **Starvation:** with no pending input the server repeats the last frame for at most 6 extrapolated
+  ticks (200 ms at 30 Hz), then simulates a neutral idle frame so gravity and collision keep running.
   The ack stays pinned to the last received input; inventing an ack would have no client-side state
   to reconcile against.
 - **Prediction & reconciliation (CP4b):** the client stores every locally simulated frame with its
@@ -103,9 +104,10 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   packets at 2 KB and drains at most 64 per frame to prevent stalls.
 - **Spawn authority:** the server owns the spawn pose and ships it in `JOIN_OK`; clients must adopt it
   or they will disagree with every other client about where they are standing.
-- **Input authority:** the server consumes one queued input per tick, deduplicates by sequence and
-  rate-limits at 90 frames/s. Repeating the last frame never advances the ack, so clients replay
-  exactly the unacknowledged tail.
+- **Input authority:** the server applies the newest received input each tick (latest wins, so a
+  burst cannot build a permanent backlog), deduplicates by sequence and rate-limits at 90 frames/s.
+  Jump/fire/reload are sticky one-shot edges and still fire once if a newer frame overwrites them.
+  Repeating the last frame never advances the ack, so clients replay exactly the unacknowledged tail.
 - **Yaw ownership:** the client owns aim yaw *after* its first input frame. Before that, the server keeps
   the spawn yaw so a missing packet can never spin a player to a default angle.
 - Broadcasts go to joined roster peers only, never to half-open connections.
