@@ -19,7 +19,7 @@ signal event_received(event: Dictionary)
 signal score_received(entries: Array)
 signal match_received(state: Dictionary)
 signal remote_input(peer_id: int, frame: Dictionary)
-signal peer_joined(peer_id: int, player_name: String, class_id: int)
+signal peer_joined(peer_id: int, player_name: String, class_id: int, map_index: int)
 signal peer_left(peer_id: int)
 signal ping_updated(rtt_ms: int)
 signal connection_failed
@@ -116,6 +116,7 @@ var _had_connection: bool = false
 var _needs_rejoin: bool = false
 var _join_name: String = ""
 var _join_class: int = 0
+var _join_map_index: int = 0
 var _grace_deadline_msec: int = 0
 var _reconnecting: bool = false
 var _closing_peer: bool = false
@@ -219,6 +220,8 @@ func start_client(host: String, port: int, path: String = "") -> int:
 	_had_connection = false
 	_needs_rejoin = false
 	_join_name = ""
+	_join_class = 0
+	_join_map_index = 0
 	_grace_deadline_msec = 0
 	_reconnecting = false
 	return _open_client_socket()
@@ -310,6 +313,8 @@ func stop() -> void:
 	_had_connection = false
 	_needs_rejoin = false
 	_join_name = ""
+	_join_class = 0
+	_join_map_index = 0
 	_grace_deadline_msec = 0
 	_reconnecting = false
 	_client_host = ""
@@ -321,14 +326,17 @@ func stop() -> void:
 	_intentional_stop = false
 
 
-func send_join_request(display_name: String, class_id: int = 0) -> void:
+func send_join_request(display_name: String, class_id: int = 0, map_index: int = 0) -> void:
 	if mode != Mode.CLIENT:
 		return
 	_join_name = display_name
 	_join_class = NetProtocol.sanitize_class(class_id)
+	_join_map_index = NetProtocol.sanitize_map_index(map_index)
 	_join_requested_msec = Time.get_ticks_msec()
 	_pending_joins[1] = _join_requested_msec
-	client_send(NetProtocol.encode_join_request(_join_name, _join_class))
+	client_send(NetProtocol.encode_join_request(
+		_join_name, _join_class, NetProtocol.PROTOCOL_VERSION, _join_map_index
+	))
 
 
 func _on_peer_connected(peer_id: int) -> void:
@@ -438,7 +446,9 @@ func _check_client_connection() -> void:
 			_needs_rejoin = false
 			_join_requested_msec = Time.get_ticks_msec()
 			_pending_joins[1] = _join_requested_msec
-			client_send(NetProtocol.encode_join_request(_join_name, _join_class))
+			client_send(NetProtocol.encode_join_request(
+				_join_name, _join_class, NetProtocol.PROTOCOL_VERSION, _join_map_index
+			))
 			reconnected.emit()
 		return
 	if _retry_scheduled:
@@ -573,11 +583,11 @@ func _route(sender: int, pkt: PackedByteArray) -> void:
 func _route_server(sender: int, msg: int, pkt: PackedByteArray) -> void:
 	match msg:
 		NetProtocol.Msg.JOIN_REQ:
-			var req := NetProtocol.decode_join_request(pkt)
-			if req.is_empty():
-				packets_rejected += 1
-				return
-			if int(req.get("version", 0)) != NetProtocol.PROTOCOL_VERSION:
+			# Check the version byte before the body layout: a v2 JOIN_REQ is
+			# one byte shorter, so a strict v3 decode would classify it as
+			# malformed and never send DENY(VERSION).
+			var version := int(pkt[1]) if pkt.size() >= 2 else -1
+			if version != NetProtocol.PROTOCOL_VERSION:
 				# Deny before the roster sees the peer, then give the deny packet
 				# a tick to flush (same pattern as the full-server deny).
 				_send_to(sender, NetProtocol.encode_deny(NetProtocol.DenyReason.VERSION))
@@ -589,8 +599,15 @@ func _route_server(sender: int, msg: int, pkt: PackedByteArray) -> void:
 							server_disconnect(sender)
 				)
 				return
+			var req := NetProtocol.decode_join_request(pkt)
+			if req.is_empty():
+				packets_rejected += 1
+				return
 			_pending_joins.erase(sender)
-			peer_joined.emit(sender, req["name"], int(req.get("class_id", 0)))
+			peer_joined.emit(
+				sender, req["name"], int(req.get("class_id", 0)),
+				int(req.get("map_index", 0))
+			)
 		NetProtocol.Msg.INPUT:
 			var frame := NetProtocol.decode_input(pkt)
 			if frame.is_empty():
@@ -617,8 +634,8 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 				packets_rejected += 1
 				return
 			if int(ok.get("version", 0)) != NetProtocol.PROTOCOL_VERSION:
-				# A v1/v3 server would feed us rows we cannot parse; refuse the
-				# join instead of silently desyncing the match.
+				# A server on another protocol version would feed us packets we
+				# cannot parse; refuse the join instead of silently desyncing.
 				_pending_joins.erase(1)
 				join_denied.emit(NetProtocol.DenyReason.VERSION)
 				return
@@ -629,6 +646,7 @@ func _route_client(msg: int, pkt: PackedByteArray) -> void:
 			join_accepted.emit(int(ok["id"]), {
 				"pos": ok["spawn"], "yaw": float(ok["yaw"]),
 				"tick": int(ok["tick"]), "class_id": int(ok["class_id"]),
+				"map_index": int(ok["map_index"]),
 			})
 		NetProtocol.Msg.DENY:
 			join_denied.emit(pkt[1] if pkt.size() > 1 else -1)

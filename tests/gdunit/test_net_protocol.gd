@@ -28,13 +28,15 @@ func test_join_ok_carries_spawn() -> void:
 	var pkt := NetProtocol.encode_join_ok(3, 4242, Vector3(22.0, 0.3, -15.556), -1.2)
 	var join_ok := NetProtocol.decode_join_ok(pkt)
 	expect(join_ok.get("id") == 3 and join_ok.get("tick") == 4242, "join ok id/tick roundtrip")
-	expect(pkt.size() == 16, "join ok is 16 B (got %d)" % pkt.size())
+	expect(pkt.size() == 17, "join ok is 17 B (got %d)" % pkt.size())
+	expect(int(join_ok.get("map_index", -1)) == 0, "join ok carries the map index")
 	expect(int(join_ok.get("version", 0)) == NetProtocol.PROTOCOL_VERSION, "join ok carries the protocol version")
 	var spawn: Vector3 = join_ok.get("spawn", Vector3.ZERO)
 	expect(spawn.distance_to(Vector3(22.0, 0.3, -15.556)) < 0.005, "join ok spawn roundtrips within 5 mm")
 	expect(absf(float(join_ok.get("yaw", 0.0)) - -1.2) < 0.001, "join ok yaw roundtrips")
 	expect(NetProtocol.decode_join_ok(PackedByteArray([2, 1, 0, 0, 0, 0])) == {}, "truncated join ok rejected")
 	expect(NetProtocol.decode_join_ok(pkt.slice(0, 15)) == {}, "15 B join ok rejected")
+	expect(NetProtocol.decode_join_ok(pkt.slice(0, 16)) == {}, "16 B join ok rejected")
 	expect(NetProtocol.decode_join_ok(NetProtocol.encode_join_ok(3, 4242, Vector3.ZERO, 0.0, 0, 1)).get("version", 0) == 1,
 		"v1 join ok decodes with version 1")
 

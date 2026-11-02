@@ -51,6 +51,14 @@ func _ready() -> void:
 	Engine.max_physics_steps_per_frame = 8
 	Engine.physics_jitter_fix = 0.0
 	var user_args := OS.get_cmdline_user_args()
+	# Authority hooks exist in both roles: the server may switch arena on the
+	# first join, and a client adopts the arena JOIN_OK names.
+	var gm := get_node_or_null("/root/GameManager")
+	if gm:
+		if gm.has_signal("server_map_changed"):
+			gm.server_map_changed.connect(_on_authoritative_map)
+		if gm.has_signal("join_map_received"):
+			gm.join_map_received.connect(_on_authoritative_map)
 	if OS.has_feature("dedicated_server") or user_args.has("--server"):
 		_start_server(user_args)
 		return
@@ -316,6 +324,13 @@ func _set_map(map_id: String) -> void:
 		local.rotation.y = spawn.global_rotation.y
 
 
+## Server authority for the arena. JOIN_OK (client) and the first-join switch
+## (server) both land here; the loading overlay stays up until the swap is done.
+func _on_authoritative_map(map_index: int) -> void:
+	_selected_map = MapRegistry.id_at(NetProtocol.sanitize_map_index(map_index))
+	_set_map(_selected_map)
+
+
 func _on_menu_join(config: Dictionary) -> void:
 	var params: Dictionary = {"name": String(config.get("name", "Player"))}
 	_selected_class = NetProtocol.sanitize_class(int(config.get("class_id", 0)))
@@ -358,7 +373,6 @@ func _begin_join(endpoint: Dictionary) -> void:
 		int(endpoint.get("class_id", _selected_class))
 	)
 	_selected_map = MapRegistry.sanitize(String(endpoint.get("map_id", _selected_map)))
-	_set_map(_selected_map)
 	if _menu:
 		_menu.hide_menu()
 	_set_hud_visible(false)
@@ -366,12 +380,15 @@ func _begin_join(endpoint: Dictionary) -> void:
 		_loading.show_loading("Connecting to %s:%d…" % [
 			String(endpoint.get("host", "127.0.0.1")), int(endpoint.get("port", DEFAULT_PORT)),
 		])
+	# The menu pick travels in JOIN_REQ as a request only. The arena is loaded
+	# from JOIN_OK while the loading overlay is still up.
 	var err: int = gm.client_start(
 		self,
 		String(endpoint.get("host", "127.0.0.1")),
 		int(endpoint.get("port", DEFAULT_PORT)),
 		String(endpoint.get("name", "Player")),
-		_selected_class
+		_selected_class,
+		MapRegistry.index_of(_selected_map)
 	)
 	if err != OK:
 		_was_client = false
@@ -619,7 +636,6 @@ func _try_autoconnect(args: PackedStringArray) -> void:
 	var endpoint := resolve_endpoint(params, _page)
 	_selected_class = NetProtocol.sanitize_class(int(endpoint.get("class_id", 0)))
 	_selected_map = MapRegistry.sanitize(String(endpoint.get("map_id", MapRegistry.DEFAULT_MAP)))
-	_set_map(_selected_map)
 	if _menu:
 		_menu.configure(_menu_defaults(endpoint))
 		_menu.show_menu()
@@ -893,9 +909,16 @@ func _start_server(args: PackedStringArray) -> void:
 	var bots_index := args.find("--bots")
 	if bots_index >= 0 and bots_index + 1 < args.size():
 		bots = maxi(0, int(args[bots_index + 1]))
-	var map_index := args.find("--map")
-	if map_index >= 0 and map_index + 1 < args.size():
-		_set_map(String(args[map_index + 1]))
+	# --map pins the arena for the session. Without it the server boots on the
+	# default map, then the first human JOIN_REQ chooses the arena (bots wait).
+	var map_id := MapRegistry.DEFAULT_MAP
+	var map_locked := false
+	var map_arg := args.find("--map")
+	if map_arg >= 0 and map_arg + 1 < args.size():
+		map_id = MapRegistry.sanitize(String(args[map_arg + 1]))
+		map_locked = true
+	_set_map(map_id)
+	var server_map_index := MapRegistry.index_of(map_id)
 
 	var local_player := get_node_or_null("Player")
 	if local_player:
@@ -906,11 +929,15 @@ func _start_server(args: PackedStringArray) -> void:
 			layer.visible = false
 
 	var gm := get_node_or_null("/root/GameManager")
-	var err: int = gm.server_start(self, port, bots) if gm else ERR_UNAVAILABLE
+	var err: int = gm.server_start(
+		self, port, bots, server_map_index, map_locked
+	) if gm else ERR_UNAVAILABLE
 	if err != OK:
 		push_error("BALL_OF_DUTY server failed to start: %s" % err)
 		return
-	print("BALL_OF_DUTY server listening on port %d" % port)
+	print("BALL_OF_DUTY server map=%d (%s) listening on port %d" % [
+		server_map_index, map_id, port,
+	])
 	get_tree().create_timer(0.75).timeout.connect(
 		func() -> void:
 			print("BALL_OF_DUTY server tick=%d" % Engine.get_physics_frames())
