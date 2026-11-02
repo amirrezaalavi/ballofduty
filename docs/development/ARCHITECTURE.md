@@ -88,8 +88,8 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 - **Weapon presentation:** the gun follows `DEF-hand.R` via an external `BoneAttachment3D`, with a
   filtered upper-body `Pistol_Aim_Neutral` hold overlay and a filtered `Pistol_Shoot` one-shot.
   Lower-body tracks stay with the main `AnimationPlayer`, so walking and shooting compose.
-- **Web loop:** `Engine.max_physics_steps_per_frame = 4` and `physics_jitter_fix = 0` prevent
-  background-tab catch-up bursts while still feeding 30 Hz down to ~7.5 FPS.
+- **Web loop:** `Engine.max_physics_steps_per_frame = 8` and `physics_jitter_fix = 0` prevent
+  background-tab catch-up bursts while still feeding 30 Hz down to ~3.75 FPS.
 - **Starvation:** with no pending input the server repeats the last frame for at most 6 extrapolated
   ticks (200 ms at 30 Hz), then simulates a neutral idle frame so gravity and collision keep running.
   The ack stays pinned to the last received input; inventing an ack would have no client-side state
