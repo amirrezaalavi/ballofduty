@@ -3,7 +3,7 @@
 **Date:** 2026-11-01
 **Branch:** `develop` (single clone at `ballofduty/`, GitHub is the head)
 **Engine:** Godot 4.7.2, GDScript, Compatibility/WebGL 2, single-threaded WASM
-**Tests:** **209 green, 0 failures**; `tools/check.sh --skip-export` green
+**Tests:** **214 green, 0 failures**; `tools/check.sh --skip-export` green
 
 ---
 
@@ -16,11 +16,13 @@ Shipped:
 - Five classes with distinct long-range weapons, per-class visuals and HUD.
 - Solo practice and server-authoritative online play: 30 Hz, WebSocket, binary
   snapshots, prediction and reconciliation.
-- Protocol v2: **8 actors by default, 16-actor capability**, 18 B snapshot row
-  (150 B at 8, 294 B at 16).
+- Protocol v3: **8 actors by default, 16-actor capability**, 18 B snapshot row
+  (150 B at 8, 294 B at 16). JOIN_REQ carries the requested arena and JOIN_OK
+  echoes the server's authoritative one.
 - Four maps: Sunken Quarry (default, 35-section physics walkthrough) plus
-  Starfall Crater, Dune Canyon and Jungle Ruins, selectable from the menu and
-  over the wire (`map_id` in JOIN).
+  Starfall Crater, Dune Canyon and Jungle Ruins, selectable from the menu.
+  `--map` pins a server's arena; without it the first human join chooses it and
+  every client loads what JOIN_OK names.
 - Phase-aware quick menu, settings panel (sensitivity, invert Y, scope scale,
   volume, LOW/MEDIUM/HIGH quality), content standard with budget validation.
 - `CharacterBodyStats`: one body/camera/muzzle profile applied to LOCAL, REMOTE
@@ -33,7 +35,7 @@ Shipped:
 
 ### Verification
 
-`tools/check.sh --skip-export`: content manifest, 209 gdUnit tests, arena
+`tools/check.sh --skip-export`: content manifest, 214 gdUnit tests, arena
 budget, 35-section quarry walkthrough, 4-bot match, 16-actor probe, headless
 client/server boot.
 

@@ -24,7 +24,7 @@ That is a scoped refactor, not a one-file flip — plan for it.
 - Snapshots are sent once per tick at 30 Hz as a binary `PackedByteArray`:
   `{tick, seq, players:[{id, pos_q, yaw_q, state, hp, acked_input_seq}], events[]}`.
 - Budget: **≤ 300 B** snapshot at 16 players → **≤ 10 KB/s** downstream per client (quantized, no dictionaries).
-  Protocol v2 rows are 18 B: **150 B at 8 actors, 294 B at 16**.
+  Snapshot rows are 18 B: **150 B at 8 actors, 294 B at 16**.
 - Remote players render with a **2-interval (67 ms) buffer + jitter margin**, newest-wins; extrapolation is
   capped at **1 tick**, otherwise hold the last pose. Late packets never snap the pose backwards.
 - Local player: fixed-tick prediction, replay of unacked inputs, visual correction smoothed over 100 ms.
@@ -58,8 +58,8 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
 
 | Message | Size | Fields |
 |---|---|---|
-| `JOIN_REQ` | 4 + n | protocol version, name length, class id, up to 16 sanitized bytes |
-| `JOIN_OK` | 16 | protocol version, id, server tick, **spawn xyz (cm i16), spawn yaw (i16), class id** |
+| `JOIN_REQ` | 5 + n | protocol version, name length, class id, **map id (MapRegistry index)**, up to 16 sanitized bytes |
+| `JOIN_OK` | 17 | protocol version, id, server tick, **spawn xyz (cm i16), spawn yaw (i16), class id, map id** |
 | `DENY` | 2 | reason (`FULL`, `VERSION`) |
 | `ROSTER` | 2 + Σ(3+n) | count, then (id, class id, name len, name) |
 | `INPUT` | 12 | seq u32, move x/y i8, flags, yaw i16, pitch i16 |
@@ -72,8 +72,8 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   centimetres per second. The packed24 field holds 12-bit yaw (≈1.53 mrad/step), 2-bit animation state,
   `on_floor`, and 7-bit HP (0–127). Ack is the low 16 bits of the input sequence; a 5-minute match at
   30 Hz is 9000 frames, well inside the 36.4-minute wrap window.
-- `PROTOCOL_VERSION = 2`. A JOIN_REQ with a different version is denied with `DENY(VERSION)`; old
-  clients cannot misread the 18 B rows as the old 22 B rows.
+- `PROTOCOL_VERSION = 3`. A JOIN_REQ with a different version is denied with `DENY(VERSION)`. v3 adds
+  the arena to JOIN_REQ/JOIN_OK, so v2 clients cannot be allowed to parse the changed JOIN layouts.
 - `SCORE` and `MATCH` are **additive**: an older client ignores unknown message types and keeps the
   DEATH-event fallback for scores, so the version was not bumped. Bump it when a message changes an
   existing layout, not when one is added.
@@ -101,6 +101,9 @@ All messages start with a 1-byte type (`NetProtocol.Msg`), little-endian, hand-p
   whose horizontal travel exceeds `8.6 m/s × dt` and logs it.
 - Every decoder rejects wrong lengths, counts above 16, and out-of-range values; the transport also caps
   packets at 2 KB and drains at most 64 per frame to prevent stalls.
+- **Arena authority:** the server owns the map. `--map` pins it at boot; otherwise the first human
+  JOIN_REQ picks it before any actor (including bots) spawns, and later joins receive the live map.
+  The client loads the arena named by `JOIN_OK`, never the menu pick alone.
 - **Spawn authority:** the server owns the spawn pose and ships it in `JOIN_OK`; clients must adopt it
   or they will disagree with every other client about where they are standing.
 - **Input authority:** the server consumes one queued input per tick, deduplicates by sequence and

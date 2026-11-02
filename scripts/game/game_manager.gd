@@ -10,6 +10,12 @@ signal server_hit(killed: bool)
 signal server_death(victim_id: int, killer_id: int)
 signal server_respawn(player_id: int, position: Vector3, yaw: float)
 signal server_shot(shooter_id: int, origin: Vector3, direction: Vector3)
+## Server -> world owner: the first human join selected a different arena than
+## the boot map. The handler swaps the scene before the joining actor is spawned.
+signal server_map_changed(map_index: int)
+## Client -> world owner: JOIN_OK named the authoritative arena. The handler
+## loads it while the loading overlay is still up, before the spawn is applied.
+signal join_map_received(map_index: int)
 
 # Preloaded so joining never hits the resource loader mid-match.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
@@ -80,6 +86,12 @@ var _next_id: int = 1
 var _server_tick: int = 0
 var _world: Node
 var _spawns: Array = [] # Array[Vector3]
+## MapRegistry index the server simulates. PINNED by --map; otherwise the first
+## human JOIN_REQ picks it before any actor (including bots) is spawned.
+var _server_map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+var _server_map_locked: bool = true
+## Bots waiting for the first join to reveal the arena (unpinned server only).
+var _pending_bots: int = 0
 var _used_slots: Dictionary = {} # slot -> peer_id
 ## peer_id -> overflow ring (0 = own marker, 1 = first overflow ring, ...)
 var _spawn_ring: Dictionary = {}
@@ -107,6 +119,9 @@ var _remotes: Dictionary = {} # id -> PlayerController
 var _join_sent: bool = false
 var _wanted_name: String = "Player"
 var _wanted_class: int = 0
+var _wanted_map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+## Arena the server named in JOIN_OK; -1 until the first join ack.
+var _client_map_index: int = -1
 # Match state (server authority, client mirror).
 var _match_start_msec: int = 0
 var _match_over: bool = false
@@ -196,7 +211,11 @@ func remote_jitter_ticks() -> int:
 
 # --- server ---------------------------------------------------------------
 
-func server_start(world: Node, port: int, bots: int = 0) -> int:
+func server_start(
+	world: Node, port: int, bots: int = 0,
+	map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP),
+	map_locked: bool = true
+) -> int:
 	_reset()
 	var net := _net()
 	if net == null:
@@ -206,6 +225,12 @@ func server_start(world: Node, port: int, bots: int = 0) -> int:
 		return err
 	net_mode = NetMode.SERVER
 	_world = world
+	# An unpinned server boots on the default arena but leaves the final choice
+	# to the first human join. Bots wait for that decision so they cannot land on
+	# an arena the players are not in.
+	_server_map_index = NetProtocol.sanitize_map_index(map_index)
+	_server_map_locked = map_locked
+	_pending_bots = 0 if map_locked else maxi(0, bots)
 	_spawns = collect_spawn_points(world)
 	_free_ids = range(1, NetProtocol.MAX_PLAYERS + 1)
 	_next_id = 1
@@ -221,8 +246,9 @@ func server_start(world: Node, port: int, bots: int = 0) -> int:
 			bus.damage_dealt.connect(_on_server_damage)
 		if not bus.player_died.is_connected(_on_server_death):
 			bus.player_died.connect(_on_server_death)
-	for i in bots:
-		_spawn_bot(i)
+	if map_locked:
+		for i in bots:
+			_spawn_bot(i)
 	return OK
 
 
@@ -241,12 +267,18 @@ func server_roster_names() -> Array:
 	return out
 
 
-func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> void:
+func _on_peer_joined(
+	peer_id: int, player_name: String, class_id: int = 0, map_index: int = -1
+) -> void:
 	if net_mode != NetMode.SERVER:
 		return
 	var net := _net()
 	if _roster.has(peer_id):
 		return
+	# The first human picks the arena on an unpinned server. This must run before
+	# the capacity check because the deferred bots join the roster here too.
+	if not _server_map_locked and not _has_humans():
+		_begin_server_session(map_index)
 	if _roster.size() >= NetProtocol.MAX_PLAYERS:
 		net.server_send(peer_id, NetProtocol.encode_deny(NetProtocol.DenyReason.FULL))
 		# Give the deny packet a tick to flush; closing immediately can drop it.
@@ -269,9 +301,13 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 	initial.yaw = spawn_yaw
 	_roster[peer_id] = _new_entry(assigned, player_name, node, peer_id, player_class)
 	_index_entry(_roster[peer_id])
-	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
+	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s map=%d" % [
+		assigned, player_name, _roster.size(),
+		str(spawn_pos.snapped(Vector3.ONE * 0.01)), _server_map_index,
+	])
 	net.server_send(peer_id, NetProtocol.encode_join_ok(
-		assigned, _server_tick, spawn_pos, spawn_yaw, player_class
+		assigned, _server_tick, spawn_pos, spawn_yaw, player_class,
+		NetProtocol.PROTOCOL_VERSION, _server_map_index
 	))
 	_broadcast_roster()
 	# Late joiners and reconnects converge immediately: current clock + table.
@@ -280,6 +316,33 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 		0 if _match_over else _server_seconds_left(Time.get_ticks_msec())
 	))
 	net.server_send(peer_id, NetProtocol.encode_score(server_match_scores()))
+
+
+func _has_humans() -> bool:
+	for peer_id in _roster:
+		if int(peer_id) > 0:
+			return true
+	return false
+
+
+## First human join on an unpinned server: adopt its map before any actor is
+## spawned, then lock the session so later joins cannot move the arena. The
+## world owner swaps the scene on `server_map_changed`; re-collecting spawns
+## here keeps the server's respawn list in step with the loaded arena.
+func _begin_server_session(map_index: int) -> void:
+	var clean := NetProtocol.sanitize_map_index(map_index)
+	if clean != _server_map_index:
+		_server_map_index = clean
+		server_map_changed.emit(clean)
+		_spawns = collect_spawn_points(_world)
+		print("BALL_OF_DUTY server map=%d (%s)" % [
+			clean, MapRegistry.id_at(clean),
+		])
+	_server_map_locked = true
+	var count := _pending_bots
+	_pending_bots = 0
+	for i in count:
+		_spawn_bot(i)
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -1094,7 +1157,8 @@ static func collect_spawn_points(world: Node) -> Array:
 # --- client ---------------------------------------------------------------
 
 func client_start(
-	world: Node, host: String, port: int, display_name: String, class_id: int = 0
+	world: Node, host: String, port: int, display_name: String, class_id: int = 0,
+	map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
 ) -> int:
 	_reset()
 	_client_error = ""
@@ -1109,6 +1173,7 @@ func client_start(
 	_wanted_name = NetProtocol.sanitize_name(display_name)
 	local_name = _wanted_name
 	_wanted_class = NetProtocol.sanitize_class(class_id)
+	_wanted_map_index = NetProtocol.sanitize_map_index(map_index)
 	_join_sent = false
 	var local := _world.get_node_or_null("Player") as PlayerController
 	if local:
@@ -1138,6 +1203,14 @@ func remote_count() -> int:
 	return _remotes.size()
 
 
+## Arena named by JOIN_OK, or "" before the server has answered. The world
+## owner uses this as the client's authoritative map state.
+func client_map_id() -> String:
+	if _client_map_index < 0:
+		return ""
+	return MapRegistry.id_at(_client_map_index)
+
+
 func _poll_client_connection() -> void:
 	if net_mode != NetMode.CLIENT or _join_sent:
 		return
@@ -1147,13 +1220,19 @@ func _poll_client_connection() -> void:
 	var peer_status: int = net.connection_status()
 	if peer_status == MultiplayerPeer.CONNECTION_CONNECTED:
 		_join_sent = true
-		net.send_join_request(_wanted_name, _wanted_class)
+		net.send_join_request(_wanted_name, _wanted_class, _wanted_map_index)
 
 
 func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 	if net_mode != NetMode.CLIENT:
 		return
 	_client_error = ""
+	# The server owns the arena. Load it now, while the loading overlay is still
+	# up, so the spawn below lands on the scene authority is simulating.
+	_client_map_index = NetProtocol.sanitize_map_index(
+		int(spawn.get("map_index", _wanted_map_index))
+	)
+	join_map_received.emit(_client_map_index)
 	local_id = player_id
 	var local_player := _world.get_node_or_null("Player") as PlayerController if _world else null
 	if local_player:
@@ -1445,6 +1524,11 @@ func _reset() -> void:
 	_spawn_ring.clear()
 	_next_overflow = 0
 	_join_sent = false
+	_wanted_map_index = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+	_client_map_index = -1
+	_server_map_index = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+	_server_map_locked = true
+	_pending_bots = 0
 	spawn_raycasts = 0
 	_match_start_msec = 0
 	_match_over = false
