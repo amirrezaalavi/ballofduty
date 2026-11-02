@@ -41,7 +41,7 @@ var _ray_samples: Array = []
 ## Minimal transport stand-in. Isolates server CPU from socket scheduling so the
 ## tick numbers are comparable across machines. Packets are counted, not sent.
 class FakeNet extends Node:
-	signal peer_joined(peer_id, player_name, class_id)
+	signal peer_joined(peer_id, player_name, class_id, map_index)
 	signal peer_left(peer_id)
 	signal remote_input(peer_id, frame)
 	signal join_accepted(player_id, spawn)

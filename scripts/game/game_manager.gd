@@ -10,13 +10,19 @@ signal server_hit(killed: bool)
 signal server_death(victim_id: int, killer_id: int)
 signal server_respawn(player_id: int, position: Vector3, yaw: float)
 signal server_shot(shooter_id: int, origin: Vector3, direction: Vector3)
+## Server -> world owner: the first human join selected a different arena than
+## the boot map. The handler swaps the scene before the joining actor is spawned.
+signal server_map_changed(map_index: int)
+## Client -> world owner: JOIN_OK named the authoritative arena. The handler
+## loads it while the loading overlay is still up, before the spawn is applied.
+signal join_map_received(map_index: int)
 
 # Preloaded so joining never hits the resource loader mid-match.
 const PLAYER_SCENE: PackedScene = preload("res://scenes/characters/player.tscn")
 const RIFLE_STATS: WeaponStats = preload("res://resources/weapons/rifle_stats.tres")
-## CP4b input intake: one frame is consumed per server tick, so a jitter burst
-## queues instead of overwriting. Oldest frames are dropped past the cap.
-const MAX_INPUT_QUEUE := 16
+## CP4b input intake: the server applies the newest frame it has every tick.
+## A newer packet overwrites the one the tick has not read yet, so a jitter
+## burst cannot leave the server permanently behind the client's send rate.
 const INPUT_RATE_LIMIT := 90
 ## If a client cannot feed 30 inputs/s, extrapolate at most this many server
 ## ticks, then simulate a neutral frame until input arrives. The ack stays pinned
@@ -29,7 +35,11 @@ const INPUT_RATE_LIMIT := 90
 ## body stopped gravity too, so a player caught mid-air stayed there and every
 ## correction was huge. Simulating idle input lets them land and keeps the
 ## divergence bounded to the missed movement.
-const MAX_EXTRAPOLATION_TICKS := 2
+##
+## Six ticks is 200 ms at 30 Hz: long enough to ride out a join hitch or a
+## low-end GPU frame spike without stuttering the body, short enough that a
+## client that has gone away stops moving well under a second.
+const MAX_EXTRAPOLATION_TICKS := 6
 const RESPAWN_DELAY_MSEC := 3000
 const SPAWN_PROTECTION_MSEC := 1500
 const BOT_PEER_BASE := -1000
@@ -80,6 +90,12 @@ var _next_id: int = 1
 var _server_tick: int = 0
 var _world: Node
 var _spawns: Array = [] # Array[Vector3]
+## MapRegistry index the server simulates. PINNED by --map; otherwise the first
+## human JOIN_REQ picks it before any actor (including bots) is spawned.
+var _server_map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+var _server_map_locked: bool = true
+## Bots waiting for the first join to reveal the arena (unpinned server only).
+var _pending_bots: int = 0
 var _used_slots: Dictionary = {} # slot -> peer_id
 ## peer_id -> overflow ring (0 = own marker, 1 = first overflow ring, ...)
 var _spawn_ring: Dictionary = {}
@@ -107,6 +123,9 @@ var _remotes: Dictionary = {} # id -> PlayerController
 var _join_sent: bool = false
 var _wanted_name: String = "Player"
 var _wanted_class: int = 0
+var _wanted_map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+## Arena the server named in JOIN_OK; -1 until the first join ack.
+var _client_map_index: int = -1
 # Match state (server authority, client mirror).
 var _match_start_msec: int = 0
 var _match_over: bool = false
@@ -196,7 +215,11 @@ func remote_jitter_ticks() -> int:
 
 # --- server ---------------------------------------------------------------
 
-func server_start(world: Node, port: int, bots: int = 0) -> int:
+func server_start(
+	world: Node, port: int, bots: int = 0,
+	map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP),
+	map_locked: bool = true
+) -> int:
 	_reset()
 	var net := _net()
 	if net == null:
@@ -206,6 +229,12 @@ func server_start(world: Node, port: int, bots: int = 0) -> int:
 		return err
 	net_mode = NetMode.SERVER
 	_world = world
+	# An unpinned server boots on the default arena but leaves the final choice
+	# to the first human join. Bots wait for that decision so they cannot land on
+	# an arena the players are not in.
+	_server_map_index = NetProtocol.sanitize_map_index(map_index)
+	_server_map_locked = map_locked
+	_pending_bots = 0 if map_locked else maxi(0, bots)
 	_spawns = collect_spawn_points(world)
 	_free_ids = range(1, NetProtocol.MAX_PLAYERS + 1)
 	_next_id = 1
@@ -221,8 +250,9 @@ func server_start(world: Node, port: int, bots: int = 0) -> int:
 			bus.damage_dealt.connect(_on_server_damage)
 		if not bus.player_died.is_connected(_on_server_death):
 			bus.player_died.connect(_on_server_death)
-	for i in bots:
-		_spawn_bot(i)
+	if map_locked:
+		for i in bots:
+			_spawn_bot(i)
 	return OK
 
 
@@ -241,12 +271,18 @@ func server_roster_names() -> Array:
 	return out
 
 
-func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> void:
+func _on_peer_joined(
+	peer_id: int, player_name: String, class_id: int = 0, map_index: int = -1
+) -> void:
 	if net_mode != NetMode.SERVER:
 		return
 	var net := _net()
 	if _roster.has(peer_id):
 		return
+	# The first human picks the arena on an unpinned server. This must run before
+	# the capacity check because the deferred bots join the roster here too.
+	if not _server_map_locked and not _has_humans():
+		_begin_server_session(map_index)
 	if _roster.size() >= NetProtocol.MAX_PLAYERS:
 		net.server_send(peer_id, NetProtocol.encode_deny(NetProtocol.DenyReason.FULL))
 		# Give the deny packet a tick to flush; closing immediately can drop it.
@@ -269,9 +305,13 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 	initial.yaw = spawn_yaw
 	_roster[peer_id] = _new_entry(assigned, player_name, node, peer_id, player_class)
 	_index_entry(_roster[peer_id])
-	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s" % [assigned, player_name, _roster.size(), str(spawn_pos.snapped(Vector3.ONE * 0.01))])
+	print("BALL_OF_DUTY net join id=%d name=%s peers=%d spawn=%s map=%d" % [
+		assigned, player_name, _roster.size(),
+		str(spawn_pos.snapped(Vector3.ONE * 0.01)), _server_map_index,
+	])
 	net.server_send(peer_id, NetProtocol.encode_join_ok(
-		assigned, _server_tick, spawn_pos, spawn_yaw, player_class
+		assigned, _server_tick, spawn_pos, spawn_yaw, player_class,
+		NetProtocol.PROTOCOL_VERSION, _server_map_index
 	))
 	_broadcast_roster()
 	# Late joiners and reconnects converge immediately: current clock + table.
@@ -280,6 +320,33 @@ func _on_peer_joined(peer_id: int, player_name: String, class_id: int = 0) -> vo
 		0 if _match_over else _server_seconds_left(Time.get_ticks_msec())
 	))
 	net.server_send(peer_id, NetProtocol.encode_score(server_match_scores()))
+
+
+func _has_humans() -> bool:
+	for peer_id in _roster:
+		if int(peer_id) > 0:
+			return true
+	return false
+
+
+## First human join on an unpinned server: adopt its map before any actor is
+## spawned, then lock the session so later joins cannot move the arena. The
+## world owner swaps the scene on `server_map_changed`; re-collecting spawns
+## here keeps the server's respawn list in step with the loaded arena.
+func _begin_server_session(map_index: int) -> void:
+	var clean := NetProtocol.sanitize_map_index(map_index)
+	if clean != _server_map_index:
+		_server_map_index = clean
+		server_map_changed.emit(clean)
+		_spawns = collect_spawn_points(_world)
+		print("BALL_OF_DUTY server map=%d (%s)" % [
+			clean, MapRegistry.id_at(clean),
+		])
+	_server_map_locked = true
+	var count := _pending_bots
+	_pending_bots = 0
+	for i in count:
+		_spawn_bot(i)
 
 
 func _on_peer_left(peer_id: int) -> void:
@@ -334,11 +401,17 @@ func _on_remote_input(peer_id: int, frame: Dictionary) -> void:
 	converted.pitch = float(frame["pitch"])
 	stored["last_seq"] = seq
 
-	var queue: Array = stored["queue"]
-	queue.append(converted)
-	if queue.size() > MAX_INPUT_QUEUE:
-		queue.pop_front()
-		stored["inputs_dropped"] = int(stored["inputs_dropped"]) + 1
+	# Latest wins: overwrite whatever the tick has not consumed yet. The server
+	# is then never more than one packet behind the client.
+	stored["pending_frame"] = converted
+	# Jump/fire/reload are one-shot actions. If a newer packet overwrites an
+	# action before the tick reads it, keep the action until it is applied once.
+	if converted.jump:
+		stored["edge_jump"] = true
+	if converted.fire:
+		stored["edge_fire"] = true
+	if converted.reload:
+		stored["edge_reload"] = true
 
 
 func _physics_process(delta: float) -> void:
@@ -399,9 +472,9 @@ func _physics_process(delta: float) -> void:
 	if net_stats and _server_tick % 30 == 0:
 		for peer_id in _roster:
 			var e: Dictionary = _roster[peer_id]
-			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d queue=%d dropped=%d starved=%d idle=%d hp=%d ammo=%d" % [
+			print("BALL_OF_DUTY stat id=%d ack=%d last_seq=%d pending=%d dropped=%d starved=%d idle=%d hp=%d ammo=%d" % [
 				int(e["id"]), int(e["ack"]), int(e["last_seq"]),
-				(e["queue"] as Array).size(), int(e["inputs_dropped"]),
+				1 if e["pending_frame"] != null else 0, int(e["inputs_dropped"]),
 				int(e["starved_ticks"]), int(e["idle_ticks"]),
 				_health(e["node"]).current if _health(e["node"]) else 0,
 				int(e["ammo"]),
@@ -520,19 +593,30 @@ static func _sort_scores(a: Dictionary, b: Dictionary) -> bool:
 ## updates the entry's starve counters. Bots and local/server actors do not use
 ## this path.
 ##
-## 1-2 missed ticks: repeat the last input (short extrapolation).
+## With input pending, the newest frame wins: held state comes from that frame
+## and any sticky one-shot edges (jump/fire/reload) are ORed in exactly once.
+## 1-6 missed ticks: repeat the last input (short extrapolation).
 ## Beyond that: neutral input, so gravity and collision keep running. Never a
 ## hard freeze, and never an ack the client cannot compare against.
 func _pick_server_frame(entry: Dictionary) -> PlayerInputFrame:
-	var queue: Array = entry["queue"]
-	if not queue.is_empty():
-		var queued: PlayerInputFrame = queue.pop_front()
-		entry["last_frame"] = queued
-		entry["ack"] = queued.seq
+	var pending: Variant = entry["pending_frame"]
+	if pending != null:
+		var frame: PlayerInputFrame = pending
+		# The newest frame owns move/sprint/aim/yaw/pitch, but an action seen in
+		# an overwritten frame must still happen once.
+		frame.jump = frame.jump or bool(entry["edge_jump"])
+		frame.fire = frame.fire or bool(entry["edge_fire"])
+		frame.reload = frame.reload or bool(entry["edge_reload"])
+		entry["edge_jump"] = false
+		entry["edge_fire"] = false
+		entry["edge_reload"] = false
+		entry["pending_frame"] = null
+		entry["last_frame"] = frame
+		entry["ack"] = frame.seq
 		entry["has_input"] = true
 		entry["starved_ticks"] = 0
 		entry["idle_ticks"] = 0
-		return queued
+		return frame
 	if not bool(entry["has_input"]):
 		entry["starved_ticks"] = 0
 		return entry["last_frame"]
@@ -564,7 +648,8 @@ func _new_entry(
 	var entry := {
 		"id": player_id, "name": player_name, "node": node,
 		"class_id": node.class_id,
-		"last_frame": initial, "queue": [], "last_seq": 0, "ack": 0,
+		"last_frame": initial, "pending_frame": null, "last_seq": 0, "ack": 0,
+		"edge_jump": false, "edge_fire": false, "edge_reload": false,
 		"has_input": false, "inputs_dropped": 0, "rate_window_msec": 0,
 		"rate_count": 0, "displacements": 0, "starved_ticks": 0, "idle_ticks": 0,
 		"idle_frame": PlayerInputFrame.new(),
@@ -679,7 +764,10 @@ func _respawn(entry: Dictionary) -> void:
 	entry["has_input"] = false
 	entry["ack"] = 0
 	entry["last_seq"] = 0
-	(entry["queue"] as Array).clear()
+	entry["pending_frame"] = null
+	entry["edge_jump"] = false
+	entry["edge_fire"] = false
+	entry["edge_reload"] = false
 	var initial := PlayerInputFrame.new()
 	initial.yaw = spawn["yaw"]
 	entry["last_frame"] = initial
@@ -1000,7 +1088,7 @@ func server_player_stats(player_id: int) -> Dictionary:
 		if int(entry["id"]) == player_id:
 			return {
 				"ack": int(entry["ack"]),
-				"queued": (entry["queue"] as Array).size(),
+				"pending": 1 if entry["pending_frame"] != null else 0,
 				"last_seq": int(entry["last_seq"]),
 				"dropped": int(entry["inputs_dropped"]),
 				"displacements": int(entry["displacements"]),
@@ -1094,7 +1182,8 @@ static func collect_spawn_points(world: Node) -> Array:
 # --- client ---------------------------------------------------------------
 
 func client_start(
-	world: Node, host: String, port: int, display_name: String, class_id: int = 0
+	world: Node, host: String, port: int, display_name: String, class_id: int = 0,
+	map_index: int = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
 ) -> int:
 	_reset()
 	_client_error = ""
@@ -1109,6 +1198,7 @@ func client_start(
 	_wanted_name = NetProtocol.sanitize_name(display_name)
 	local_name = _wanted_name
 	_wanted_class = NetProtocol.sanitize_class(class_id)
+	_wanted_map_index = NetProtocol.sanitize_map_index(map_index)
 	_join_sent = false
 	var local := _world.get_node_or_null("Player") as PlayerController
 	if local:
@@ -1138,6 +1228,14 @@ func remote_count() -> int:
 	return _remotes.size()
 
 
+## Arena named by JOIN_OK, or "" before the server has answered. The world
+## owner uses this as the client's authoritative map state.
+func client_map_id() -> String:
+	if _client_map_index < 0:
+		return ""
+	return MapRegistry.id_at(_client_map_index)
+
+
 func _poll_client_connection() -> void:
 	if net_mode != NetMode.CLIENT or _join_sent:
 		return
@@ -1147,13 +1245,19 @@ func _poll_client_connection() -> void:
 	var peer_status: int = net.connection_status()
 	if peer_status == MultiplayerPeer.CONNECTION_CONNECTED:
 		_join_sent = true
-		net.send_join_request(_wanted_name, _wanted_class)
+		net.send_join_request(_wanted_name, _wanted_class, _wanted_map_index)
 
 
 func _on_join_accepted(player_id: int, spawn: Dictionary) -> void:
 	if net_mode != NetMode.CLIENT:
 		return
 	_client_error = ""
+	# The server owns the arena. Load it now, while the loading overlay is still
+	# up, so the spawn below lands on the scene authority is simulating.
+	_client_map_index = NetProtocol.sanitize_map_index(
+		int(spawn.get("map_index", _wanted_map_index))
+	)
+	join_map_received.emit(_client_map_index)
 	local_id = player_id
 	var local_player := _world.get_node_or_null("Player") as PlayerController if _world else null
 	if local_player:
@@ -1445,6 +1549,11 @@ func _reset() -> void:
 	_spawn_ring.clear()
 	_next_overflow = 0
 	_join_sent = false
+	_wanted_map_index = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+	_client_map_index = -1
+	_server_map_index = MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+	_server_map_locked = true
+	_pending_bots = 0
 	spawn_raycasts = 0
 	_match_start_msec = 0
 	_match_over = false

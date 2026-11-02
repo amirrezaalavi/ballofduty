@@ -3,10 +3,13 @@ extends RefCounted
 ## CP4a binary wire protocol. All integers are little-endian, hand-packed so the
 ## layout is unambiguous across native and web exports.
 ##
-## Protocol v2 raises the actor cap from 8 to 16 and packs the snapshot row into
-## 18 B: header 6 B + 18 B/player -> 150 B at 8 players, 294 B at 16 (limit
-## 300 B). Yaw is a 12-bit field (2*PI / 4095 ~= 1.53 mrad per step), which keeps
-## prediction precision below one 30 Hz movement step.
+## Protocol v3 makes the arena part of the session contract: JOIN_REQ carries the
+## requested MapRegistry index and JOIN_OK echoes the authoritative one, so a
+## client always loads the map the server simulates. v2 also raised the actor cap
+## from 8 to 16 and packs the snapshot row into 18 B: header 6 B + 18 B/player ->
+## 150 B at 8 players, 294 B at 16 (limit 300 B). Yaw is a 12-bit field
+## (2*PI / 4095 ~= 1.53 mrad per step), which keeps prediction precision below
+## one 30 Hz movement step.
 ## Events are separate TCP messages (one per shot/hit/death/respawn).
 ## The velocity + on-floor fields exist so CP4b reconciliation can restart the
 ## replay from authoritative motion state instead of guessing it.
@@ -20,9 +23,9 @@ enum EventType { SHOT = 1, HIT = 2, DEATH = 3, RESPAWN = 4 }
 enum MatchState { RUNNING = 1, OVER = 2 }
 enum AnimState { STILL = 0, WALK = 1, SPRINT = 2, AIR = 3 }
 
-## Wire version. JOIN_REQ/JOIN_OK carry it so a v1 peer is rejected at the door
-## instead of misreading the 18 B snapshot rows as v1's 22 B rows.
-const PROTOCOL_VERSION := 2
+## Wire version. JOIN_REQ/JOIN_OK carry it so an older peer is rejected at the
+## door instead of misreading the current packet and snapshot layouts.
+const PROTOCOL_VERSION := 3
 const MAX_PLAYERS := 16
 const CLASS_COUNT := 5
 const MAX_NAME_BYTES := 16
@@ -52,32 +55,47 @@ static func sanitize_name(raw: String) -> String:
 	return out if out != "" else "Player"
 
 
+## The wire carries the MapRegistry index so the server is the single source of
+## truth for the arena. A malformed index falls back to the default map instead
+## of indexing outside the registry.
+static func sanitize_map_index(raw: int) -> int:
+	if raw >= 0 and raw < MapRegistry.MAPS.size():
+		return raw
+	return MapRegistry.index_of(MapRegistry.DEFAULT_MAP)
+
+
 static func encode_join_request(
-	display_name: String, class_id: int = 0, version: int = PROTOCOL_VERSION
+	display_name: String, class_id: int = 0, version: int = PROTOCOL_VERSION,
+	map_index: int = 0
 ) -> PackedByteArray:
 	var body := sanitize_name(display_name).to_utf8_buffer().slice(0, MAX_NAME_BYTES)
-	var pkt := PackedByteArray([Msg.JOIN_REQ, version & 0xFF, body.size(), sanitize_class(class_id)])
+	var pkt := PackedByteArray([
+		Msg.JOIN_REQ, version & 0xFF, body.size(), sanitize_class(class_id),
+		sanitize_map_index(map_index),
+	])
 	pkt.append_array(body)
 	return pkt
 
 
 static func decode_join_request(pkt: PackedByteArray) -> Dictionary:
-	if pkt.size() < 4 or pkt[0] != Msg.JOIN_REQ:
+	if pkt.size() < 5 or pkt[0] != Msg.JOIN_REQ:
 		return {}
 	var version := pkt[1]
 	var name_len := pkt[2]
-	if name_len > MAX_NAME_BYTES or pkt.size() != 4 + name_len:
+	if name_len > MAX_NAME_BYTES or pkt.size() != 5 + name_len:
 		return {}
 	return {
-		"name": sanitize_name(pkt.slice(4).get_string_from_utf8()),
+		"name": sanitize_name(pkt.slice(5).get_string_from_utf8()),
 		"class_id": sanitize_class(pkt[3]),
+		"map_index": sanitize_map_index(pkt[4]),
 		"version": version,
 	}
 
 
 static func encode_join_ok(
 	player_id: int, server_tick: int, spawn: Vector3 = Vector3.ZERO,
-	yaw: float = 0.0, class_id: int = 0, version: int = PROTOCOL_VERSION
+	yaw: float = 0.0, class_id: int = 0, version: int = PROTOCOL_VERSION,
+	map_index: int = 0
 ) -> PackedByteArray:
 	var pkt := PackedByteArray([Msg.JOIN_OK, version & 0xFF, player_id & 0xFF]) + _u32(server_tick)
 	pkt.append_array(_i16(_quant_pos(spawn.x)))
@@ -85,11 +103,12 @@ static func encode_join_ok(
 	pkt.append_array(_i16(_quant_pos(spawn.z)))
 	pkt.append_array(_i16(int(roundf(clampf(wrapf(yaw, -PI, PI) / PI, -1.0, 1.0) * 32767.0))))
 	pkt.append(sanitize_class(class_id))
+	pkt.append(sanitize_map_index(map_index))
 	return pkt
 
 
 static func decode_join_ok(pkt: PackedByteArray) -> Dictionary:
-	if pkt.size() != 16 or pkt[0] != Msg.JOIN_OK:
+	if pkt.size() != 17 or pkt[0] != Msg.JOIN_OK:
 		return {}
 	return {
 		"id": pkt[2],
@@ -97,6 +116,7 @@ static func decode_join_ok(pkt: PackedByteArray) -> Dictionary:
 		"spawn": Vector3(_dequant_pos(_get_i16(pkt, 7)), _dequant_pos(_get_i16(pkt, 9)), _dequant_pos(_get_i16(pkt, 11))),
 		"yaw": float(_get_i16(pkt, 13)) / 32767.0 * PI,
 		"class_id": sanitize_class(pkt[15]),
+		"map_index": sanitize_map_index(pkt[16]),
 		"version": pkt[1],
 	}
 

@@ -234,7 +234,7 @@ func test_replication_pipeline() -> void:
 	expect(_server_net.packets_rejected == before + 3, "3 malformed packets rejected, server alive")
 	expect(server_gm.server_player_count() == 1, "server still serving after malformed traffic")
 
-	# CP4b input intake: ordered consumption, duplicate rejection, rate limiting.
+	# CP4b input intake: latest-wins consumption, duplicate rejection, rate limiting.
 	var peer_b := 0
 	for peer_id in server_gm._roster:
 		if int(server_gm._roster[peer_id]["id"]) == client_b_gm.local_id:
@@ -245,14 +245,14 @@ func test_replication_pipeline() -> void:
 	_server_net._route(peer_b, ordered)
 	await get_tree().physics_frame
 	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
-	expect(int(b_stats["ack"]) == base_seq + 1, "queued input is consumed in order (ack %d)" % int(b_stats["ack"]))
+	expect(int(b_stats["ack"]) == base_seq + 1, "newest input is applied on the next tick (ack %d)" % int(b_stats["ack"]))
 	var dropped_before := int(b_stats["dropped"])
 	_server_net._route(peer_b, ordered)
 	await get_tree().physics_frame
 	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
 	expect(int(b_stats["dropped"]) == dropped_before + 1, "duplicate input seq is rejected")
 
-	# Starved client: one input every 5 ticks. The server may extrapolate two
+	# Starved client: one input every 10 ticks. The server may extrapolate six
 	# ticks, then must idle (neutral input) instead of running ahead, while the
 	# ack stays pinned to the last input actually received.
 	var starve_seq := int(b_stats["last_seq"])
@@ -260,14 +260,15 @@ func test_replication_pipeline() -> void:
 		starve_seq += 1
 		_server_net._route(peer_b, NetProtocol.encode_input(
 			starve_seq, Vector2.ZERO, false, false, false, 0.0, 0.0))
-		for _k in 5:
+		for _k in 10:
 			await get_tree().physics_frame
 	b_stats = server_gm.server_player_stats(client_b_gm.local_id)
 	print("  starvation: starved=%d idle=%d ack=%d last_seq=%d" % [
 		int(b_stats["starved"]), int(b_stats["idle"]),
 		int(b_stats["ack"]), int(b_stats["last_seq"])])
 	expect(int(b_stats["idle"]) > 0, "starved client idles after bounded extrapolation")
-	expect(int(b_stats["starved"]) > 2, "server went past the extrapolation grace")
+	expect(int(b_stats["starved"]) > int(gm_script.MAX_EXTRAPOLATION_TICKS),
+		"server went past the extrapolation grace")
 	expect(int(b_stats["ack"]) <= int(b_stats["last_seq"]), "ack never exceeds the received seq")
 	expect(int(b_stats["displacements"]) == 0, "starvation does not reject legitimate steps")
 

@@ -29,6 +29,7 @@ Top level:
 - [`development/TESTING.md`](development/TESTING.md) — suites, reports, tooling
 - [`development/FEATURE-BRANCHES.md`](development/FEATURE-BRANCHES.md) — branch and PR workflow
 - [`development/CHECKPOINTS.md`](development/CHECKPOINTS.md) — CP0–CP5 history and evidence
+- [`development/SESSION-HOSTING.md`](development/SESSION-HOSTING.md) — V2 direction: service, game IDs, lobbies
 
 ## data/
 

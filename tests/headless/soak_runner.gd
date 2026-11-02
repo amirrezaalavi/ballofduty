@@ -434,8 +434,8 @@ func _report(m: Dictionary, joined: int) -> void:
 		var cnet: Node = session["net"]
 		var cid := int(cgm.local_id)
 		var s: Dictionary = stats_call.call(cid) if cid > 0 else {}
-		print("SOAK client id=%d seq=%d ack=%d queue=%d dropped=%d starved=%d frozen=%d snaps=%d" % [
-			cid, int(session["seq"]), int(s.get("ack", -1)), int(s.get("queued", -1)),
+		print("SOAK client id=%d seq=%d ack=%d pending=%d dropped=%d starved=%d frozen=%d snaps=%d" % [
+			cid, int(session["seq"]), int(s.get("ack", -1)), int(s.get("pending", -1)),
 			int(s.get("dropped", -1)), int(s.get("starved", -1)), int(s.get("idle", -1)),
 			int(cnet.snapshots_processed),
 		])

@@ -7,6 +7,7 @@ extends BodTestSuite
 ## GPUs drop physics catch-up. None of that may turn into a permanent desync.
 
 const DT := 1.0 / 30.0
+const GM_SCRIPT := preload("res://scripts/game/game_manager.gd")
 
 var _gm: Node
 var _player: PlayerController
@@ -14,7 +15,7 @@ var _world: Node3D
 
 
 func before_test() -> void:
-	_gm = load("res://scripts/game/game_manager.gd").new()
+	_gm = GM_SCRIPT.new()
 	add_child(_gm)
 
 
@@ -34,7 +35,10 @@ func _entry(seq: int = 7) -> Dictionary:
 	last.yaw = 0.5
 	last.pitch = -0.2
 	return {
-		"queue": [],
+		"pending_frame": null,
+		"edge_jump": false,
+		"edge_fire": false,
+		"edge_reload": false,
 		"last_frame": last,
 		"ack": seq,
 		"last_seq": seq,
@@ -47,7 +51,7 @@ func _entry(seq: int = 7) -> Dictionary:
 
 # --- server intake -------------------------------------------------------
 
-func test_server_repeats_last_input_for_two_ticks() -> void:
+func test_server_repeats_last_input_during_the_grace_window() -> void:
 	var entry := _entry()
 	var first: PlayerInputFrame = _gm._pick_server_frame(entry)
 	var second: PlayerInputFrame = _gm._pick_server_frame(entry)
@@ -60,13 +64,13 @@ func test_server_repeats_last_input_for_two_ticks() -> void:
 
 func test_server_idles_after_the_grace_window() -> void:
 	var entry := _entry()
-	_gm._pick_server_frame(entry)
-	_gm._pick_server_frame(entry)
-	var third: PlayerInputFrame = _gm._pick_server_frame(entry)
-	expect(third.move == Vector2.ZERO, "third miss stops inventing movement")
-	expect(third.jump == false, "idle frame never jumps")
-	expect(third.seq == 7, "idle frame keeps the last sequence")
-	expect(is_equal_approx(third.yaw, 0.5), "idle frame keeps the view yaw")
+	for _i in GM_SCRIPT.MAX_EXTRAPOLATION_TICKS:
+		_gm._pick_server_frame(entry)
+	var idle: PlayerInputFrame = _gm._pick_server_frame(entry)
+	expect(idle.move == Vector2.ZERO, "the first miss past the grace window stops inventing movement")
+	expect(idle.jump == false, "idle frame never jumps")
+	expect(idle.seq == 7, "idle frame keeps the last sequence")
+	expect(is_equal_approx(idle.yaw, 0.5), "idle frame keeps the view yaw")
 	expect(int(entry["idle_ticks"]) == 1, "idle counter advanced")
 	expect(int(entry["ack"]) == 7, "ack is still pinned while idle")
 
@@ -78,7 +82,10 @@ func test_server_never_freezes_the_simulation() -> void:
 	for _i in 120:
 		var frame: PlayerInputFrame = _gm._pick_server_frame(entry)
 		expect(frame != null, "an intake frame always exists")
-	expect(int(entry["idle_ticks"]) == 118, "two extrapolated ticks, then idle")
+	expect(
+		int(entry["idle_ticks"]) == 120 - GM_SCRIPT.MAX_EXTRAPOLATION_TICKS,
+		"the grace window extrapolates, then idle"
+	)
 	expect(int(entry["starved_ticks"]) == 120, "starve counter keeps counting")
 
 
@@ -89,9 +96,9 @@ func test_server_resumes_on_the_next_input() -> void:
 	var fresh := PlayerInputFrame.new()
 	fresh.seq = 8
 	fresh.move = Vector2(0.0, 1.0)
-	(entry["queue"] as Array).append(fresh)
+	entry["pending_frame"] = fresh
 	var frame: PlayerInputFrame = _gm._pick_server_frame(entry)
-	expect(frame.seq == 8, "queued input wins immediately")
+	expect(frame.seq == 8, "pending input wins immediately")
 	expect(int(entry["ack"]) == 8, "ack advances to the received input")
 	expect(int(entry["starved_ticks"]) == 0, "starve counter reset")
 	expect(int(entry["idle_ticks"]) == 0, "idle counter reset")
@@ -99,8 +106,8 @@ func test_server_resumes_on_the_next_input() -> void:
 
 func test_idle_frame_is_reused() -> void:
 	var entry := _entry()
-	_gm._pick_server_frame(entry)
-	_gm._pick_server_frame(entry)
+	for _i in GM_SCRIPT.MAX_EXTRAPOLATION_TICKS + 1:
+		_gm._pick_server_frame(entry)
 	var a: PlayerInputFrame = _gm._pick_server_frame(entry)
 	var b: PlayerInputFrame = _gm._pick_server_frame(entry)
 	expect(a == b, "idle frame is a reused instance, not a per-tick allocation")
